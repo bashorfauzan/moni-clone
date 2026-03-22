@@ -44,6 +44,21 @@
                 android:text="http://10.0.2.2:5001/api/webhook/notification" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.textfield.TextInputLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/web_app_url_hint">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/webAppUrlInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textUri"
+                android:minHeight="56dp"
+                android:text="http://10.0.2.2:4173" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/saveButton"
             android:layout_width="match_parent"
@@ -72,6 +87,14 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="@string/open_notification_settings" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/openWebAppButton"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/open_web_app" />
 
         <TextView
             android:id="@+id/statusText"

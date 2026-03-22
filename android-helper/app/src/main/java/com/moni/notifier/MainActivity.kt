@@ -2,6 +2,7 @@ package com.moni.notifier
 
 import android.content.ComponentName
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Toast
@@ -20,18 +21,21 @@ class MainActivity : AppCompatActivity() {
 
         preferenceStore = PreferenceStore(this)
         binding.baseUrlInput.setText(preferenceStore.getWebhookUrl())
+        binding.webAppUrlInput.setText(preferenceStore.getWebAppUrl())
         binding.filterKeywordsInput.setText(preferenceStore.getFilterKeywords())
 
         binding.saveButton.setOnClickListener {
             val value = binding.baseUrlInput.text?.toString()?.trim().orEmpty()
+            val webAppUrl = binding.webAppUrlInput.text?.toString()?.trim().orEmpty()
             val filterKeywords = binding.filterKeywordsInput.text?.toString()?.trim().orEmpty()
-            if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            if (!isValidHttpUrl(value) || !isValidHttpUrl(webAppUrl)) {
                 binding.statusText.text = getString(R.string.status_invalid_url)
                 Toast.makeText(this, R.string.status_invalid_url, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             preferenceStore.setWebhookUrl(value)
+            preferenceStore.setWebAppUrl(webAppUrl)
             preferenceStore.setFilterKeywords(filterKeywords)
             binding.statusText.text = getString(R.string.status_saved)
             binding.lastDeliveryText.text = preferenceStore.getLastDeliveryStatus()
@@ -40,6 +44,19 @@ class MainActivity : AppCompatActivity() {
 
         binding.openSettingsButton.setOnClickListener {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+
+        binding.openWebAppButton.setOnClickListener {
+            val webAppUrl = binding.webAppUrlInput.text?.toString()?.trim().orEmpty()
+            if (!isValidHttpUrl(webAppUrl)) {
+                binding.statusText.text = getString(R.string.web_app_invalid_url)
+                Toast.makeText(this, R.string.web_app_invalid_url, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            preferenceStore.setWebAppUrl(webAppUrl)
+            binding.statusText.text = getString(R.string.status_opening_web_app)
+            startActivity(WebAppActivity.createIntent(this, webAppUrl))
         }
     }
 
@@ -59,5 +76,11 @@ class MainActivity : AppCompatActivity() {
             val component = ComponentName.unflattenFromString(it)
             component?.packageName == packageName
         }
+    }
+
+    private fun isValidHttpUrl(value: String): Boolean {
+        if (value.isBlank()) return false
+        val parsed = Uri.parse(value)
+        return parsed.scheme == "http" || parsed.scheme == "https"
     }
 }
