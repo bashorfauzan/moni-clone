@@ -136,12 +136,12 @@ const Reports = () => {
     if (loading) return <div className="p-8 text-center text-slate-500">Memuat Laporan...</div>;
 
     return (
-        <div className="p-4 md:p-8 space-y-8 pb-32 mx-auto w-full max-w-6xl">
+        <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             {/* Header & Filter */}
             <header className="flex flex-col gap-4">
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-2xl font-bold italic text-slate-900">Laporan</h1>
-                    <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex">
+                    <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex self-start">
                         <button
                             onClick={() => setViewMode('MONTHLY')}
                             className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'MONTHLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
@@ -294,7 +294,7 @@ const Reports = () => {
                 </div>
                 
                 <div className="overflow-x-auto w-full max-w-full">
-                    <table className="w-full text-left text-sm whitespace-nowrap">
+                    <table className="w-full min-w-[860px] text-left text-sm whitespace-nowrap">
                         <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                             <tr>
                                 <th className="px-6 py-4">Tanggal</th>

@@ -774,29 +774,50 @@ const MenuPage = () => {
     return (
         <div className="px-3 py-4 sm:p-4 md:p-8 space-y-5 sm:space-y-6 pb-28 sm:pb-32 mx-auto w-full max-w-2xl relative">
             {/* Profile Card */}
-            <div className="app-hero-card rounded-3xl p-4 sm:p-6 flex items-center gap-3 sm:gap-5 min-h-[132px] sm:min-h-[148px]">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg shrink-0" style={{ background: 'linear-gradient(135deg, var(--theme-accent) 0%, var(--theme-hero-glow) 100%)', boxShadow: '0 16px 28px -18px color-mix(in srgb, var(--theme-accent) 70%, transparent)' }}>
-                    {mainOwner.name.substring(0, 1)}
+            <div className="app-hero-card rounded-3xl p-4 sm:p-6 min-h-[132px] sm:min-h-[148px]">
+                <div className="flex items-start gap-3 sm:gap-5">
+                    <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg shrink-0" style={{ background: 'linear-gradient(135deg, var(--theme-accent) 0%, var(--theme-hero-glow) 100%)', boxShadow: '0 16px 28px -18px color-mix(in srgb, var(--theme-accent) 70%, transparent)' }}>
+                        {mainOwner.name.substring(0, 1)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h2 className="text-base sm:text-lg font-bold text-white truncate">{mainOwner.name}</h2>
+                        <p className="text-white/55 text-xs font-semibold truncate">{user?.email || 'Premium Member'}</p>
+                        <div className="mt-2 text-[10px] px-3 py-1 rounded-full w-fit font-bold uppercase tracking-tighter border text-white" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-accent) 16%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-accent) 30%, white 10%)' }}>
+                            Keamanan Aktif
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsAccountSettingsOpen(true)}
+                        className="p-2.5 rounded-xl text-white/60 hover:text-white transition-colors shrink-0"
+                        style={{ backgroundColor: 'color-mix(in srgb, white 8%, transparent)' }}
+                    >
+                        <Settings size={18} />
+                    </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                    <h2 className="text-base sm:text-lg font-bold text-white truncate">{mainOwner.name}</h2>
-                    <p className="text-white/55 text-xs font-semibold">Premium Member</p>
-                    <div className="mt-2 text-[10px] px-3 py-1 rounded-full w-fit font-bold uppercase tracking-tighter border text-white" style={{ backgroundColor: 'color-mix(in srgb, var(--theme-accent) 16%, transparent)', borderColor: 'color-mix(in srgb, var(--theme-accent) 30%, white 10%)' }}>
-                        Keamanan Aktif
+
+                <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Anggota</p>
+                        <p className="mt-1 text-sm font-bold text-white">{meta.owners.length}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Rekening</p>
+                        <p className="mt-1 text-sm font-bold text-white">{meta.accounts.length}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Kategori</p>
+                        <p className="mt-1 text-sm font-bold text-white">{meta.activities.length}</p>
                     </div>
                 </div>
-                <button
-                    type="button"
-                    onClick={() => setIsAccountSettingsOpen(true)}
-                    className="p-2.5 rounded-xl text-white/60 hover:text-white transition-colors shrink-0"
-                    style={{ backgroundColor: 'color-mix(in srgb, white 8%, transparent)' }}
-                >
-                    <Settings size={18} />
-                </button>
             </div>
 
             {/* Settings List */}
             <section className="space-y-3">
+                <div className="app-section-header rounded-2xl px-4 py-3">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Pengaturan & Setup</p>
+                    <p className="text-sm text-slate-700 mt-1">Lengkapi data dasar aplikasi, backup, dan pengaturan akun dari satu halaman.</p>
+                </div>
                 <div className="app-surface-card rounded-[28px] overflow-hidden">
                     {/* Setup Rekening */}
                     <button
@@ -807,7 +828,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
                                 <Wallet size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-slate-800 truncate">Setup Rekening</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Setup Rekening</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Bank, e-wallet, RDN, dan sekuritas</span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] bg-blue-100 text-blue-600 font-bold px-2 py-0.5 rounded-full">{meta.accounts.length}</span>
@@ -824,7 +848,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
                                 <Tag size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-slate-800 truncate">Setup Kategori</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Setup Kategori</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Kelompok pemasukan dan pengeluaran</span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] bg-emerald-100 text-emerald-600 font-bold px-2 py-0.5 rounded-full">{meta.activities.length}</span>
@@ -841,7 +868,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
                                 <User size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-slate-800 truncate">Setup Anggota / Pemilik</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Setup Anggota / Pemilik</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Pisahkan dana dan transaksi per orang</span>
+                            </div>
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] bg-violet-100 text-violet-600 font-bold px-2 py-0.5 rounded-full">{meta.owners.length}</span>
@@ -860,7 +890,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
                                 <Palette size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-slate-800 truncate">Tema & Tampilan</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Tema & Tampilan</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Atur visual aplikasi dan ukuran tampilan</span>
+                            </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-400" />
                     </button>
@@ -890,7 +923,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
                                 <User size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-slate-800 truncate">Bantuan & Dukungan</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Bantuan & Dukungan</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Lihat alur setup awal dan panduan penggunaan</span>
+                            </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-400" />
                     </button>
@@ -904,7 +940,10 @@ const MenuPage = () => {
                             <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
                                 <Trash2 size={16} />
                             </div>
-                            <span className="text-sm font-semibold text-rose-700 truncate">Reset & Pemulihan Data</span>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-rose-700 truncate">Reset & Pemulihan Data</span>
+                                <span className="block text-[11px] text-rose-500 truncate">Hapus data atau pulihkan dari backup</span>
+                            </div>
                         </div>
                         <ChevronRight size={16} className="text-rose-400" />
                     </button>

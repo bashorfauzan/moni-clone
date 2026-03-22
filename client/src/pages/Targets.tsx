@@ -173,7 +173,7 @@ const Targets = () => {
     const progressBase = totalTargetAmount <= 0 ? 100 : Math.min(100, (bankIncomeMonth / totalTargetAmount) * 100);
 
     return (
-        <div className="p-4 md:p-8 space-y-8 pb-32 mx-auto w-full max-w-6xl">
+        <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             <header>
                 <h1 className="text-2xl font-bold italic text-slate-900">Manajemen Likuiditas</h1>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
@@ -243,9 +243,9 @@ const Targets = () => {
             </div>
 
             <section className="space-y-4">
-                <div className="app-section-header rounded-2xl px-4 py-3 flex justify-between items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
                     <h3>Target Tagihan</h3>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                         <span>Total target aktif: {formatCurrency(totalTargetAmount)}</span>
                         <button
                             type="button"

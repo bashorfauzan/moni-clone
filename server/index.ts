@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
 import os from 'os';
 
 import transactionRoutes from './routes/transaction.js';
@@ -14,7 +13,6 @@ import telegramRoutes from './routes/telegram.js';
 dotenv.config();
 
 const app = express();
-const prisma = new PrismaClient();
 const PORT = process.env.PORT || 5001;
 const HOST = process.env.HOST || '0.0.0.0';
 
@@ -41,7 +39,7 @@ app.use('/api/targets', targetRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/telegram', telegramRoutes);
 
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
     res.send('API Aplikasi Keuangan Pribadi berjalan lancar!');
 });
 

@@ -230,7 +230,7 @@ const Investment = () => {
     if (loading) return <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">Memuat Portofolio...</div>;
 
     return (
-        <div className="p-4 md:p-8 space-y-8 pb-32 mx-auto w-full max-w-6xl">
+        <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
                 <div>
                     <h1 className="text-2xl font-bold italic text-slate-900">Portofolio Investasi</h1>
@@ -276,7 +276,7 @@ const Investment = () => {
             )}
 
             {/* Summary Card */}
-            <div className="app-hero-card rounded-[32px] p-8 relative overflow-hidden">
+            <div className="app-hero-card rounded-[28px] sm:rounded-[32px] p-5 sm:p-8 relative overflow-hidden">
                 <div className="relative z-10 flex flex-col gap-6">
                     <div className="flex items-center gap-2 text-white/60">
                         <Wallet size={18} />
@@ -284,13 +284,13 @@ const Investment = () => {
                     </div>
 
                     <div>
-                        <h2 className="text-4xl font-bold text-white">{formatCurrency(totalValue)}</h2>
-                        <div className="flex items-center gap-4 mt-3">
+                        <h2 className="text-3xl sm:text-4xl font-bold text-white break-words">{formatCurrency(totalValue)}</h2>
+                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                             <div>
                                 <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.18em]">Total Modal Disetor</p>
                                 <p className="text-white text-sm font-semibold">{formatCurrency(totalModal)}</p>
                             </div>
-                            <div className="h-8 w-px bg-white/14 mx-2"></div>
+                            <div className="hidden sm:block h-8 w-px bg-white/14 mx-2"></div>
                             <div>
                                 <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.18em]">Total Return</p>
                                 <p className={`text-sm font-bold flex items-center gap-1 ${totalReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
@@ -320,13 +320,13 @@ const Investment = () => {
 
                     {portfolioData.map((rdn) => (
                         <div key={rdn.id} className="bg-white border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-sm">
-                            <div className="flex justify-between items-start">
-                                <div>
+                            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+                                <div className="min-w-0">
                                     <h3 className="font-bold text-lg text-slate-900">{rdn.name}</h3>
                                     <p className="text-[10px] font-bold uppercase text-slate-400">Nilai Saat Ini</p>
-                                    <p className="text-xl font-bold text-blue-600">{formatCurrency(rdn.balance)}</p>
+                                    <p className="text-xl font-bold text-blue-600 break-words">{formatCurrency(rdn.balance)}</p>
                                 </div>
-                                <div className="text-right">
+                                <div className="sm:text-right">
                                     <p className="text-[10px] font-bold uppercase text-slate-400">Modal</p>
                                     <p className="text-sm font-semibold text-slate-700">{formatCurrency(rdn.modal)}</p>
 

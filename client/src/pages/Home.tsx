@@ -19,7 +19,9 @@ const Home = () => {
     const { user } = useAuth();
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[] }>({ owners: [], accounts: [] });
     const [data, setData] = useState({
-        availableBalance: 0,
+        totalWealth: 0,
+        liquidBalance: 0,
+        investmentBalance: 0,
         investmentMonth: 0,
         incomeMonth: 0,
         expenseMonth: 0
@@ -69,25 +71,13 @@ const Home = () => {
                 || tx.type === 'INVESTMENT_OUT'
                 || tx.type === 'INVESTMENT'
             );
-            const isInvestmentWithdrawal = (tx: TransactionItem) => (
-                tx.type === 'TRANSFER'
-                && isInvestmentAccount(tx.sourceAccount?.type)
-                && !isInvestmentAccount(tx.destinationAccount?.type)
-            );
-
-            const totalIncomeAllTime = allValidatedTransactions
-                .filter((tx: any) => tx.type === 'INCOME' && !isInvestmentIncome(tx))
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const totalInvestmentFundingAllTime = allValidatedTransactions
-                .filter((tx: any) => isInvestmentFunding(tx))
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const totalInvestmentWithdrawalAllTime = allValidatedTransactions
-                .filter((tx: any) => isInvestmentWithdrawal(tx))
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const totalExpenseAllTime = allValidatedTransactions
-                .filter((tx: any) => tx.type === 'EXPENSE')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const availableBalance = totalIncomeAllTime - totalExpenseAllTime - totalInvestmentFundingAllTime + totalInvestmentWithdrawalAllTime;
+            const liquidBalance = accounts
+                .filter((account) => account.type === 'Bank' || account.type === 'E-Wallet')
+                .reduce((sum, account) => sum + Number(account.balance || 0), 0);
+            const investmentBalance = accounts
+                .filter((account) => account.type === 'RDN' || account.type === 'Sekuritas')
+                .reduce((sum, account) => sum + Number(account.balance || 0), 0);
+            const totalWealth = liquidBalance + investmentBalance;
 
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -113,7 +103,7 @@ const Home = () => {
                 })
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
-            setData({ availableBalance, investmentMonth, incomeMonth, expenseMonth });
+            setData({ totalWealth, liquidBalance, investmentBalance, investmentMonth, incomeMonth, expenseMonth });
             setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
             setNotifications(nextNotifications);
@@ -300,40 +290,47 @@ const Home = () => {
     return (
         <div className="p-4 md:p-8 mx-auto w-full max-w-6xl">
             {/* Header */}
-            <header className="flex justify-between items-center mb-8">
-                <div>
+            <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent italic">
                         SPEND
                     </h1>
-                    <p className="text-slate-500 text-sm font-medium">{greeting}, {displayName}</p>
+                    <p className="text-slate-500 text-sm font-medium truncate">{greeting}, {displayName}</p>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
                     <span className="text-sm font-bold text-blue-600">{displayName.slice(0, 2).toUpperCase()}</span>
                 </div>
             </header>
 
             {/* Saldo Utama */}
-            <section className="app-hero-card rounded-[32px] p-6 mb-6 relative overflow-hidden mt-2">
+            <section className="app-hero-card rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 mb-6 relative overflow-hidden mt-2">
                 <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
-                <div className="flex justify-between items-start relative z-10 mb-1">
-                    <p className="text-white/60 text-[10px] uppercase tracking-[0.22em] font-bold">Total Dana Tersedia</p>
+                <div className="flex justify-between items-start gap-3 relative z-10 mb-1">
+                    <div>
+                        <p className="text-white/60 text-[10px] uppercase tracking-[0.22em] font-bold">Total Kekayaan Tercatat</p>
+                        <p className="text-white/55 text-[11px] mt-1">Akumulasi seluruh rekening bank, RDN, dan sekuritas.</p>
+                    </div>
                     <button onClick={toggleHideBalance} className="text-white/55 hover:text-white transition-colors p-1" title={isBalanceHidden ? "Tampilkan Saldo" : "Sembunyikan Saldo"}>
                         {isBalanceHidden ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                 </div>
-                <h2 className="text-3xl font-bold text-white mb-4 relative z-10">{displayCurrency(data.availableBalance)}</h2>
-                <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/10 relative z-10">
+                <h2 className="text-[2rem] sm:text-4xl font-bold text-white mb-4 relative z-10 break-words">{displayCurrency(data.totalWealth)}</h2>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pt-4 border-t border-white/10 relative z-10">
                     <div>
-                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Pemasukan Bulan Ini</p>
-                        <p className="text-emerald-300 font-bold">+{displayCurrency(data.incomeMonth)}</p>
+                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Dana Likuid</p>
+                        <p className="text-emerald-300 font-bold break-words">{displayCurrency(data.liquidBalance)}</p>
                     </div>
-                    <div className="text-center">
-                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Investasi</p>
-                        <p className="text-sky-300 font-bold">{displayCurrency(data.investmentMonth)}</p>
+                    <div className="sm:text-center">
+                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Nilai Investasi</p>
+                        <p className="text-sky-300 font-bold break-words">{displayCurrency(data.investmentBalance)}</p>
                     </div>
-                    <div>
-                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Pengeluaran Bulan Ini</p>
-                        <p className="text-rose-300 font-bold">-{displayCurrency(data.expenseMonth)}</p>
+                    <div className="col-span-2 sm:col-span-1">
+                        <p className="text-[10px] text-white/55 font-bold uppercase mb-1 tracking-[0.16em]">Arus Bulan Ini</p>
+                        <p className="text-white font-bold flex flex-wrap gap-x-3 gap-y-1">
+                            <span className="text-emerald-300">+{displayCurrency(data.incomeMonth)}</span>
+                            <span className="text-sky-300">Inv {displayCurrency(data.investmentMonth)}</span>
+                            <span className="text-rose-300">-{displayCurrency(data.expenseMonth)}</span>
+                        </p>
                     </div>
                 </div>
             </section>
@@ -349,12 +346,12 @@ const Home = () => {
                         </button>
                     </div>
                     {!isWealthHidden && (
-                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x hide-scrollbar w-full max-w-full" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {wealthDistribution.map((w) => (
                             <div 
                                 key={w.id} 
                                 onClick={() => setExpandedOwnerId(prev => prev === w.id ? null : w.id)}
-                                className="min-w-[240px] max-w-[280px] bg-white border border-slate-200 rounded-3xl p-5 shadow-sm snap-start shrink-0 cursor-pointer hover:border-blue-300 transition-colors hover:shadow-md"
+                                className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm cursor-pointer hover:border-blue-300 transition-colors hover:shadow-md"
                             >
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20 shrink-0">
@@ -378,8 +375,8 @@ const Home = () => {
                                         {w.accounts.map(acc => (
                                             <div key={acc.id} className="flex flex-col gap-1.5">
                                                 <div className="flex justify-between items-center text-xs gap-2">
-                                                    <span className="text-slate-600 font-bold truncate max-w-[120px]">{acc.name}</span>
-                                                    <span className="text-slate-900 font-bold">{displayCurrency(acc.balance)}</span>
+                                                    <span className="text-slate-600 font-bold truncate max-w-[140px] sm:max-w-[180px]">{acc.name}</span>
+                                                    <span className="text-slate-900 font-bold text-right">{displayCurrency(acc.balance)}</span>
                                                 </div>
                                                 <div className="flex items-center justify-between gap-2">
                                                     <p className="text-[9px] text-slate-400 uppercase">{acc.type}</p>
@@ -424,7 +421,7 @@ const Home = () => {
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-4 gap-3 sm:gap-4 mb-10">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 mb-10">
                 {[
                     { label: 'Income', color: 'bg-emerald-50 text-emerald-600', icon: '↘', type: 'INCOME' },
                     { label: 'Expense', color: 'bg-rose-50 text-rose-600', icon: '↗', type: 'EXPENSE' },
@@ -445,26 +442,30 @@ const Home = () => {
             </div>
 
             <section className="mb-10">
-                <div className="app-section-header rounded-2xl px-4 py-3 flex justify-between items-center mb-6 gap-3">
-                    <div>
+                <div className="app-section-header rounded-2xl px-4 py-3 mb-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
                         <h3 className="font-bold text-slate-900">Inbox Notifikasi Otomatis</h3>
                         <p className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mt-1">
                             WhatsApp dan notifikasi bank yang sudah masuk ke backend
                         </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            <button
+                                onClick={fetchData}
+                                className="app-action-chip rounded-full px-3 py-2 text-xs text-blue-600 font-bold uppercase tracking-wide shrink-0"
+                            >
+                                Refresh
+                            </button>
+                            <button
+                                onClick={() => void handleClearNotifications()}
+                                disabled={clearingNotifications}
+                                className="app-action-chip rounded-full px-3 py-2 text-xs text-rose-600 font-bold uppercase tracking-wide shrink-0 disabled:opacity-50"
+                            >
+                                {clearingNotifications ? 'Menghapus...' : 'Kosongkan Inbox'}
+                            </button>
+                        </div>
                     </div>
-                    <button
-                        onClick={fetchData}
-                        className="app-action-chip rounded-full px-3 py-2 text-xs text-blue-600 font-bold uppercase tracking-wide shrink-0"
-                    >
-                        Refresh
-                    </button>
-                    <button
-                        onClick={() => void handleClearNotifications()}
-                        disabled={clearingNotifications}
-                        className="app-action-chip rounded-full px-3 py-2 text-xs text-rose-600 font-bold uppercase tracking-wide shrink-0 disabled:opacity-50"
-                    >
-                        {clearingNotifications ? 'Menghapus...' : 'Kosongkan Inbox'}
-                    </button>
                 </div>
 
                 <div className="space-y-3">
@@ -561,8 +562,8 @@ const Home = () => {
                     </div>
                     <div className="space-y-3">
                         {pendingTransactions.map((tx, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-amber-50/50 border border-amber-200 rounded-2xl shadow-sm shadow-amber-100/50">
-                                <div className="flex items-center gap-4">
+                            <div key={i} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-amber-50/50 border border-amber-200 rounded-2xl shadow-sm shadow-amber-100/50">
+                                <div className="flex items-center gap-4 min-w-0">
                                     <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-lg text-amber-600">
                                         🔔
                                     </div>
@@ -573,7 +574,7 @@ const Home = () => {
                                         </p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 ml-2">
+                                <div className="flex items-center gap-2 sm:ml-2 self-end sm:self-auto">
                                     <button
                                         onClick={() => handleValidate(tx.id, 'APPROVE', tx)}
                                         className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-colors border border-emerald-100 font-bold text-lg"
@@ -604,15 +605,15 @@ const Home = () => {
                 <div className="space-y-3">
                     {recentTransactions.length > 0 ? (
                         recentTransactions.map((tx, i: number) => (
-                            <div key={i} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:bg-slate-50/50 transition-colors shadow-sm shadow-slate-100">
-                                <div className="flex items-center gap-4">
+                            <div key={i} className="flex items-center justify-between gap-3 p-4 bg-white border border-slate-100 rounded-2xl hover:bg-slate-50/50 transition-colors shadow-sm shadow-slate-100">
+                                <div className="flex items-center gap-4 min-w-0">
                                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${tx.type === 'INCOME' ? 'bg-emerald-50 text-emerald-600' :
                                         tx.type === 'EXPENSE' ? 'bg-rose-50 text-rose-600' :
                                             tx.type === 'TRANSFER' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
                                         }`}>
                                         {tx.type === 'INCOME' ? '↘' : tx.type === 'EXPENSE' ? '↗' : '⇄'}
                                     </div>
-                                    <div>
+                                    <div className="min-w-0">
                                         <p className="font-bold text-sm text-slate-900 line-clamp-1">{tx.description || tx.activity?.name}</p>
                                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight">
                                             {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}

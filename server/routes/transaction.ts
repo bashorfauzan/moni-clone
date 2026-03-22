@@ -511,7 +511,7 @@ router.put('/:id/validate', async (req, res) => {
 });
 
 // Endpoint untuk Master Data (Pendukung dropdown)
-router.get('/meta', async (req, res) => {
+router.get('/meta', async (_req, res) => {
     try {
         const [owners, accounts, activities] = await Promise.all([
             prisma.owner.findMany(),

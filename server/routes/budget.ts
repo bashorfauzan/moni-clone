@@ -5,7 +5,7 @@ const router = express.Router();
 const prisma = new PrismaClient();
 
 // Ambil semua anggaran
-router.get('/', async (req, res) => {
+router.get('/', async (_req, res) => {
     try {
         const budgets = await prisma.budget.findMany({
             include: {
