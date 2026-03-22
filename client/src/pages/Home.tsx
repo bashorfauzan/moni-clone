@@ -349,7 +349,7 @@ const Home = () => {
                         </button>
                     </div>
                     {!isWealthHidden && (
-                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                        <div className="flex gap-4 overflow-x-auto pb-2 snap-x hide-scrollbar w-full max-w-full" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
                         {wealthDistribution.map((w) => (
                             <div 
                                 key={w.id} 

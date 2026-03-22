@@ -17,7 +17,7 @@ const Layout = () => {
 
     return (
         <div className="min-h-screen text-slate-900 pb-24 font-sans border-t-[0.5px] border-transparent transition-colors duration-300">
-            <main className="mx-auto w-full max-w-6xl">
+            <main className="mx-auto w-full max-w-6xl overflow-x-hidden">
                 <Outlet />
             </main>
 

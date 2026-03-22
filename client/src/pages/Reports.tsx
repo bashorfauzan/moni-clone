@@ -293,7 +293,7 @@ const Reports = () => {
                     <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{data.transactionsData.length} Data</span>
                 </div>
                 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto w-full max-w-full">
                     <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
                             <tr>
