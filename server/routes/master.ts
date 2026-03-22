@@ -110,6 +110,50 @@ router.get('/export-excel', async (_req, res) => {
     }
 });
 
+router.get('/export-backup', async (req, res) => {
+    try {
+        const includeNotifications = req.query.includeNotifications !== '0';
+
+        const [owners, accounts, activities, budgets, targets, transactions, notifications] = await Promise.all([
+            prisma.owner.findMany({ orderBy: { createdAt: 'asc' } }),
+            prisma.account.findMany({ orderBy: { createdAt: 'asc' } }),
+            prisma.activity.findMany({ orderBy: { createdAt: 'asc' } }),
+            prisma.budget.findMany({ orderBy: { createdAt: 'asc' } }),
+            prisma.target.findMany({ orderBy: { createdAt: 'asc' } }),
+            prisma.transaction.findMany({ orderBy: { createdAt: 'asc' } }),
+            includeNotifications
+                ? prisma.notificationInbox.findMany({ orderBy: { receivedAt: 'asc' } })
+                : Promise.resolve([])
+        ]);
+
+        const payload = {
+            meta: {
+                exportedAt: new Date().toISOString(),
+                app: 'SPEND',
+                version: 1,
+                includeNotifications
+            },
+            data: {
+                owners,
+                accounts,
+                activities,
+                budgets,
+                targets,
+                transactions,
+                notifications
+            }
+        };
+
+        const filename = `spend-backup-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(JSON.stringify(payload, null, 2));
+    } catch (error) {
+        res.status(500).json({ error: 'Gagal membuat file backup' });
+    }
+});
+
 router.post('/accounts', async (req, res) => {
     const { name, type, balance, ownerId, accountNumber } = req.body;
 

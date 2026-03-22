@@ -18,12 +18,22 @@ import {
     Save,
     Tag,
     Search,
-    ChevronLeft
+    ChevronLeft,
+    Download
 } from 'lucide-react';
 import { useTheme, THEME_PRESETS } from '../context/ThemeContext';
 import { fetchMasterMeta, type Owner, type Account, type Activity } from '../services/masterData';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import {
+    buildBackupFilename,
+    downloadBackupBlob,
+    exportBackupJson,
+    loadBackupSettings,
+    saveBackupSettings,
+    shouldRunAutoBackup,
+    type BackupSettings
+} from '../services/backup';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
@@ -76,7 +86,11 @@ const MenuPage = () => {
     const [themeImageError, setThemeImageError] = useState('');
     const [heroThemeImageError, setHeroThemeImageError] = useState('');
     const [isThemeCustomizerOpen, setIsThemeCustomizerOpen] = useState(false);
+    const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero'>('app');
+    const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
+    const [backupRunning, setBackupRunning] = useState(false);
+    const [backupError, setBackupError] = useState('');
     const [themeCropMode, setThemeCropMode] = useState<'fit' | 'crop-portrait'>(() => {
         const saved = localStorage.getItem('app-bg-crop-mode');
         return saved === 'crop-portrait' ? 'crop-portrait' : 'fit';
@@ -456,6 +470,7 @@ const MenuPage = () => {
     useEffect(() => { setActivityPage(1); }, [activityQuery, meta.activities.length]);
     useEffect(() => { if (accountPage > totalAccountPages) setAccountPage(totalAccountPages); }, [accountPage, totalAccountPages]);
     useEffect(() => { if (activityPage > totalActivityPages) setActivityPage(totalActivityPages); }, [activityPage, totalActivityPages]);
+    useEffect(() => { saveBackupSettings(backupSettings); }, [backupSettings]);
     useEffect(() => {
         const shouldOpenAccounts = new URLSearchParams(location.search).get('accounts') === '1';
         if (!shouldOpenAccounts) return;
@@ -464,6 +479,49 @@ const MenuPage = () => {
         setIsAccountManagerOpen(true);
         navigate('/menu', { replace: true });
     }, [location.search, navigate]);
+
+    const formatBackupDate = (value: string | null) => {
+        if (!value) return 'Belum pernah';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return 'Belum pernah';
+        return new Intl.DateTimeFormat('id-ID', {
+            dateStyle: 'medium',
+            timeStyle: 'short'
+        }).format(parsed);
+    };
+
+    const updateBackupSettings = (patch: Partial<BackupSettings>) => {
+        setBackupSettings((prev) => ({ ...prev, ...patch }));
+    };
+
+    const handleBackupNow = async (mode: 'manual' | 'auto' = 'manual') => {
+        setBackupRunning(true);
+        setBackupError('');
+
+        try {
+            const blob = await exportBackupJson(backupSettings.includeNotifications);
+            const completedAt = new Date().toISOString();
+            downloadBackupBlob(blob, buildBackupFilename(new Date(completedAt)));
+            setBackupSettings((prev) => ({ ...prev, lastBackupAt: completedAt }));
+
+            if (mode === 'manual') {
+                alert('Backup berhasil dibuat. File disimpan ke folder unduhan perangkat/browser.');
+            }
+        } catch (error: any) {
+            const message = error?.response?.data?.error || 'Gagal membuat backup data.';
+            setBackupError(message);
+            if (mode === 'manual') {
+                alert(message);
+            }
+        } finally {
+            setBackupRunning(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!shouldRunAutoBackup(backupSettings) || backupRunning) return;
+        void handleBackupNow('auto');
+    }, [backupRunning, backupSettings, handleBackupNow]);
 
     if (loading) return (
         <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">
@@ -573,6 +631,22 @@ const MenuPage = () => {
                                 <Palette size={16} />
                             </div>
                             <span className="text-sm font-semibold text-slate-800 truncate">Tema & Tampilan</span>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-400" />
+                    </button>
+
+                    <button
+                        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
+                        onClick={() => setIsBackupSettingsOpen(true)}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center">
+                                <Download size={16} />
+                            </div>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Backup Data</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Terakhir: {formatBackupDate(backupSettings.lastBackupAt)}</span>
+                            </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-400" />
                     </button>
@@ -860,6 +934,99 @@ const MenuPage = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isBackupSettingsOpen && (
+                <div
+                    className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+                    onMouseDown={() => setIsBackupSettingsOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-xl bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-slate-900">Backup Data</h3>
+                                <p className="text-sm text-slate-500 mt-1">Simpan snapshot data ke file JSON agar ada cadangan di perangkat ini.</p>
+                            </div>
+                            <button onClick={() => setIsBackupSettingsOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overscroll-contain">
+                            <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-4">
+                                <p className="text-sm font-bold text-amber-900">Lokasi penyimpanan</p>
+                                <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+                                    Backup akan diunduh ke folder default perangkat/browser, biasanya <span className="font-bold">Downloads</span>. Untuk simpan langsung ke direktori instalasi app Android, aplikasi perlu dibungkus menjadi APK native.
+                                </p>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-sm font-bold text-slate-800">Backup otomatis</p>
+                                        <p className="text-xs text-slate-500 mt-1">Saat waktunya jatuh tempo dan aplikasi dibuka, file backup baru akan dibuat otomatis.</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => updateBackupSettings({ autoBackup: !backupSettings.autoBackup })}
+                                        className={`relative h-7 w-12 rounded-full transition-colors ${backupSettings.autoBackup ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                                        aria-label="Toggle auto backup"
+                                    >
+                                        <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all ${backupSettings.autoBackup ? 'left-6' : 'left-1'}`} />
+                                    </button>
+                                </div>
+
+                                <div>
+                                    <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Frekuensi</label>
+                                    <select
+                                        value={backupSettings.frequency}
+                                        onChange={(e) => updateBackupSettings({ frequency: e.target.value as BackupSettings['frequency'] })}
+                                        className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all bg-white"
+                                    >
+                                        <option value="manual">Manual saja</option>
+                                        <option value="daily">Harian</option>
+                                        <option value="weekly">Mingguan</option>
+                                    </select>
+                                </div>
+
+                                <label className="flex items-start gap-3 rounded-2xl border border-slate-200 p-3 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5 h-4 w-4 accent-amber-600"
+                                        checked={backupSettings.includeNotifications}
+                                        onChange={(e) => updateBackupSettings({ includeNotifications: e.target.checked })}
+                                    />
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-800">Sertakan riwayat notifikasi</p>
+                                        <p className="text-[11px] text-slate-500 mt-1">Aktifkan jika Anda juga ingin membackup inbox notifikasi yang masuk ke sistem.</p>
+                                    </div>
+                                </label>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-bold text-slate-800">Status backup</p>
+                                    <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">{backupRunning ? 'Proses' : 'Siap'}</span>
+                                </div>
+                                <p className="text-xs text-slate-600">Backup terakhir: {formatBackupDate(backupSettings.lastBackupAt)}</p>
+                                <p className="text-xs text-slate-500">Format file: JSON snapshot. Cocok untuk arsip data penuh, bukan sekadar laporan.</p>
+                                {backupError ? <p className="text-xs font-medium text-rose-600">{backupError}</p> : null}
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => void handleBackupNow('manual')}
+                                disabled={backupRunning}
+                                className="w-full h-11 rounded-xl bg-amber-600 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-amber-700 transition-colors"
+                            >
+                                <Download size={14} /> {backupRunning ? 'Membuat Backup...' : 'Backup Sekarang'}
+                            </button>
                         </div>
                     </div>
                 </div>
