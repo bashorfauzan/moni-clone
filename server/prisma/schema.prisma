@@ -1,0 +1,145 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+  INVESTMENT_IN
+  INVESTMENT_OUT
+}
+
+enum TargetPeriod {
+  ONE_MONTH
+  THREE_MONTH
+  SIX_MONTH
+  YEARLY
+  THREE_YEAR
+  FIVE_YEAR
+}
+
+enum NotificationParseStatus {
+  PENDING
+  PARSED
+  IGNORED
+  FAILED
+}
+
+model Owner {
+  id           String        @id @default(uuid())
+  name         String
+  accounts     Account[]
+  transactions Transaction[]
+  budgets      Budget[]
+  targets      Target[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Account {
+  id               String        @id @default(uuid())
+  name             String
+  type             String // Bank, E-Wallet, RDN, Sekuritas
+  accountNumber    String?
+  balance          Float         @default(0)
+  owner            Owner         @relation(fields: [ownerId], references: [id])
+  ownerId          String
+  sourceTrans      Transaction[] @relation("SourceAccount")
+  destinationTrans Transaction[] @relation("DestinationAccount")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model Activity {
+  id           String        @id @default(uuid())
+  name         String
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Transaction {
+  id                   String          @id @default(uuid())
+  date                 DateTime        @default(now())
+  type                 TransactionType
+  amount               Float
+  description          String?
+  isValidated          Boolean         @default(false)
+  notificationInboxId  String?         @unique
+  
+  owner                Owner           @relation(fields: [ownerId], references: [id])
+  ownerId              String
+  
+  activity             Activity        @relation(fields: [activityId], references: [id])
+  activityId           String
+
+  notificationInbox    NotificationInbox? @relation(fields: [notificationInboxId], references: [id])
+  
+  sourceAccount        Account?        @relation("SourceAccount", fields: [sourceAccountId], references: [id])
+  sourceAccountId      String?
+  
+  destinationAccount   Account?        @relation("DestinationAccount", fields: [destinationAccountId], references: [id])
+  destinationAccountId String?
+  
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+}
+
+model NotificationInbox {
+  id                    String                  @id @default(uuid())
+  sourceApp             String
+  senderName            String?
+  title                 String?
+  messageText           String
+  receivedAt            DateTime                @default(now())
+  parseStatus           NotificationParseStatus @default(PENDING)
+  parsedType            TransactionType?
+  parsedAmount          Float?
+  parsedDescription     String?
+  parsedAccountHint     String?
+  confidenceScore       Float?
+  parseNotes            String?
+  rawPayload            Json?
+  transaction           Transaction?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@index([parseStatus, receivedAt])
+  @@index([sourceApp, receivedAt])
+}
+
+model Budget {
+  id        String   @id @default(uuid())
+  amount    Float
+  period    String // Monthly
+  owner     Owner    @relation(fields: [ownerId], references: [id])
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Target {
+  id              String       @id @default(uuid())
+  title           String
+  totalAmount     Float
+  remainingAmount Float
+  period          TargetPeriod
+  isActive        Boolean      @default(true)
+  dueDate         DateTime?
+  owner           Owner        @relation(fields: [ownerId], references: [id])
+  ownerId         String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}

@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.npm
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma
+prisma/migrations/**/migration.sql
+
+# IDE
+.vscode/
+.idea/
+
+# Images / media in root
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.xlsx
+
+# Android
+android-helper/.gradle/
+android-helper/build/
+android-helper/app/build/
+android-helper/local.properties

@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #0f172a;
+  background-color: var(--app-bg, #f8fafc);
+  --app-bg-image: none;
+  --app-bg-overlay-opacity: 0.24;
+  --app-bg-blur: 0px;
+  --hero-image: none;
+  --theme-hero-start: #16213e;
+  --theme-hero-end: #0f172a;
+  --theme-hero-glow: #3b82f6;
+  --theme-accent: #3b82f6;
+  --theme-accent-soft: #dbeafe;
+  --theme-surface: #f8fafc;
+  --theme-border: #dbe3f0;
+  --theme-ink: #0f172a;
+  --theme-muted: #64748b;
+  transition: background-color 0.3s ease;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: transparent;
+  position: relative;
+  isolation: isolate;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -2;
+}
+
+body::before {
+  background-image: var(--app-bg-image);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(var(--app-bg-blur));
+  transform: scale(1.04);
+  opacity: 1;
+}
+
+body::after {
+  z-index: -1;
+  background:
+    linear-gradient(
+      rgba(248, 250, 252, var(--app-bg-overlay-opacity)),
+      rgba(248, 250, 252, var(--app-bg-overlay-opacity))
+    );
+}
+
+.app-hero-card {
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.28), rgba(15, 23, 42, 0.28)),
+    var(--hero-image),
+    radial-gradient(circle at top right, color-mix(in srgb, var(--theme-hero-glow) 28%, transparent), transparent 34%),
+    linear-gradient(135deg, var(--theme-hero-start) 0%, var(--theme-hero-end) 100%);
+  background-size: cover, cover, auto, auto;
+  background-position: center, center, top right, center;
+  border: 1px solid color-mix(in srgb, var(--theme-hero-glow) 24%, white 18%);
+  color: #fff;
+  box-shadow: 0 20px 45px -28px color-mix(in srgb, var(--theme-hero-end) 80%, black 20%);
+}
+
+.app-hero-panel {
+  background: color-mix(in srgb, white 10%, transparent);
+  border: 1px solid color-mix(in srgb, white 18%, transparent);
+}
+
+.app-theme-card {
+  background: linear-gradient(180deg, color-mix(in srgb, white 88%, var(--theme-surface) 12%) 0%, color-mix(in srgb, white 94%, var(--theme-surface) 6%) 100%);
+  border: 1px solid var(--theme-border);
+  box-shadow: 0 14px 35px -28px color-mix(in srgb, var(--theme-hero-end) 50%, transparent);
+}
+
+.app-surface-card {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.78) 100%);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid color-mix(in srgb, white 72%, var(--theme-border) 28%);
+  box-shadow:
+    0 18px 42px -30px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+.app-surface-muted {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.68) 100%);
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  border: 1px solid color-mix(in srgb, white 68%, var(--theme-border) 32%);
+}
+
+.app-section-header {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.76) 100%);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  border: 1px solid color-mix(in srgb, white 75%, var(--theme-border) 25%);
+  box-shadow: 0 16px 34px -30px rgba(15, 23, 42, 0.24);
+}
+
+.app-action-chip {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.8) 100%);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid color-mix(in srgb, white 72%, var(--theme-border) 28%);
+  box-shadow: 0 16px 32px -28px rgba(15, 23, 42, 0.24);
+}
+
+@media (max-width: 640px) {
+  body::before {
+    background-position: center center;
+    transform: scale(1.08);
+  }
+
+  .app-hero-card {
+    background-position: center center, center center, top right, center;
+  }
+
+  .app-surface-card,
+  .app-surface-muted,
+  .app-section-header,
+  .app-action-chip {
+    backdrop-filter: blur(16px) saturate(135%);
+    -webkit-backdrop-filter: blur(16px) saturate(135%);
+  }
+}
