@@ -81,3 +81,8 @@ export const exportBackupJson = async (includeNotifications: boolean) => {
 
     return response.data as Blob;
 };
+
+export const restoreBackupJson = async (payload: unknown) => {
+    const response = await api.post('/master/restore-backup', payload);
+    return response.data;
+};

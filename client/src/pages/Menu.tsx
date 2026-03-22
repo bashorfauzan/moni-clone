@@ -30,6 +30,7 @@ import {
     downloadBackupBlob,
     exportBackupJson,
     loadBackupSettings,
+    restoreBackupJson,
     saveBackupSettings,
     shouldRunAutoBackup,
     type BackupSettings
@@ -90,7 +91,10 @@ const MenuPage = () => {
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
+    const [restoreRunning, setRestoreRunning] = useState(false);
     const [backupError, setBackupError] = useState('');
+    const [restoreError, setRestoreError] = useState('');
+    const [selectedBackupFileName, setSelectedBackupFileName] = useState('');
     const [themeCropMode, setThemeCropMode] = useState<'fit' | 'crop-portrait'>(() => {
         const saved = localStorage.getItem('app-bg-crop-mode');
         return saved === 'crop-portrait' ? 'crop-portrait' : 'fit';
@@ -515,6 +519,44 @@ const MenuPage = () => {
             }
         } finally {
             setBackupRunning(false);
+        }
+    };
+
+    const handleRestoreFileChange = async (file?: File | null) => {
+        if (!file) return;
+
+        setSelectedBackupFileName(file.name);
+        setRestoreError('');
+
+        if (!file.name.toLowerCase().endsWith('.json')) {
+            setRestoreError('File restore harus berupa JSON.');
+            return;
+        }
+
+        const confirmRestore = window.confirm(
+            'Restore akan mengganti seluruh data aktif dengan isi file backup. Lanjutkan?'
+        );
+        if (!confirmRestore) return;
+
+        const check = window.prompt("Ketik 'RESTORE' untuk mengeksekusi pemulihan data:");
+        if (check !== 'RESTORE') {
+            alert('Restore dibatalkan.');
+            return;
+        }
+
+        setRestoreRunning(true);
+        try {
+            const rawText = await file.text();
+            const payload = JSON.parse(rawText);
+            await restoreBackupJson(payload);
+            alert('Restore backup berhasil. Halaman akan dimuat ulang.');
+            window.location.reload();
+        } catch (error: any) {
+            const message = error?.response?.data?.error || error?.message || 'Gagal memulihkan backup.';
+            setRestoreError(message);
+            alert(message);
+        } finally {
+            setRestoreRunning(false);
         }
     };
 
@@ -1027,6 +1069,34 @@ const MenuPage = () => {
                             >
                                 <Download size={14} /> {backupRunning ? 'Membuat Backup...' : 'Backup Sekarang'}
                             </button>
+
+                            <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-4">
+                                <div>
+                                    <p className="text-sm font-bold text-slate-800">Restore Dari Backup</p>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Gunakan file JSON hasil backup untuk memulihkan seluruh data. Proses ini akan mengganti data yang sedang aktif.
+                                    </p>
+                                </div>
+
+                                <label className="h-11 px-4 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold uppercase tracking-wider flex items-center justify-center cursor-pointer text-center hover:bg-slate-50 transition-colors">
+                                    {restoreRunning ? 'Memproses Restore...' : 'Pilih File Backup JSON'}
+                                    <input
+                                        type="file"
+                                        accept="application/json,.json"
+                                        className="hidden"
+                                        disabled={restoreRunning}
+                                        onChange={(e) => {
+                                            void handleRestoreFileChange(e.target.files?.[0]);
+                                            e.currentTarget.value = '';
+                                        }}
+                                    />
+                                </label>
+
+                                <p className="text-xs text-slate-500">
+                                    {selectedBackupFileName ? `File terpilih: ${selectedBackupFileName}` : 'Belum ada file dipilih'}
+                                </p>
+                                {restoreError ? <p className="text-xs font-medium text-rose-600">{restoreError}</p> : null}
+                            </div>
                         </div>
                     </div>
                 </div>

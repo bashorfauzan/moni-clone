@@ -12,6 +12,14 @@ const ensurePrimaryOwner = async () => {
 };
 
 const isMissingTableError = (error: any) => error?.code === 'P2021';
+const isRecordArray = (value: unknown): value is Record<string, any>[] =>
+    Array.isArray(value) && value.every((item) => item && typeof item === 'object' && !Array.isArray(item));
+
+const asDate = (value: unknown) => {
+    if (!value) return undefined;
+    const date = new Date(String(value));
+    return Number.isNaN(date.getTime()) ? undefined : date;
+};
 
 router.get('/meta', async (_req, res) => {
     try {
@@ -151,6 +159,169 @@ router.get('/export-backup', async (req, res) => {
         res.send(JSON.stringify(payload, null, 2));
     } catch (error) {
         res.status(500).json({ error: 'Gagal membuat file backup' });
+    }
+});
+
+router.post('/restore-backup', async (req, res) => {
+    const payload = req.body;
+    const data = payload?.data;
+
+    if (!data || typeof data !== 'object') {
+        return res.status(400).json({ error: 'Format file backup tidak valid' });
+    }
+
+    const owners = isRecordArray(data.owners) ? data.owners : null;
+    const accounts = isRecordArray(data.accounts) ? data.accounts : null;
+    const activities = isRecordArray(data.activities) ? data.activities : null;
+    const budgets = isRecordArray(data.budgets) ? data.budgets : [];
+    const targets = isRecordArray(data.targets) ? data.targets : [];
+    const notifications = isRecordArray(data.notifications) ? data.notifications : [];
+    const transactions = isRecordArray(data.transactions) ? data.transactions : null;
+
+    if (!owners || !accounts || !activities || !transactions) {
+        return res.status(400).json({ error: 'Isi file backup tidak lengkap atau rusak' });
+    }
+
+    try {
+        await prisma.$transaction(async (trx) => {
+            await trx.transaction.deleteMany({});
+            await trx.notificationInbox.deleteMany({});
+            await trx.target.deleteMany({});
+            await trx.budget.deleteMany({});
+            await trx.account.deleteMany({});
+            await trx.activity.deleteMany({});
+            await trx.owner.deleteMany({});
+
+            if (owners.length > 0) {
+                await trx.owner.createMany({
+                    data: owners.map((owner) => ({
+                        id: String(owner.id),
+                        name: String(owner.name || 'Owner'),
+                        createdAt: asDate(owner.createdAt),
+                        updatedAt: asDate(owner.updatedAt)
+                    }))
+                });
+            }
+
+            if (activities.length > 0) {
+                await trx.activity.createMany({
+                    data: activities.map((activity) => ({
+                        id: String(activity.id),
+                        name: String(activity.name || 'Kategori'),
+                        createdAt: asDate(activity.createdAt),
+                        updatedAt: asDate(activity.updatedAt)
+                    }))
+                });
+            }
+
+            if (accounts.length > 0) {
+                await trx.account.createMany({
+                    data: accounts.map((account) => ({
+                        id: String(account.id),
+                        name: String(account.name || 'Rekening'),
+                        type: String(account.type || 'Bank'),
+                        accountNumber: account.accountNumber ? String(account.accountNumber) : null,
+                        balance: Number(account.balance || 0),
+                        ownerId: String(account.ownerId),
+                        createdAt: asDate(account.createdAt),
+                        updatedAt: asDate(account.updatedAt)
+                    }))
+                });
+            }
+
+            if (budgets.length > 0) {
+                await trx.budget.createMany({
+                    data: budgets.map((budget) => ({
+                        id: String(budget.id),
+                        amount: Number(budget.amount || 0),
+                        period: String(budget.period || 'Monthly'),
+                        ownerId: String(budget.ownerId),
+                        createdAt: asDate(budget.createdAt),
+                        updatedAt: asDate(budget.updatedAt)
+                    }))
+                });
+            }
+
+            if (targets.length > 0) {
+                await trx.target.createMany({
+                    data: targets.map((target) => ({
+                        id: String(target.id),
+                        title: String(target.title || 'Target'),
+                        totalAmount: Number(target.totalAmount || 0),
+                        remainingAmount: Number(target.remainingAmount || 0),
+                        period: target.period,
+                        isActive: Boolean(target.isActive),
+                        dueDate: asDate(target.dueDate) ?? null,
+                        ownerId: String(target.ownerId),
+                        createdAt: asDate(target.createdAt),
+                        updatedAt: asDate(target.updatedAt)
+                    }))
+                });
+            }
+
+            if (notifications.length > 0) {
+                await trx.notificationInbox.createMany({
+                    data: notifications.map((notification) => ({
+                        id: String(notification.id),
+                        sourceApp: String(notification.sourceApp || ''),
+                        senderName: notification.senderName ? String(notification.senderName) : null,
+                        title: notification.title ? String(notification.title) : null,
+                        messageText: String(notification.messageText || ''),
+                        receivedAt: asDate(notification.receivedAt),
+                        parseStatus: notification.parseStatus,
+                        parsedType: notification.parsedType ?? null,
+                        parsedAmount: notification.parsedAmount != null ? Number(notification.parsedAmount) : null,
+                        parsedDescription: notification.parsedDescription ? String(notification.parsedDescription) : null,
+                        parsedAccountHint: notification.parsedAccountHint ? String(notification.parsedAccountHint) : null,
+                        confidenceScore: notification.confidenceScore != null ? Number(notification.confidenceScore) : null,
+                        parseNotes: notification.parseNotes ? String(notification.parseNotes) : null,
+                        rawPayload: notification.rawPayload ?? null,
+                        createdAt: asDate(notification.createdAt),
+                        updatedAt: asDate(notification.updatedAt)
+                    }))
+                });
+            }
+
+            if (transactions.length > 0) {
+                await trx.transaction.createMany({
+                    data: transactions.map((transaction) => ({
+                        id: String(transaction.id),
+                        date: asDate(transaction.date),
+                        type: transaction.type,
+                        amount: Number(transaction.amount || 0),
+                        description: transaction.description ? String(transaction.description) : null,
+                        isValidated: Boolean(transaction.isValidated),
+                        notificationInboxId: transaction.notificationInboxId ? String(transaction.notificationInboxId) : null,
+                        ownerId: String(transaction.ownerId),
+                        activityId: String(transaction.activityId),
+                        sourceAccountId: transaction.sourceAccountId ? String(transaction.sourceAccountId) : null,
+                        destinationAccountId: transaction.destinationAccountId ? String(transaction.destinationAccountId) : null,
+                        createdAt: asDate(transaction.createdAt),
+                        updatedAt: asDate(transaction.updatedAt)
+                    }))
+                });
+            }
+        });
+
+        if (owners.length === 0) {
+            await ensurePrimaryOwner();
+        }
+
+        res.json({
+            ok: true,
+            restored: {
+                owners: owners.length,
+                accounts: accounts.length,
+                activities: activities.length,
+                budgets: budgets.length,
+                targets: targets.length,
+                notifications: notifications.length,
+                transactions: transactions.length
+            }
+        });
+    } catch (error) {
+        console.error('Error restoring backup:', error);
+        res.status(500).json({ error: 'Gagal memulihkan backup' });
     }
 });
 
