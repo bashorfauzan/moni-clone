@@ -19,7 +19,16 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val enabled = isNotificationServiceEnabled()
+
         preferenceStore = PreferenceStore(this)
+        
+        if (enabled) {
+            startActivity(WebAppActivity.createIntent(this, preferenceStore.getWebAppUrl()))
+            finish()
+            return
+        }
+
         binding.baseUrlInput.setText(preferenceStore.getWebhookUrl())
         binding.webAppUrlInput.setText(preferenceStore.getWebAppUrl())
         binding.filterKeywordsInput.setText(preferenceStore.getFilterKeywords())
