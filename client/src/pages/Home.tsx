@@ -4,8 +4,9 @@ import { useTransaction } from '../context/TransactionContext';
 import { fetchNotificationInbox, type NotificationItem } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
-import { Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
+import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
 
 const Home = () => {
     const { openModal } = useTransaction();
@@ -23,6 +24,7 @@ const Home = () => {
     const [isBalanceHidden, setIsBalanceHidden] = useState(() => localStorage.getItem('hideBalance') === 'true');
     const [isWealthHidden, setIsWealthHidden] = useState(() => localStorage.getItem('hideWealth') === 'true');
     const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
+    const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
     const refreshTimeoutRef = useRef<number | null>(null);
 
     const toggleHideWealth = () => {
@@ -310,12 +312,27 @@ const Home = () => {
                                 {expandedOwnerId === w.id ? (
                                     <div className="pt-4 border-t border-slate-100 space-y-3">
                                         {w.accounts.map(acc => (
-                                            <div key={acc.id} className="flex flex-col gap-0.5">
-                                                <div className="flex justify-between items-center text-xs">
+                                            <div key={acc.id} className="flex flex-col gap-1.5">
+                                                <div className="flex justify-between items-center text-xs gap-2">
                                                     <span className="text-slate-600 font-bold truncate max-w-[120px]">{acc.name}</span>
                                                     <span className="text-slate-900 font-bold">{displayCurrency(acc.balance)}</span>
                                                 </div>
-                                                <p className="text-[9px] text-slate-400 uppercase">{acc.type}</p>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="text-[9px] text-slate-400 uppercase">{acc.type}</p>
+                                                    {canLaunchAccountApp(acc) ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                void handleLaunchAccount(acc);
+                                                            }}
+                                                            className="h-7 px-2.5 rounded-lg bg-slate-900 text-white text-[10px] font-bold flex items-center gap-1.5 hover:bg-slate-800 transition-colors"
+                                                        >
+                                                            <ExternalLink size={11} />
+                                                            {launchingAccountId === acc.id ? 'Buka...' : 'Buka'}
+                                                        </button>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                         ))}
                                         {w.accounts.length === 0 && (

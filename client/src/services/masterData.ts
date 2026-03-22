@@ -7,6 +7,9 @@ export type Account = {
     name: string;
     type: string;
     accountNumber?: string | null;
+    appPackageName?: string | null;
+    appDeepLink?: string | null;
+    appStoreUrl?: string | null;
     balance: number;
     ownerId: string;
 };
@@ -28,6 +31,9 @@ const normalizeAccount = (row: any): Account => ({
     name: row.name,
     type: row.type,
     accountNumber: row.accountNumber ?? row.account_number ?? null,
+    appPackageName: row.appPackageName ?? row.app_package_name ?? null,
+    appDeepLink: row.appDeepLink ?? row.app_deep_link ?? null,
+    appStoreUrl: row.appStoreUrl ?? row.app_store_url ?? null,
     balance: Number(row.balance ?? 0),
     ownerId: row.ownerId ?? row.owner_id
 });
@@ -41,7 +47,7 @@ export const fetchMasterMeta = async (): Promise<MasterMeta> => {
     if (hasSupabaseEnv && supabase) {
         const [ownersRes, accountsRes, activitiesRes] = await Promise.all([
             supabase.from('Owner').select('id, name').order('createdAt', { ascending: true }),
-            supabase.from('Account').select('id, name, type, accountNumber, balance, ownerId').order('createdAt', { ascending: false }),
+            supabase.from('Account').select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, balance, ownerId').order('createdAt', { ascending: false }),
             supabase.from('Activity').select('id, name').order('createdAt', { ascending: false })
         ]);
 

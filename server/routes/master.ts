@@ -221,6 +221,9 @@ router.post('/restore-backup', async (req, res) => {
                         name: String(account.name || 'Rekening'),
                         type: String(account.type || 'Bank'),
                         accountNumber: account.accountNumber ? String(account.accountNumber) : null,
+                        appPackageName: account.appPackageName ? String(account.appPackageName) : null,
+                        appDeepLink: account.appDeepLink ? String(account.appDeepLink) : null,
+                        appStoreUrl: account.appStoreUrl ? String(account.appStoreUrl) : null,
                         balance: Number(account.balance || 0),
                         ownerId: String(account.ownerId),
                         createdAt: asDate(account.createdAt),
@@ -326,7 +329,7 @@ router.post('/restore-backup', async (req, res) => {
 });
 
 router.post('/accounts', async (req, res) => {
-    const { name, type, balance, ownerId, accountNumber } = req.body;
+    const { name, type, balance, ownerId, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
 
     if (!name || !type) {
         return res.status(400).json({ error: 'Nama dan tipe wajib diisi' });
@@ -339,6 +342,9 @@ router.post('/accounts', async (req, res) => {
                 name: String(name),
                 type: String(type),
                 accountNumber: accountNumber ? String(accountNumber) : null,
+                appPackageName: appPackageName ? String(appPackageName) : null,
+                appDeepLink: appDeepLink ? String(appDeepLink) : null,
+                appStoreUrl: appStoreUrl ? String(appStoreUrl) : null,
                 ownerId: selectedOwnerId,
                 balance: Number.isFinite(Number(balance)) ? Number(balance) : 0
             }
@@ -350,14 +356,25 @@ router.post('/accounts', async (req, res) => {
 });
 
 router.put('/accounts/:id', async (req, res) => {
-    const { name, type, balance, accountNumber } = req.body;
+    const { name, type, balance, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
 
     try {
-        const data: { name?: string; type?: string; balance?: number; accountNumber?: string | null } = {};
+        const data: {
+            name?: string;
+            type?: string;
+            balance?: number;
+            accountNumber?: string | null;
+            appPackageName?: string | null;
+            appDeepLink?: string | null;
+            appStoreUrl?: string | null;
+        } = {};
         if (name !== undefined) data.name = String(name);
         if (type !== undefined) data.type = String(type);
         if (balance !== undefined && Number.isFinite(Number(balance))) data.balance = Number(balance);
         if (accountNumber !== undefined) data.accountNumber = accountNumber ? String(accountNumber) : null;
+        if (appPackageName !== undefined) data.appPackageName = appPackageName ? String(appPackageName) : null;
+        if (appDeepLink !== undefined) data.appDeepLink = appDeepLink ? String(appDeepLink) : null;
+        if (appStoreUrl !== undefined) data.appStoreUrl = appStoreUrl ? String(appStoreUrl) : null;
 
         const account = await prisma.account.update({
             where: { id: req.params.id },

@@ -80,3 +80,35 @@ Contoh payload:
 1. Tambahkan retry queue jika backend sedang tidak aktif.
 2. Tambahkan filter pengirim tertentu bila hanya notifikasi bank yang ingin diteruskan.
 3. Tambahkan daftar histori pengiriman di UI Android.
+
+## Jalur APK Untuk Buka App Rekening
+
+Web client sekarang sudah menyiapkan konfigurasi rekening berikut:
+
+- `appPackageName`
+- `appDeepLink`
+- `appStoreUrl`
+
+Dan di sisi browser sudah ada bridge contract global:
+
+```ts
+window.SpendNativeBridge?.openAccountApp?.({
+  id: string,
+  name: string,
+  packageName?: string | null,
+  deepLink?: string | null,
+  storeUrl?: string | null
+})
+```
+
+Target implementasi APK:
+
+1. Bungkus web app utama ke WebView Android.
+2. Expose bridge `SpendNativeBridge.openAccountApp`.
+3. Prioritas buka app:
+   - pakai `deepLink` jika tersedia
+   - fallback ke launcher app via `packageName`
+   - fallback terakhir ke `storeUrl`
+4. Jika app tidak terpasang dan tidak ada `storeUrl`, tampilkan pesan error native.
+
+Dengan kontrak ini, UI web tidak perlu dirombak lagi saat nanti dipindah ke APK.

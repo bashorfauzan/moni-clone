@@ -53,6 +53,9 @@ model Account {
   name             String
   type             String // Bank, E-Wallet, RDN, Sekuritas
   accountNumber    String?
+  appPackageName   String?
+  appDeepLink      String?
+  appStoreUrl      String?
   balance          Float         @default(0)
   owner            Owner         @relation(fields: [ownerId], references: [id])
   ownerId          String

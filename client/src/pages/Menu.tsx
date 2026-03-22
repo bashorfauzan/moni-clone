@@ -19,7 +19,8 @@ import {
     Tag,
     Search,
     ChevronLeft,
-    Download
+    Download,
+    ExternalLink
 } from 'lucide-react';
 import { useTheme, THEME_PRESETS } from '../context/ThemeContext';
 import { fetchMasterMeta, type Owner, type Account, type Activity } from '../services/masterData';
@@ -35,9 +36,21 @@ import {
     shouldRunAutoBackup,
     type BackupSettings
 } from '../services/backup';
+import {
+    ACCOUNT_APP_PRESETS,
+    canLaunchAccountApp,
+    launchAccountApp
+} from '../services/accountLauncher';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
+type RestorePreview = {
+    fileName: string;
+    exportedAt?: string | null;
+    includeNotifications?: boolean;
+    counts: Record<string, number>;
+    payload: unknown;
+};
 
 const MenuPage = () => {
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[]; activities: Activity[] }>({ owners: [], accounts: [], activities: [] });
@@ -64,7 +77,16 @@ const MenuPage = () => {
     const [saving, setSaving] = useState(false);
 
     // Account Manager
-    const [accountForm, setAccountForm] = useState({ name: '', type: 'Bank', accountNumber: '', balance: '', ownerId: '' });
+    const [accountForm, setAccountForm] = useState({
+        name: '',
+        type: 'Bank',
+        accountNumber: '',
+        balance: '',
+        ownerId: '',
+        appPackageName: '',
+        appDeepLink: '',
+        appStoreUrl: ''
+    });
     const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
     const [isAccountManagerOpen, setIsAccountManagerOpen] = useState(false);
     const [confirmDeleteAccountId, setConfirmDeleteAccountId] = useState<string | null>(null);
@@ -95,6 +117,8 @@ const MenuPage = () => {
     const [backupError, setBackupError] = useState('');
     const [restoreError, setRestoreError] = useState('');
     const [selectedBackupFileName, setSelectedBackupFileName] = useState('');
+    const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
+    const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
     const [themeCropMode, setThemeCropMode] = useState<'fit' | 'crop-portrait'>(() => {
         const saved = localStorage.getItem('app-bg-crop-mode');
         return saved === 'crop-portrait' ? 'crop-portrait' : 'fit';
@@ -268,7 +292,16 @@ const MenuPage = () => {
 
     // --- Account handlers ---
     const resetAccountForm = () => {
-        setAccountForm({ name: '', type: 'Bank', accountNumber: '', balance: '', ownerId: meta.owners[0]?.id || '' });
+        setAccountForm({
+            name: '',
+            type: 'Bank',
+            accountNumber: '',
+            balance: '',
+            ownerId: meta.owners[0]?.id || '',
+            appPackageName: '',
+            appDeepLink: '',
+            appStoreUrl: ''
+        });
         setEditingAccountId(null);
     };
 
@@ -279,7 +312,16 @@ const MenuPage = () => {
 
     const openEditAccount = (acc: any) => {
         setEditingAccountId(acc.id);
-        setAccountForm({ name: acc.name, type: acc.type, accountNumber: acc.accountNumber || '', balance: String(acc.balance), ownerId: acc.ownerId || meta.owners[0]?.id || '' });
+        setAccountForm({
+            name: acc.name,
+            type: acc.type,
+            accountNumber: acc.accountNumber || '',
+            balance: String(acc.balance),
+            ownerId: acc.ownerId || meta.owners[0]?.id || '',
+            appPackageName: acc.appPackageName || '',
+            appDeepLink: acc.appDeepLink || '',
+            appStoreUrl: acc.appStoreUrl || ''
+        });
         setShowAccountForm(true);
     };
 
@@ -292,6 +334,9 @@ const MenuPage = () => {
                 name: accountForm.name.trim(),
                 type: accountForm.type,
                 accountNumber: accountForm.accountNumber.trim() || null,
+                appPackageName: accountForm.appPackageName.trim() || null,
+                appDeepLink: accountForm.appDeepLink.trim() || null,
+                appStoreUrl: accountForm.appStoreUrl.trim() || null,
                 balance: Number(accountForm.balance || 0),
                 ownerId: accountForm.ownerId || meta.owners[0].id,
             };
@@ -317,6 +362,30 @@ const MenuPage = () => {
             await fetchMeta();
         } catch (error: any) {
             alert(error?.response?.data?.error || 'Gagal menghapus rekening');
+        }
+    };
+
+    const applyAccountPreset = (presetKey: string) => {
+        const preset = ACCOUNT_APP_PRESETS.find((item) => item.key === presetKey);
+        if (!preset) return;
+
+        setAccountForm((prev) => ({
+            ...prev,
+            appPackageName: preset.packageName,
+            appDeepLink: preset.deepLink,
+            appStoreUrl: preset.storeUrl
+        }));
+    };
+
+    const handleLaunchAccount = async (account: Account) => {
+        setLaunchingAccountId(account.id);
+        try {
+            const result = await launchAccountApp(account);
+            if (!result.ok && result.message) {
+                alert(result.message);
+            }
+        } finally {
+            setLaunchingAccountId(null);
         }
     };
 
@@ -527,9 +596,45 @@ const MenuPage = () => {
 
         setSelectedBackupFileName(file.name);
         setRestoreError('');
+        setRestorePreview(null);
 
         if (!file.name.toLowerCase().endsWith('.json')) {
             setRestoreError('File restore harus berupa JSON.');
+            return;
+        }
+
+        try {
+            const rawText = await file.text();
+            const payload = JSON.parse(rawText);
+            const data = payload?.data;
+            if (!data || typeof data !== 'object') {
+                throw new Error('Format file backup tidak valid.');
+            }
+
+            setRestorePreview({
+                fileName: file.name,
+                exportedAt: payload?.meta?.exportedAt ?? null,
+                includeNotifications: payload?.meta?.includeNotifications,
+                counts: {
+                    owners: Array.isArray(data.owners) ? data.owners.length : 0,
+                    accounts: Array.isArray(data.accounts) ? data.accounts.length : 0,
+                    activities: Array.isArray(data.activities) ? data.activities.length : 0,
+                    budgets: Array.isArray(data.budgets) ? data.budgets.length : 0,
+                    targets: Array.isArray(data.targets) ? data.targets.length : 0,
+                    notifications: Array.isArray(data.notifications) ? data.notifications.length : 0,
+                    transactions: Array.isArray(data.transactions) ? data.transactions.length : 0
+                },
+                payload
+            });
+        } catch (error: any) {
+            const message = error?.response?.data?.error || error?.message || 'Gagal membaca file backup.';
+            setRestoreError(message);
+        }
+    };
+
+    const submitRestoreBackup = async () => {
+        if (!restorePreview) {
+            alert('Pilih file backup lebih dulu.');
             return;
         }
 
@@ -1074,7 +1179,7 @@ const MenuPage = () => {
                                 <div>
                                     <p className="text-sm font-bold text-slate-800">Restore Dari Backup</p>
                                     <p className="text-xs text-slate-500 mt-1">
-                                        Gunakan file JSON hasil backup untuk memulihkan seluruh data. Proses ini akan mengganti data yang sedang aktif.
+                                        Pilih file backup dulu untuk melihat ringkasannya. Restore akan mengganti data yang sedang aktif.
                                     </p>
                                 </div>
 
@@ -1096,6 +1201,34 @@ const MenuPage = () => {
                                     {selectedBackupFileName ? `File terpilih: ${selectedBackupFileName}` : 'Belum ada file dipilih'}
                                 </p>
                                 {restoreError ? <p className="text-xs font-medium text-rose-600">{restoreError}</p> : null}
+                                {restorePreview ? (
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                        <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Preview Backup</p>
+                                        <p className="text-xs text-slate-600">File: {restorePreview.fileName}</p>
+                                        <p className="text-xs text-slate-600">
+                                            Exported: {restorePreview.exportedAt ? formatBackupDate(restorePreview.exportedAt) : 'Tidak diketahui'}
+                                        </p>
+                                        <p className="text-xs text-slate-600">
+                                            Notifikasi: {restorePreview.includeNotifications ? 'Disertakan' : 'Tidak disertakan'}
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-2 pt-1">
+                                            {Object.entries(restorePreview.counts).map(([key, value]) => (
+                                                <div key={key} className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{key}</p>
+                                                    <p className="text-sm font-bold text-slate-800">{value}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => void submitRestoreBackup()}
+                                            disabled={restoreRunning}
+                                            className="w-full h-11 rounded-xl bg-rose-600 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-rose-700 transition-colors"
+                                        >
+                                            {restoreRunning ? 'Memproses Restore...' : 'Restore Backup Ini'}
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                     </div>
@@ -1208,6 +1341,55 @@ const MenuPage = () => {
                                         className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                                     />
                                 </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Launcher Aplikasi</p>
+                                        <p className="text-[11px] text-slate-500 mt-1">Siapkan tombol `Buka Aplikasi` untuk rekening ini.</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Preset Aplikasi</label>
+                                        <select
+                                            defaultValue=""
+                                            onChange={(e) => {
+                                                applyAccountPreset(e.target.value);
+                                                e.currentTarget.value = '';
+                                            }}
+                                            className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all bg-white"
+                                        >
+                                            <option value="">Pilih preset opsional</option>
+                                            {ACCOUNT_APP_PRESETS.map((preset) => (
+                                                <option key={preset.key} value={preset.key}>{preset.label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Package Name</label>
+                                        <input
+                                            value={accountForm.appPackageName}
+                                            onChange={(e) => setAccountForm((p) => ({ ...p, appPackageName: e.target.value }))}
+                                            placeholder="cth: id.co.bni.wondr"
+                                            className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Deep Link</label>
+                                        <input
+                                            value={accountForm.appDeepLink}
+                                            onChange={(e) => setAccountForm((p) => ({ ...p, appDeepLink: e.target.value }))}
+                                            placeholder="cth: dana:// atau gojek://home"
+                                            className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Store URL</label>
+                                        <input
+                                            value={accountForm.appStoreUrl}
+                                            onChange={(e) => setAccountForm((p) => ({ ...p, appStoreUrl: e.target.value }))}
+                                            placeholder="cth: https://play.google.com/store/apps/details?id=..."
+                                            className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                        />
+                                    </div>
+                                </div>
                                 <button
                                     onClick={saveAccount}
                                     disabled={saving}
@@ -1244,6 +1426,9 @@ const MenuPage = () => {
                                                         {acc.accountNumber ? ` · ···${acc.accountNumber.slice(-4)}` : ''}
                                                         {' · '}{formatCurrency(acc.balance)}
                                                     </p>
+                                                    {canLaunchAccountApp(acc) ? (
+                                                        <p className="text-[10px] font-semibold text-blue-600 mt-1">Launcher aktif</p>
+                                                    ) : null}
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2 shrink-0">
@@ -1266,6 +1451,16 @@ const MenuPage = () => {
                                                     </>
                                                 ) : (
                                                     <>
+                                                        {canLaunchAccountApp(acc) ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => void handleLaunchAccount(acc)}
+                                                                className="h-8 px-3 rounded-lg bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center gap-1.5 hover:bg-slate-800 transition-colors"
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                                {launchingAccountId === acc.id ? 'Buka...' : 'Buka'}
+                                                            </button>
+                                                        ) : null}
                                                         <button
                                                             type="button"
                                                             onClick={() => openEditAccount(acc)}
