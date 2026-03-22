@@ -27,6 +27,7 @@ interface ThemeContextType {
     bgOverlay: number;
     bgBlur: number;
     heroImageMode: 'app-only' | 'app-and-hero';
+    appScale: number;
     setBgColor: (color: string) => void;
     setBgImage: (image: string | null) => void;
     setHeroColor: (color: string) => void;
@@ -34,6 +35,7 @@ interface ThemeContextType {
     setBgOverlay: (value: number) => void;
     setBgBlur: (value: number) => void;
     setHeroImageMode: (value: 'app-only' | 'app-and-hero') => void;
+    setAppScale: (scale: number) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -57,6 +59,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     const [bgOverlay, setBgOverlayState] = useState(() => Number(localStorage.getItem('app-bg-overlay') || 0.24));
     const [bgBlur, setBgBlurState] = useState(() => Number(localStorage.getItem('app-bg-blur') || 0));
+    const [appScale, setAppScaleState] = useState(() => Number(localStorage.getItem('app-scale') || 1.0));
     const [heroImageMode, setHeroImageModeState] = useState<'app-only' | 'app-and-hero'>(() => {
         const saved = localStorage.getItem('app-hero-image-mode');
         return saved === 'app-and-hero' ? 'app-and-hero' : 'app-only';
@@ -105,7 +108,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         localStorage.setItem('app-hero-image-mode', value);
     };
 
+    const setAppScale = (scale: number) => {
+        setAppScaleState(scale);
+        localStorage.setItem('app-scale', String(scale));
+    };
+
     useEffect(() => {
+        // Apply root font-size scaling for standard layout rem values
+        document.documentElement.style.fontSize = `${appScale * 16}px`;
+        
         // Inject the physical CSS variable to the root so Tailwind can pick it up
         document.documentElement.style.setProperty('--app-bg', bgColor);
         document.documentElement.style.setProperty('--app-bg-image', bgImage ? `url("${bgImage}")` : 'none');
@@ -129,7 +140,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         document.documentElement.style.setProperty('--theme-border', palette.border);
         document.documentElement.style.setProperty('--theme-ink', palette.ink);
         document.documentElement.style.setProperty('--theme-muted', palette.muted);
-    }, [bgColor, bgImage, heroColor, heroCardImage, bgOverlay, bgBlur, heroImageMode]);
+    }, [bgColor, bgImage, heroColor, heroCardImage, bgOverlay, bgBlur, heroImageMode, appScale]);
 
     return (
         <ThemeContext.Provider value={{
@@ -140,13 +151,15 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             bgOverlay,
             bgBlur,
             heroImageMode,
+            appScale,
             setBgColor,
             setBgImage,
             setHeroColor,
             setHeroCardImage,
             setBgOverlay,
             setBgBlur,
-            setHeroImageMode
+            setHeroImageMode,
+            setAppScale
         }}>
             {children}
         </ThemeContext.Provider>

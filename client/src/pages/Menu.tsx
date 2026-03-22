@@ -61,22 +61,7 @@ const MenuPage = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { signOut, user } = useAuth();
-    const {
-        bgColor,
-        bgImage,
-        heroColor,
-        heroCardImage,
-        bgOverlay,
-        bgBlur,
-        heroImageMode,
-        setBgColor,
-        setBgImage,
-        setHeroColor,
-        setHeroCardImage,
-        setBgOverlay,
-        setBgBlur,
-        setHeroImageMode
-    } = useTheme();
+    const { bgColor, bgImage, heroColor, heroCardImage, bgOverlay, bgBlur, heroImageMode, appScale, setBgColor, setBgImage, setHeroColor, setHeroCardImage, setBgOverlay, setBgBlur, setHeroImageMode, setAppScale } = useTheme();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
 
@@ -116,7 +101,7 @@ const MenuPage = () => {
     const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
     const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
     const [isHelpSupportOpen, setIsHelpSupportOpen] = useState(false);
-    const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero'>('app');
+    const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero' | 'font'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
     const [restoreRunning, setRestoreRunning] = useState(false);
@@ -971,42 +956,89 @@ const MenuPage = () => {
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
-                                            {activeThemePanel === 'app' ? 'Background App' : 'Kartu Utama'}
+                                            {activeThemePanel === 'app' ? 'Background App' : activeThemePanel === 'hero' ? 'Kartu Utama' : 'Skala Tampilan'}
                                         </p>
                                         <p className="text-sm font-semibold text-slate-900 mt-1">
-                                            {activeThemePanel === 'app' ? 'Warna dan gambar halaman utama' : 'Warna dan gambar hero card utama'}
+                                            {activeThemePanel === 'app' ? 'Warna dan gambar halaman utama' : activeThemePanel === 'hero' ? 'Warna dan gambar hero card utama' : 'Atur ukuran seluruh teks dan ikon'}
                                         </p>
                                     </div>
                                     <div
                                         className="w-full sm:w-24 aspect-[16/9] sm:h-14 sm:aspect-auto rounded-2xl border border-white/70 shadow-sm bg-center bg-cover"
                                         style={{
-                                            backgroundColor: activeThemePanel === 'app' ? bgColor : heroColor,
+                                            backgroundColor: activeThemePanel === 'app' ? bgColor : activeThemePanel === 'hero' ? heroColor : '#f1f5f9',
                                             backgroundImage: activeThemePanel === 'app'
                                                 ? (bgImage ? `url(${bgImage})` : 'none')
-                                                : (heroCardImage ? `url(${heroCardImage})` : 'none')
+                                                : activeThemePanel === 'hero'
+                                                ? (heroCardImage ? `url(${heroCardImage})` : 'none')
+                                                : 'none'
                                         }}
-                                    />
+                                    >
+                                        {activeThemePanel === 'font' && (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <span className="text-slate-400 font-bold" style={{ fontSize: `${appScale * 14}px` }}>Aa</span>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
+                            <div className="grid grid-cols-3 gap-2 rounded-2xl bg-slate-100 p-1">
                                 <button
                                     type="button"
                                     onClick={() => setActiveThemePanel('app')}
                                     className={`h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${activeThemePanel === 'app' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
                                 >
-                                    Background App
+                                    App
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => setActiveThemePanel('hero')}
                                     className={`h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${activeThemePanel === 'hero' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
                                 >
-                                    Kartu Utama
+                                    Kartu
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setActiveThemePanel('font')}
+                                    className={`h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors ${activeThemePanel === 'font' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500'}`}
+                                >
+                                    Ukuran
                                 </button>
                             </div>
 
-                            {activeThemePanel === 'app' ? (
+                            {activeThemePanel === 'font' ? (
+                                <div className="space-y-4">
+                                    <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-4">
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-800">Skala Tampilan</p>
+                                            <p className="text-xs text-slate-500 mt-1">Mengatur ukuran font dan antarmuka agar pas di layar smartphone Anda.</p>
+                                        </div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                            {[
+                                                { label: 'Kecil', value: 0.875, desc: 'Lebih padat' },
+                                                { label: 'Normal', value: 1.0, desc: 'Standar' },
+                                                { label: 'Besar', value: 1.125, desc: 'Mudah dibaca' },
+                                                { label: 'Ekstra', value: 1.25, desc: 'Paling jelas' }
+                                            ].map((scale) => (
+                                                <button
+                                                    key={scale.label}
+                                                    type="button"
+                                                    onClick={() => setAppScale(scale.value)}
+                                                    className={`p-3 rounded-2xl border transition-all text-left flex flex-col justify-center ${appScale === scale.value ? 'border-indigo-500 bg-indigo-50 shadow-sm' : 'border-slate-200 hover:bg-slate-50'}`}
+                                                >
+                                                    <p className={`font-bold ${appScale === scale.value ? 'text-indigo-700' : 'text-slate-700'}`}>{scale.label}</p>
+                                                    <p className={`text-[10px] mt-1 ${appScale === scale.value ? 'text-indigo-500' : 'text-slate-500'}`}>{scale.desc}</p>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4">
+                                        <p className="text-xs text-amber-800 leading-relaxed">
+                                            <span className="font-bold">Tips Responsif:</span> Jika ada bagian UI yang terpotong di layar HP Anda, cobalah turunkan skala menjadi <span className="font-bold">Kecil</span>.
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : activeThemePanel === 'app' ? (
                                 <div className="space-y-4">
                                     <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-4">
                                         <div>
