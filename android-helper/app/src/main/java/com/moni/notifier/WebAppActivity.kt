@@ -85,6 +85,14 @@ class WebAppActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 injectNativeBridge()
             }
+
+            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: android.webkit.WebResourceError?) {
+                super.onReceivedError(view, request, error)
+                if (request?.isForMainFrame == true) {
+                    val msg = getString(R.string.web_app_load_failed) + " (" + (error?.description ?: "Unknown") + ")"
+                    Toast.makeText(this@WebAppActivity, msg, Toast.LENGTH_LONG).show()
+                }
+            }
         }
     }
 
