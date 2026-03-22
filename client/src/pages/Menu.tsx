@@ -115,6 +115,7 @@ const MenuPage = () => {
     const [isThemeCustomizerOpen, setIsThemeCustomizerOpen] = useState(false);
     const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
     const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
+    const [isHelpSupportOpen, setIsHelpSupportOpen] = useState(false);
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
@@ -546,6 +547,21 @@ const MenuPage = () => {
     ) as string;
 
     const mainOwner = { name: profileDisplayName };
+    const startOwnerSetup = () => {
+        setIsHelpSupportOpen(false);
+        setShowOwnerForm(false);
+        setIsOwnerManagerOpen(true);
+    };
+    const startCategorySetup = () => {
+        setIsHelpSupportOpen(false);
+        setShowActivityForm(false);
+        setIsActivityManagerOpen(true);
+    };
+    const startAccountSetup = () => {
+        setIsHelpSupportOpen(false);
+        setShowAccountForm(false);
+        setIsAccountManagerOpen(true);
+    };
 
     useEffect(() => {
         if (!isAccountSettingsOpen) return;
@@ -881,7 +897,10 @@ const MenuPage = () => {
                     </button>
 
                     {/* Bantuan */}
-                    <button className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left">
+                    <button
+                        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
+                        onClick={() => setIsHelpSupportOpen(true)}
+                    >
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
                                 <User size={16} />
@@ -1256,6 +1275,215 @@ const MenuPage = () => {
                             >
                                 <Save size={14} /> {accountSettingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan Akun'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isHelpSupportOpen && (
+                <div
+                    className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+                    onMouseDown={() => setIsHelpSupportOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-2xl bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-slate-900">Bantuan & Dukungan</h3>
+                                <p className="text-sm text-slate-500 mt-1">Panduan setup awal agar pengguna tahu urutan isi data sebelum mulai mencatat transaksi.</p>
+                            </div>
+                            <button onClick={() => setIsHelpSupportOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overscroll-contain">
+                            <div className="rounded-[28px] border border-indigo-200 bg-gradient-to-br from-indigo-950 via-indigo-900 to-blue-900 p-5 text-white">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-indigo-200">Urutan Yang Disarankan</p>
+                                <h4 className="text-xl font-bold mt-2">1. Setup Anggota  2. Setup Kategori  3. Setup Rekening</h4>
+                                <p className="text-sm text-indigo-100/90 mt-2 leading-relaxed">
+                                    Tiga langkah ini adalah pondasi aplikasi. Jika urutannya benar, transaksi otomatis maupun manual akan lebih cepat diisi dan laporan akan langsung rapi.
+                                </p>
+                                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="rounded-2xl bg-white/10 border border-white/10 p-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-violet-400/20 flex items-center justify-center">
+                                            <User size={18} />
+                                        </div>
+                                        <p className="text-sm font-bold mt-3">Setup Anggota</p>
+                                        <p className="text-xs text-indigo-100/85 mt-1">Tentukan siapa pemilik uang atau siapa yang melakukan transaksi.</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-white/10 border border-white/10 p-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-emerald-400/20 flex items-center justify-center">
+                                            <Tag size={18} />
+                                        </div>
+                                        <p className="text-sm font-bold mt-3">Setup Kategori</p>
+                                        <p className="text-xs text-indigo-100/85 mt-1">Buat kelompok pemasukan dan pengeluaran yang sering dipakai.</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-white/10 border border-white/10 p-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-amber-400/20 flex items-center justify-center">
+                                            <Wallet size={18} />
+                                        </div>
+                                        <p className="text-sm font-bold mt-3">Setup Rekening</p>
+                                        <p className="text-xs text-indigo-100/85 mt-1">Tambahkan bank, e-wallet, RDN, atau akun sekuritas yang dipakai.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Gambar Alur Setup</p>
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr_auto_1fr] gap-3 items-center">
+                                    <div className="rounded-2xl bg-white border border-violet-200 p-3">
+                                        <p className="text-xs font-bold text-violet-700">Anggota</p>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            <span className="px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-semibold">Bashor</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-semibold">Istri</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-violet-100 text-violet-700 text-[11px] font-semibold">Usaha</span>
+                                        </div>
+                                    </div>
+                                    <div className="hidden sm:flex justify-center text-slate-300 text-xl font-bold">→</div>
+                                    <div className="rounded-2xl bg-white border border-emerald-200 p-3">
+                                        <p className="text-xs font-bold text-emerald-700">Kategori</p>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">Gaji</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">Makan</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[11px] font-semibold">Belanja</span>
+                                        </div>
+                                    </div>
+                                    <div className="hidden sm:flex justify-center text-slate-300 text-xl font-bold">→</div>
+                                    <div className="rounded-2xl bg-white border border-amber-200 p-3">
+                                        <p className="text-xs font-bold text-amber-700">Rekening</p>
+                                        <div className="mt-2 flex flex-wrap gap-2">
+                                            <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">BNI</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">DANA</span>
+                                            <span className="px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[11px] font-semibold">RDN</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                                    Setelah tiga kotak di atas terisi, barulah transaksi mudah dipilih: <span className="font-semibold text-slate-700">siapa pemiliknya</span>, <span className="font-semibold text-slate-700">masuk kategori apa</span>, dan <span className="font-semibold text-slate-700">rekening mana yang bergerak</span>.
+                                </p>
+                            </div>
+
+                            <div className="space-y-3">
+                                <div className="rounded-3xl border border-violet-200 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-violet-500">Langkah 1</p>
+                                            <h4 className="text-base font-bold text-slate-900 mt-1">Setup Anggota / Pemilik</h4>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center shrink-0">
+                                            <User size={18} />
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                                        Masukkan nama user atau pihak yang akan memakai aplikasi. Contohnya: <span className="font-semibold text-slate-800">Bashor</span>, <span className="font-semibold text-slate-800">Istri</span>, atau <span className="font-semibold text-slate-800">Tim Usaha</span>.
+                                    </p>
+                                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                        <div className="rounded-2xl bg-violet-50 p-3">
+                                            <p className="font-bold text-violet-700">Apa yang diisi</p>
+                                            <p className="text-violet-700/80 mt-1">Nama anggota atau pemilik dana/transaksi.</p>
+                                        </div>
+                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                            <p className="font-bold text-slate-700">Hasilnya</p>
+                                            <p className="text-slate-600 mt-1">Laporan dan target bisa dipisahkan per orang atau per unit.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={startOwnerSetup}
+                                        className="mt-4 h-11 px-4 rounded-2xl bg-violet-600 text-white text-xs font-bold uppercase tracking-wider inline-flex items-center justify-center gap-2 hover:bg-violet-700 transition-colors"
+                                    >
+                                        Buka Setup Anggota <ChevronRight size={14} />
+                                    </button>
+                                </div>
+
+                                <div className="rounded-3xl border border-emerald-200 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-500">Langkah 2</p>
+                                            <h4 className="text-base font-bold text-slate-900 mt-1">Setup Kategori</h4>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                                            <Tag size={18} />
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                                        Buat kategori sesuai kebiasaan Anda. Pakai nama yang sederhana dan langsung dipahami, misalnya <span className="font-semibold text-slate-800">Gaji</span>, <span className="font-semibold text-slate-800">Makan</span>, <span className="font-semibold text-slate-800">Belanja</span>, <span className="font-semibold text-slate-800">Transport</span>, atau <span className="font-semibold text-slate-800">Investasi</span>.
+                                    </p>
+                                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                        <div className="rounded-2xl bg-emerald-50 p-3">
+                                            <p className="font-bold text-emerald-700">Apa yang diisi</p>
+                                            <p className="text-emerald-700/80 mt-1">Nama kategori transaksi yang paling sering digunakan.</p>
+                                        </div>
+                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                            <p className="font-bold text-slate-700">Hasilnya</p>
+                                            <p className="text-slate-600 mt-1">Laporan jadi rapi dan target pengeluaran bisa dipantau per kategori.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={startCategorySetup}
+                                        className="mt-4 h-11 px-4 rounded-2xl bg-emerald-600 text-white text-xs font-bold uppercase tracking-wider inline-flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors"
+                                    >
+                                        Buka Setup Kategori <ChevronRight size={14} />
+                                    </button>
+                                </div>
+
+                                <div className="rounded-3xl border border-amber-200 bg-white p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-amber-500">Langkah 3</p>
+                                            <h4 className="text-base font-bold text-slate-900 mt-1">Setup Rekening</h4>
+                                        </div>
+                                        <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                                            <Wallet size={18} />
+                                        </div>
+                                    </div>
+                                    <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                                        Tambahkan rekening yang benar-benar dipakai sehari-hari. Isi nama rekening, tipe, nomor rekening bila perlu, saldo awal, dan pilih pemiliknya. Jika tersedia, isi juga data pembuka aplikasi bank/e-wallet agar tombol <span className="font-semibold text-slate-800">Buka</span> bisa dipakai.
+                                    </p>
+                                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                        <div className="rounded-2xl bg-amber-50 p-3">
+                                            <p className="font-bold text-amber-700">Apa yang diisi</p>
+                                            <p className="text-amber-700/80 mt-1">Nama rekening, tipe, saldo awal, pemilik, dan opsional deep link aplikasi.</p>
+                                        </div>
+                                        <div className="rounded-2xl bg-slate-50 p-3">
+                                            <p className="font-bold text-slate-700">Hasilnya</p>
+                                            <p className="text-slate-600 mt-1">Setiap transaksi langsung masuk ke saldo rekening yang benar.</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={startAccountSetup}
+                                        className="mt-4 h-11 px-4 rounded-2xl bg-amber-500 text-white text-xs font-bold uppercase tracking-wider inline-flex items-center justify-center gap-2 hover:bg-amber-600 transition-colors"
+                                    >
+                                        Buka Setup Rekening <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Contoh Setup Cepat</p>
+                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div className="rounded-2xl bg-white border border-slate-200 p-3">
+                                        <p className="text-xs font-bold text-slate-800">Anggota</p>
+                                        <p className="text-xs text-slate-500 mt-1">Bashor, Rumah Tangga</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-white border border-slate-200 p-3">
+                                        <p className="text-xs font-bold text-slate-800">Kategori</p>
+                                        <p className="text-xs text-slate-500 mt-1">Gaji, Makan, Belanja, Investasi</p>
+                                    </div>
+                                    <div className="rounded-2xl bg-white border border-slate-200 p-3">
+                                        <p className="text-xs font-bold text-slate-800">Rekening</p>
+                                        <p className="text-xs text-slate-500 mt-1">BNI Utama, DANA, RDN Stockbit</p>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+                                    Setelah setup selesai, pengguna bisa mulai input transaksi, menerima notifikasi otomatis, membuat target, dan membaca laporan tanpa harus menata ulang data dasar lagi.
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
