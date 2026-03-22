@@ -157,58 +157,76 @@ const Reports = () => {
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-3">
-                    <div className="flex-1 flex items-center justify-between bg-white border border-slate-100 p-4 rounded-2xl shadow-sm w-full">
-                        <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-50 rounded-full text-slate-400">
-                            <ChevronLeft size={20} />
-                        </button>
-                        <div className="flex items-center gap-2">
-                            <Calendar size={16} className="text-blue-600" />
-                            <span className="font-bold text-sm uppercase tracking-widest text-slate-700">
-                                {viewMode === 'MONTHLY'
-                                    ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-                                    : currentDate.getFullYear()}
-                            </span>
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+                    <div className="app-surface-card rounded-[28px] px-4 py-4 sm:px-5">
+                        <div className="flex items-center justify-between gap-2 sm:gap-3">
+                            <button onClick={() => changeDate(-1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
+                                <ChevronLeft size={20} />
+                            </button>
+                            <div className="min-w-0 text-center flex-1 px-1">
+                                <div className="inline-flex max-w-full items-center justify-center gap-2">
+                                    <Calendar size={16} className="text-blue-600 shrink-0" />
+                                    <span className="min-w-0 text-center font-bold text-xs sm:text-sm uppercase tracking-[0.12em] sm:tracking-[0.18em] text-slate-700 break-words">
+                                        {viewMode === 'MONTHLY'
+                                            ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                                            : currentDate.getFullYear()}
+                                    </span>
+                                </div>
+                                <p className="mt-1 text-[10px] sm:text-[11px] font-semibold text-slate-500">
+                                    {viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif'}
+                                </p>
+                            </div>
+                            <button onClick={() => changeDate(1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
+                                <ChevronRight size={20} />
+                            </button>
                         </div>
-                        <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-50 rounded-full text-slate-400">
-                            <ChevronRight size={20} />
-                        </button>
                     </div>
 
                     <button
                         onClick={exportExcel}
                         disabled={exporting || loading}
-                        className="w-full sm:w-auto px-6 h-14 bg-white border border-slate-200 rounded-2xl flex items-center justify-center gap-2 text-slate-600 font-bold uppercase tracking-widest text-xs hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
+                        className="app-surface-card w-full lg:w-auto px-4 sm:px-6 h-14 rounded-[28px] flex items-center justify-center gap-2 text-center text-slate-600 font-bold uppercase tracking-[0.14em] sm:tracking-widest text-[11px] sm:text-xs leading-tight hover:bg-white/70 transition-all disabled:opacity-50"
                     >
                         <Download size={16} /> {exporting ? 'Mengekspor...' : 'Export (Excel)'}
                     </button>
                 </div>
             </header>
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pemasukan</p>
-                    <p className="text-lg font-bold text-emerald-600">{formatCurrency(data.totalIncome)}</p>
+            <section className="app-hero-card rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
+                <div className="relative z-10">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/65">Ringkasan Periode</p>
+                    <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Pemasukan</p>
+                            <p className="mt-2 text-xl font-black text-emerald-300 break-words">{formatCurrency(data.totalIncome)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 p-4">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Pengeluaran</p>
+                            <p className="mt-2 text-xl font-black text-rose-300 break-words">{formatCurrency(data.totalExpense)}</p>
+                        </div>
+                    </div>
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Total Perputaran</p>
+                        <p className="mt-1 text-lg font-bold text-white">{formatCurrency(data.totalVolume)}</p>
+                    </div>
                 </div>
-                <div className="bg-white border border-slate-100 rounded-3xl p-5 shadow-sm">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Total Pengeluaran</p>
-                    <p className="text-lg font-bold text-rose-600">{formatCurrency(data.totalExpense)}</p>
-                </div>
-            </div>
+            </section>
 
             {/* Donut Chart Section */}
-            <section className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm">
+            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-sm">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 pb-6 border-b border-slate-50">Komposisi Transaksi</h2>
 
-                <div className="h-64 relative mt-6">
+                <div className="relative mt-6 h-[220px] sm:h-64">
                     {data.categoryData.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={data.categoryData}
-                                    innerRadius={85}
-                                    outerRadius={110}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius="54%"
+                                    outerRadius="78%"
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
@@ -223,23 +241,29 @@ const Reports = () => {
                             </PieChart>
                         </ResponsiveContainer>
                     ) : (
-                        <div className="h-full flex items-center justify-center text-slate-400 italic text-sm font-medium">Tidak ada data</div>
+                        <div className="h-full flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-center px-6">
+                            <p className="text-sm font-semibold text-slate-500">Tidak ada data transaksi pada periode ini.</p>
+                            <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Perputaran</p>
+                            <p className="mt-1 text-lg font-black text-slate-800">{formatCurrency(data.totalVolume)}</p>
+                        </div>
                     )}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mb-0.5">Perputaran</span>
-                        <span className="text-sm font-black text-slate-800 tracking-tight">{formatCurrency(data.totalVolume)}</span>
-                    </div>
+                    {data.categoryData.length > 0 ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-10 text-center">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.18em] mb-0.5">Perputaran</span>
+                            <span className="max-w-[8rem] sm:max-w-[9rem] text-sm font-black text-slate-800 tracking-tight break-words">{formatCurrency(data.totalVolume)}</span>
+                        </div>
+                    ) : null}
                 </div>
 
                 {/* Category List */}
                 <div className="space-y-4 pt-6 border-t border-slate-50 mt-6">
                     {data.categoryData.map((item: any, index: number) => (
-                        <div key={index} className="flex justify-between items-center group">
-                            <div className="flex items-center gap-4">
-                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                <span className="text-sm font-bold text-slate-600">{item.name}</span>
+                        <div key={index} className="flex items-center justify-between gap-3 group">
+                            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                <span className="text-sm font-bold text-slate-600 break-words">{item.name}</span>
                             </div>
-                            <div className="text-right">
+                            <div className="text-right shrink-0">
                                 <p className="text-sm font-bold text-slate-900">{formatCurrency(item.value)}</p>
                                 <p className="text-[10px] text-slate-400 font-bold">{data.totalVolume > 0 ? ((item.value / data.totalVolume) * 100).toFixed(1) : 0}%</p>
                             </div>
@@ -249,8 +273,8 @@ const Reports = () => {
             </section>
 
             {/* Trend Chart */}
-            <section className="bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm mb-10">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 flex gap-4">
+            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-sm mb-10">
+                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
                     <span>Tren Arus Kas</span>
                     <span className="flex items-center gap-1 text-[10px] text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Pemasukan</span>
                     <span className="flex items-center gap-1 text-[10px] text-rose-500"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Pengeluaran</span>
@@ -287,10 +311,10 @@ const Reports = () => {
             </section>
 
             {/* Transactions Table */}
-            <section className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden mb-10">
-                <div className="p-6 border-b border-slate-50 flex justify-between items-center">
+            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] shadow-sm overflow-hidden mb-10">
+                <div className="p-5 sm:p-6 border-b border-slate-50 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
                     <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2">Semua Transaksi</h2>
-                    <span className="text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{data.transactionsData.length} Data</span>
+                    <span className="self-start text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{data.transactionsData.length} Data</span>
                 </div>
                 
                 <div className="overflow-x-auto w-full max-w-full">

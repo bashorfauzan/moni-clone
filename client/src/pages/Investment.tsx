@@ -230,24 +230,24 @@ const Investment = () => {
     if (loading) return <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">Memuat Portofolio...</div>;
 
     return (
-        <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
-            <header className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4">
+        <div className="p-4 md:p-8 space-y-5 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
+            <header className="flex flex-col gap-4">
                 <div>
                     <h1 className="text-2xl font-bold italic text-slate-900">Portofolio Investasi</h1>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Rekapitulasi Modal & Return Multi-Sekuritas</p>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-wider">Rekapitulasi Modal & Return Multi-Sekuritas</p>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-between">
                     <button
                         type="button"
                         onClick={() => setIsIncomeModalOpen(true)}
-                        className="h-11 rounded-2xl bg-slate-900 text-white px-5 text-xs font-bold uppercase tracking-widest disabled:opacity-50"
+                        className="h-11 rounded-2xl bg-slate-900 text-white px-4 sm:px-5 text-[11px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest disabled:opacity-50 w-full lg:w-auto"
                         disabled={investmentIncomeAccounts.length === 0}
                     >
                         Catat Pemasukan Investasi
                     </button>
-                    <div className="w-full sm:w-[220px]">
+                    <div className="w-full lg:w-[240px]">
                         <select
-                            className="w-full bg-slate-100 rounded-xl px-4 py-2.5 text-xs font-bold text-slate-700 border-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                            className="w-full bg-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 border-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
                             value={selectedOwnerId}
                             onChange={(e) => setSelectedOwnerId(e.target.value)}
                         >
@@ -277,23 +277,23 @@ const Investment = () => {
 
             {/* Summary Card */}
             <div className="app-hero-card rounded-[28px] sm:rounded-[32px] p-5 sm:p-8 relative overflow-hidden">
-                <div className="relative z-10 flex flex-col gap-6">
+                <div className="relative z-10 flex flex-col gap-5">
                     <div className="flex items-center gap-2 text-white/60">
                         <Wallet size={18} />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.24em] text-white/70">Total Nilai Aset RDN</span>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] sm:tracking-[0.24em] text-white/70">Total Nilai Aset RDN</span>
                     </div>
 
                     <div>
-                        <h2 className="text-3xl sm:text-4xl font-bold text-white break-words">{formatCurrency(totalValue)}</h2>
+                        <h2 className="text-[2rem] leading-tight sm:text-4xl font-bold text-white break-words">{formatCurrency(totalValue)}</h2>
                         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
                             <div>
-                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.18em]">Total Modal Disetor</p>
+                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.18em]">Total Modal Disetor</p>
                                 <p className="text-white text-sm font-semibold">{formatCurrency(totalModal)}</p>
                             </div>
                             <div className="hidden sm:block h-8 w-px bg-white/14 mx-2"></div>
                             <div>
-                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.18em]">Total Return</p>
-                                <p className={`text-sm font-bold flex items-center gap-1 ${totalReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.18em]">Total Return</p>
+                                <p className={`text-sm font-bold flex flex-wrap items-center gap-1 break-words ${totalReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                     {totalReturnAmount >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                     {formatCurrency(totalReturnAmount)} ({totalReturnPercent.toFixed(2)}%)
                                 </p>
@@ -307,7 +307,7 @@ const Investment = () => {
 
             {/* RDN List */}
             <section className="space-y-4">
-                <div className="app-section-header rounded-2xl px-4 py-3 flex justify-between items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest text-slate-600">
                     <h3>Daftar Sekuritas (RDN)</h3>
                 </div>
 
@@ -319,25 +319,25 @@ const Investment = () => {
                     )}
 
                     {portfolioData.map((rdn) => (
-                        <div key={rdn.id} className="bg-white border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-sm">
+                        <div key={rdn.id} className="bg-white border border-slate-200 rounded-[24px] p-4 sm:p-5 space-y-4 shadow-sm">
                             <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                                 <div className="min-w-0">
                                     <h3 className="font-bold text-lg text-slate-900">{rdn.name}</h3>
                                     <p className="text-[10px] font-bold uppercase text-slate-400">Nilai Saat Ini</p>
                                     <p className="text-xl font-bold text-blue-600 break-words">{formatCurrency(rdn.balance)}</p>
                                 </div>
-                                <div className="sm:text-right">
+                                <div className="min-w-0 sm:text-right">
                                     <p className="text-[10px] font-bold uppercase text-slate-400">Modal</p>
-                                    <p className="text-sm font-semibold text-slate-700">{formatCurrency(rdn.modal)}</p>
+                                    <p className="text-sm font-semibold text-slate-700 break-words">{formatCurrency(rdn.modal)}</p>
 
-                                    <div className={`mt-2 flex items-center justify-end gap-1 text-xs font-bold ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    <div className={`mt-2 flex flex-wrap items-center sm:justify-end gap-1 text-xs font-bold break-words ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                         {rdn.returnAmount >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                         {formatCurrency(Math.abs(rdn.returnAmount))} ({rdn.returnPercent.toFixed(2)}%)
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-100">
+                            <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100 sm:grid-cols-2">
                                 <button
                                     onClick={() => {
                                         setSelectedRdn(rdn);
@@ -348,13 +348,13 @@ const Investment = () => {
                                         }));
                                         setIsTransferModalOpen(true);
                                     }}
-                                    className="flex items-center justify-center gap-2 h-10 w-full rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors"
+                                    className="flex items-center justify-center gap-2 h-11 w-full rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors"
                                 >
                                     <ArrowRightLeft size={14} /> Deposit / Tarik
                                 </button>
                                 <button
                                     onClick={() => setDetailAccount(rdn)}
-                                    className="flex items-center justify-center h-10 w-full rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition-colors"
+                                    className="flex items-center justify-center h-11 w-full rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition-colors"
                                 >
                                     Detail Kepemilikan
                                 </button>
