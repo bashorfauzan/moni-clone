@@ -1,7 +1,7 @@
 # Catatan Aplikasi Keuangan Pribadi
 
 ## Tujuan
-Aplikasi pencatatan keuangan pribadi (gaya Moni) yang:
+Aplikasi pencatatan keuangan pribadi (gaya SPEND) yang:
 - mobile-first
 - bisa diakses via web
 - mengikuti alur pencatatan manual dari file Excel

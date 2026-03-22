@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchNotificationInbox, type NotificationItem } from '../services/notificationInbox';
+import {
+    clearNotificationInbox,
+    deleteNotificationInboxItem,
+    fetchNotificationInbox,
+    type NotificationItem
+} from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
+import { useAuth } from '../context/AuthContext';
 
 const Home = () => {
     const { openModal } = useTransaction();
+    const { user } = useAuth();
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[] }>({ owners: [], accounts: [] });
     const [data, setData] = useState({
         availableBalance: 0,
@@ -25,6 +32,8 @@ const Home = () => {
     const [isWealthHidden, setIsWealthHidden] = useState(() => localStorage.getItem('hideWealth') === 'true');
     const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
     const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
+    const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
+    const [clearingNotifications, setClearingNotifications] = useState(false);
     const refreshTimeoutRef = useRef<number | null>(null);
 
     const toggleHideWealth = () => {
@@ -225,6 +234,61 @@ const Home = () => {
         }
     };
 
+    const displayName = (
+        user?.user_metadata?.full_name
+        || user?.user_metadata?.name
+        || user?.email?.split('@')[0]
+        || meta.owners[0]?.name
+        || 'User'
+    ) as string;
+
+    const greeting = (() => {
+        const hour = new Date().getHours();
+        if (hour >= 4 && hour < 11) return 'Selamat pagi';
+        if (hour >= 11 && hour < 15) return 'Selamat siang';
+        if (hour >= 15 && hour < 18) return 'Selamat sore';
+        return 'Selamat malam';
+    })();
+
+    const handleLaunchAccount = async (account: Account) => {
+        setLaunchingAccountId(account.id);
+        try {
+            const result = await launchAccountApp(account);
+            if (!result.ok && result.message) {
+                alert(result.message);
+            }
+        } finally {
+            setLaunchingAccountId(null);
+        }
+    };
+
+    const handleDeleteNotification = async (id: string) => {
+        setDeletingNotificationId(id);
+        try {
+            await deleteNotificationInboxItem(id);
+            await fetchData();
+        } catch (error: any) {
+            alert(error?.response?.data?.error || 'Gagal menghapus notifikasi');
+        } finally {
+            setDeletingNotificationId(null);
+        }
+    };
+
+    const handleClearNotifications = async () => {
+        const confirmed = window.confirm('Kosongkan inbox notifikasi yang belum terkait transaksi?');
+        if (!confirmed) return;
+
+        setClearingNotifications(true);
+        try {
+            await clearNotificationInbox();
+            await fetchData();
+        } catch (error: any) {
+            alert(error?.response?.data?.error || 'Gagal mengosongkan inbox notifikasi');
+        } finally {
+            setClearingNotifications(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-[60vh]">
@@ -239,12 +303,12 @@ const Home = () => {
             <header className="flex justify-between items-center mb-8">
                 <div>
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent italic">
-                        Moni Clone
+                        SPEND
                     </h1>
-                    <p className="text-slate-500 text-sm font-medium">Selamat siang, Bashor</p>
+                    <p className="text-slate-500 text-sm font-medium">{greeting}, {displayName}</p>
                 </div>
                 <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-                    <span className="text-sm font-bold text-blue-600">BF</span>
+                    <span className="text-sm font-bold text-blue-600">{displayName.slice(0, 2).toUpperCase()}</span>
                 </div>
             </header>
 
@@ -394,6 +458,13 @@ const Home = () => {
                     >
                         Refresh
                     </button>
+                    <button
+                        onClick={() => void handleClearNotifications()}
+                        disabled={clearingNotifications}
+                        className="app-action-chip rounded-full px-3 py-2 text-xs text-rose-600 font-bold uppercase tracking-wide shrink-0 disabled:opacity-50"
+                    >
+                        {clearingNotifications ? 'Menghapus...' : 'Kosongkan Inbox'}
+                    </button>
                 </div>
 
                 <div className="space-y-3">
@@ -454,6 +525,19 @@ const Home = () => {
                                         <p className="text-[11px] text-slate-500 mt-3">
                                             {item.parseNotes}
                                         </p>
+                                    ) : null}
+
+                                    {!item.transaction ? (
+                                        <div className="mt-3 flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleDeleteNotification(item.id)}
+                                                disabled={deletingNotificationId === item.id}
+                                                className="h-8 px-3 rounded-lg bg-white/80 border border-slate-200 text-[11px] font-bold uppercase tracking-wide text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
+                                            >
+                                                {deletingNotificationId === item.id ? 'Menghapus...' : 'Hapus'}
+                                            </button>
+                                        </div>
                                     ) : null}
                                 </div>
                             );

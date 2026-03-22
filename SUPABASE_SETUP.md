@@ -183,7 +183,7 @@ Skeleton Android helper app sekarang sudah tersedia di folder [android-helper](/
 
 Tujuannya:
 - membaca notifikasi WhatsApp dari Android
-- mengirim payload ke backend Moni
+- mengirim payload ke backend SPEND
 
 Lihat panduan detail di [android-helper/README.md](/Users/bashorfauzan/Documents/coba2/android-helper/README.md).
 

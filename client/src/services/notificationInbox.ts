@@ -65,3 +65,11 @@ export const fetchNotificationInbox = async (limit = 8): Promise<NotificationIte
     const response = await api.get(`/webhook/notifications?limit=${limit}`);
     return response.data.map(normalizeNotificationRow);
 };
+
+export const deleteNotificationInboxItem = async (id: string) => {
+    await api.delete(`/webhook/notifications/${id}`);
+};
+
+export const clearNotificationInbox = async () => {
+    await api.delete('/webhook/notifications');
+};

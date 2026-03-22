@@ -167,6 +167,47 @@ router.get('/notifications', async (req, res) => {
     }
 });
 
+router.delete('/notifications/:id', async (req, res) => {
+    try {
+        const notification = await notificationInboxClient.findUnique({
+            where: { id: req.params.id },
+            include: { transaction: true }
+        });
+
+        if (!notification) {
+            return res.status(404).json({ error: 'Notifikasi tidak ditemukan' });
+        }
+
+        if (notification.transaction) {
+            return res.status(409).json({ error: 'Notifikasi sudah terkait transaksi dan tidak bisa dihapus langsung' });
+        }
+
+        await notificationInboxClient.delete({
+            where: { id: req.params.id }
+        });
+
+        res.json({ ok: true });
+    } catch (error) {
+        console.error('Delete notification error:', error);
+        res.status(500).json({ error: 'Gagal menghapus notifikasi' });
+    }
+});
+
+router.delete('/notifications', async (_req, res) => {
+    try {
+        const result = await notificationInboxClient.deleteMany({
+            where: {
+                transaction: null
+            }
+        });
+
+        res.json({ ok: true, deleted: result.count });
+    } catch (error) {
+        console.error('Clear notifications error:', error);
+        res.status(500).json({ error: 'Gagal mengosongkan inbox notifikasi' });
+    }
+});
+
 router.post('/notification', async (req, res) => {
     try {
         const { appName, text, title, senderName, receivedAt, rawPayload } = req.body;

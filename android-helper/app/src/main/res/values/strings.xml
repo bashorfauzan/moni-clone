@@ -1,8 +1,8 @@
 <resources>
-    <string name="app_name">Moni Notifier</string>
-    <string name="listener_service_name">Moni WhatsApp Listener</string>
-    <string name="setup_title">Moni Android Helper</string>
-    <string name="setup_subtitle">App ini menangkap notifikasi WhatsApp lalu mengirimkannya ke backend Moni Anda.</string>
+    <string name="app_name">SPEND Notifier</string>
+    <string name="listener_service_name">SPEND WhatsApp Listener</string>
+    <string name="setup_title">SPEND Android Helper</string>
+    <string name="setup_subtitle">App ini menangkap notifikasi WhatsApp lalu mengirimkannya ke backend SPEND Anda.</string>
     <string name="backend_url_hint">URL endpoint backend</string>
     <string name="save_button">Simpan Endpoint</string>
     <string name="filter_keywords_hint">Filter keyword, pisahkan dengan koma</string>
@@ -14,5 +14,5 @@
     <string name="status_invalid_url">URL endpoint tidak valid</string>
     <string name="last_delivery_label">Pengiriman terakhir</string>
     <string name="last_delivery_default">Belum ada pengiriman</string>
-    <string name="setup_steps">Langkah setup:\n1. Isi URL backend, untuk emulator Android gunakan http://10.0.2.2:5001/api/webhook/notification\n2. Atur filter keyword, misalnya bca,dana,flip,gaji,masuk,keluar\n3. Simpan endpoint\n4. Buka Notification Access dan aktifkan Moni Notifier\n5. Pastikan notifikasi WhatsApp muncul di HP\n6. Cek status pengiriman terakhir di layar ini</string>
+    <string name="setup_steps">Langkah setup:\n1. Isi URL backend, untuk emulator Android gunakan http://10.0.2.2:5001/api/webhook/notification\n2. Atur filter keyword, misalnya bca,dana,flip,gaji,masuk,keluar\n3. Simpan endpoint\n4. Buka Notification Access dan aktifkan SPEND Notifier\n5. Pastikan notifikasi WhatsApp muncul di HP\n6. Cek status pengiriman terakhir di layar ini</string>
 </resources>

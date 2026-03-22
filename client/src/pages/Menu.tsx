@@ -20,7 +20,10 @@ import {
     Search,
     ChevronLeft,
     Download,
-    ExternalLink
+    ExternalLink,
+    Mail,
+    Lock,
+    Phone
 } from 'lucide-react';
 import { useTheme, THEME_PRESETS } from '../context/ThemeContext';
 import { fetchMasterMeta, type Owner, type Account, type Activity } from '../services/masterData';
@@ -41,6 +44,7 @@ import {
     canLaunchAccountApp,
     launchAccountApp
 } from '../services/accountLauncher';
+import { supabase } from '../lib/supabase';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
@@ -56,7 +60,7 @@ const MenuPage = () => {
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[]; activities: Activity[] }>({ owners: [], accounts: [], activities: [] });
     const location = useLocation();
     const navigate = useNavigate();
-    const { signOut } = useAuth();
+    const { signOut, user } = useAuth();
     const {
         bgColor,
         bgImage,
@@ -110,6 +114,7 @@ const MenuPage = () => {
     const [heroThemeImageError, setHeroThemeImageError] = useState('');
     const [isThemeCustomizerOpen, setIsThemeCustomizerOpen] = useState(false);
     const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
+    const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
@@ -119,6 +124,14 @@ const MenuPage = () => {
     const [selectedBackupFileName, setSelectedBackupFileName] = useState('');
     const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
     const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
+    const [accountSettingsSaving, setAccountSettingsSaving] = useState(false);
+    const [accountSettingsError, setAccountSettingsError] = useState('');
+    const [accountSettingsForm, setAccountSettingsForm] = useState({
+        username: '',
+        email: '',
+        password: '',
+        phone: ''
+    });
     const [themeCropMode, setThemeCropMode] = useState<'fit' | 'crop-portrait'>(() => {
         const saved = localStorage.getItem('app-bg-crop-mode');
         return saved === 'crop-portrait' ? 'crop-portrait' : 'fit';
@@ -524,7 +537,89 @@ const MenuPage = () => {
         }
     };
 
-    const mainOwner = meta.owners[0] || { name: 'User' };
+    const profileDisplayName = (
+        user?.user_metadata?.full_name
+        || user?.user_metadata?.name
+        || user?.email?.split('@')[0]
+        || meta.owners[0]?.name
+        || 'User'
+    ) as string;
+
+    const mainOwner = { name: profileDisplayName };
+
+    useEffect(() => {
+        if (!isAccountSettingsOpen) return;
+
+        setAccountSettingsForm({
+            username: String(
+                user?.user_metadata?.full_name
+                || user?.user_metadata?.name
+                || user?.email?.split('@')[0]
+                || meta.owners[0]?.name
+                || ''
+            ),
+            email: user?.email || '',
+            password: '',
+            phone: String(user?.user_metadata?.phone || '')
+        });
+        setAccountSettingsError('');
+    }, [isAccountSettingsOpen, meta.owners, user]);
+
+    const saveAccountSettings = async () => {
+        if (!supabase || !user) {
+            setAccountSettingsError('Konfigurasi akun tidak tersedia.');
+            return;
+        }
+
+        if (!accountSettingsForm.username.trim()) {
+            setAccountSettingsError('Username wajib diisi.');
+            return;
+        }
+
+        if (!accountSettingsForm.email.trim()) {
+            setAccountSettingsError('Email wajib diisi.');
+            return;
+        }
+
+        if (accountSettingsForm.password && accountSettingsForm.password.length < 6) {
+            setAccountSettingsError('Password baru minimal 6 karakter.');
+            return;
+        }
+
+        setAccountSettingsSaving(true);
+        setAccountSettingsError('');
+        try {
+            const payload: {
+                email?: string;
+                password?: string;
+                data: Record<string, unknown>;
+            } = {
+                data: {
+                    full_name: accountSettingsForm.username.trim(),
+                    name: accountSettingsForm.username.trim(),
+                    phone: accountSettingsForm.phone.trim()
+                }
+            };
+
+            if (accountSettingsForm.email.trim() !== user.email) {
+                payload.email = accountSettingsForm.email.trim();
+            }
+
+            if (accountSettingsForm.password) {
+                payload.password = accountSettingsForm.password;
+            }
+
+            const { error } = await supabase.auth.updateUser(payload);
+            if (error) throw error;
+
+            alert('Pengaturan akun berhasil diperbarui.');
+            setIsAccountSettingsOpen(false);
+        } catch (error: any) {
+            setAccountSettingsError(error?.message || 'Gagal memperbarui pengaturan akun.');
+        } finally {
+            setAccountSettingsSaving(false);
+        }
+    };
 
     const filteredAccounts = meta.accounts.filter((acc) =>
         acc.name.toLowerCase().includes(accountQuery.toLowerCase()) ||
@@ -650,10 +745,9 @@ const MenuPage = () => {
         }
 
         setRestoreRunning(true);
+        setRestoreError('');
         try {
-            const rawText = await file.text();
-            const payload = JSON.parse(rawText);
-            await restoreBackupJson(payload);
+            await restoreBackupJson(restorePreview.payload);
             alert('Restore backup berhasil. Halaman akan dimuat ulang.');
             window.location.reload();
         } catch (error: any) {
@@ -678,19 +772,6 @@ const MenuPage = () => {
 
     return (
         <div className="px-3 py-4 sm:p-4 md:p-8 space-y-5 sm:space-y-6 pb-28 sm:pb-32 mx-auto w-full max-w-2xl relative">
-            {/* Header */}
-            <header className="app-surface-card rounded-[28px] px-5 py-4 sm:px-6 sm:py-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-500">Pengaturan Umum</p>
-                        <p className="text-sm text-slate-600 mt-1">Atur data master, tampilan, dan preferensi akun dalam satu tempat.</p>
-                    </div>
-                    <div className="w-fit shrink-0 rounded-2xl border border-white/80 bg-white/70 px-3 py-2 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-600 shadow-sm">
-                        Moni Clone
-                    </div>
-                </div>
-            </header>
-
             {/* Profile Card */}
             <div className="app-hero-card rounded-3xl p-4 sm:p-6 flex items-center gap-3 sm:gap-5 min-h-[132px] sm:min-h-[148px]">
                 <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center text-white text-xl sm:text-2xl font-bold shadow-lg shrink-0" style={{ background: 'linear-gradient(135deg, var(--theme-accent) 0%, var(--theme-hero-glow) 100%)', boxShadow: '0 16px 28px -18px color-mix(in srgb, var(--theme-accent) 70%, transparent)' }}>
@@ -703,17 +784,18 @@ const MenuPage = () => {
                         Keamanan Aktif
                     </div>
                 </div>
-                <button className="p-2.5 rounded-xl text-white/60 hover:text-white transition-colors shrink-0" style={{ backgroundColor: 'color-mix(in srgb, white 8%, transparent)' }}>
+                <button
+                    type="button"
+                    onClick={() => setIsAccountSettingsOpen(true)}
+                    className="p-2.5 rounded-xl text-white/60 hover:text-white transition-colors shrink-0"
+                    style={{ backgroundColor: 'color-mix(in srgb, white 8%, transparent)' }}
+                >
                     <Settings size={18} />
                 </button>
             </div>
 
             {/* Settings List */}
             <section className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-1">
-                    <h3 className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-500">Daftar Pengaturan</h3>
-                    <p className="text-[11px] text-slate-500">Rapi dan tetap terbaca.</p>
-                </div>
                 <div className="app-surface-card rounded-[28px] overflow-hidden">
                     {/* Setup Rekening */}
                     <button
@@ -833,7 +915,7 @@ const MenuPage = () => {
             </button>
 
             <div className="app-surface-muted rounded-[22px] px-4 py-3 text-center pb-3">
-                <p className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">Moni Clone v1.0.0</p>
+                <p className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">SPEND v1.0.0</p>
                 <p className="text-slate-500 text-[10px] italic mt-1">Design by bashorfauzan</p>
             </div>
 
@@ -1081,6 +1163,99 @@ const MenuPage = () => {
                                     </div>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isAccountSettingsOpen && (
+                <div
+                    className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+                    onMouseDown={() => setIsAccountSettingsOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
+                            <div className="min-w-0">
+                                <h3 className="text-lg font-bold text-slate-900">Pengaturan Akun</h3>
+                                <p className="text-sm text-slate-500 mt-1">Ubah username, email, password, dan nomor HP akun.</p>
+                            </div>
+                            <button onClick={() => setIsAccountSettingsOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overscroll-contain">
+                            <div>
+                                <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Username</label>
+                                <div className="relative">
+                                    <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        value={accountSettingsForm.username}
+                                        onChange={(e) => setAccountSettingsForm((prev) => ({ ...prev, username: e.target.value }))}
+                                        placeholder="Nama pengguna"
+                                        className="w-full h-11 rounded-xl border border-slate-200 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Email</label>
+                                <div className="relative">
+                                    <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="email"
+                                        value={accountSettingsForm.email}
+                                        onChange={(e) => setAccountSettingsForm((prev) => ({ ...prev, email: e.target.value }))}
+                                        placeholder="email@contoh.com"
+                                        className="w-full h-11 rounded-xl border border-slate-200 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Password Baru</label>
+                                <div className="relative">
+                                    <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        type="password"
+                                        value={accountSettingsForm.password}
+                                        onChange={(e) => setAccountSettingsForm((prev) => ({ ...prev, password: e.target.value }))}
+                                        placeholder="Kosongkan jika tidak ingin ganti"
+                                        className="w-full h-11 rounded-xl border border-slate-200 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">No. HP</label>
+                                <div className="relative">
+                                    <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                        value={accountSettingsForm.phone}
+                                        onChange={(e) => setAccountSettingsForm((prev) => ({ ...prev, phone: e.target.value }))}
+                                        placeholder="08xxxxxxxxxx"
+                                        className="w-full h-11 rounded-xl border border-slate-200 pl-10 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            {accountSettingsError ? (
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">
+                                    {accountSettingsError}
+                                </div>
+                            ) : null}
+
+                            <button
+                                type="button"
+                                onClick={() => void saveAccountSettings()}
+                                disabled={accountSettingsSaving}
+                                className="w-full h-11 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-60 hover:bg-blue-700 transition-colors"
+                            >
+                                <Save size={14} /> {accountSettingsSaving ? 'Menyimpan...' : 'Simpan Pengaturan Akun'}
+                            </button>
                         </div>
                     </div>
                 </div>

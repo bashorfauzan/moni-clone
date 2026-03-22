@@ -61,7 +61,7 @@ const Login = () => {
                 {/* Logo */}
                 <div className="text-center mb-8">
                     <h1 className="text-3xl font-black italic bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent select-none" style={{ fontFamily: 'Inter, system-ui, sans-serif' }}>
-                        Moni Clone
+                        SPEND
                     </h1>
                     <p className="text-slate-400 text-sm mt-2 font-medium">Selamat datang kembali 👋</p>
                 </div>

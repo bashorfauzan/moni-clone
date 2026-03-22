@@ -108,7 +108,7 @@ router.get('/export-excel', async (_req, res) => {
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(transactionRows), 'Transaksi');
 
         const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        const filename = `moni-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const filename = `spend-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
         res.setHeader('Content-Disposition', `attachment; filename=\"${filename}\"`);

@@ -1,6 +1,6 @@
-# Moni Android Helper
+# SPEND Android Helper
 
-Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari perangkat Android, lalu mengirimkannya ke backend Moni.
+Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari perangkat Android, lalu mengirimkannya ke backend SPEND.
 
 ## Yang sudah ada
 
@@ -43,7 +43,7 @@ Contoh filter:
 
 5. Tap `Simpan Endpoint`.
 6. Tap `Buka Pengaturan Notification Access`.
-7. Aktifkan `Moni Notifier`.
+7. Aktifkan `SPEND Notifier`.
 8. Pastikan notifikasi WhatsApp muncul di perangkat.
 9. Cek `Pengiriman terakhir` di layar app.
 
