@@ -194,7 +194,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (owners.length > 0) {
                 await trx.owner.createMany({
-                    data: owners.map((owner) => ({
+                    data: owners.map((owner: any) => ({
                         id: String(owner.id),
                         name: String(owner.name || 'Owner'),
                         createdAt: asDate(owner.createdAt),
@@ -205,7 +205,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (activities.length > 0) {
                 await trx.activity.createMany({
-                    data: activities.map((activity) => ({
+                    data: activities.map((activity: any) => ({
                         id: String(activity.id),
                         name: String(activity.name || 'Kategori'),
                         createdAt: asDate(activity.createdAt),
@@ -216,7 +216,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (accounts.length > 0) {
                 await trx.account.createMany({
-                    data: accounts.map((account) => ({
+                    data: accounts.map((account: any) => ({
                         id: String(account.id),
                         name: String(account.name || 'Rekening'),
                         type: String(account.type || 'Bank'),
@@ -234,7 +234,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (budgets.length > 0) {
                 await trx.budget.createMany({
-                    data: budgets.map((budget) => ({
+                    data: budgets.map((budget: any) => ({
                         id: String(budget.id),
                         amount: Number(budget.amount || 0),
                         period: String(budget.period || 'Monthly'),
@@ -247,7 +247,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (targets.length > 0) {
                 await trx.target.createMany({
-                    data: targets.map((target) => ({
+                    data: targets.map((target: any) => ({
                         id: String(target.id),
                         title: String(target.title || 'Target'),
                         totalAmount: Number(target.totalAmount || 0),
@@ -264,7 +264,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (notifications.length > 0) {
                 await trx.notificationInbox.createMany({
-                    data: notifications.map((notification) => ({
+                    data: notifications.map((notification: any) => ({
                         id: String(notification.id),
                         sourceApp: String(notification.sourceApp || ''),
                         senderName: notification.senderName ? String(notification.senderName) : null,
@@ -287,7 +287,7 @@ router.post('/restore-backup', async (req, res) => {
 
             if (transactions.length > 0) {
                 await trx.transaction.createMany({
-                    data: transactions.map((transaction) => ({
+                    data: transactions.map((transaction: any) => ({
                         id: String(transaction.id),
                         date: asDate(transaction.date),
                         type: transaction.type,
