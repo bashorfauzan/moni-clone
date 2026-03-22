@@ -290,15 +290,15 @@ const Home = () => {
     return (
         <div className="p-4 md:p-8 mx-auto w-full max-w-6xl">
             {/* Header */}
-            <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
+            <header className="mb-6 flex items-center justify-between gap-3">
+                <div className="min-w-0 flex-1">
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent italic">
                         SPEND
                     </h1>
                     <p className="text-slate-500 text-sm font-medium truncate">{greeting}, {displayName}</p>
                 </div>
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 shrink-0">
-                    <span className="text-sm font-bold text-blue-600">{displayName.slice(0, 2).toUpperCase()}</span>
+                <div className="w-14 h-14 rounded-full bg-white/75 app-surface-muted flex items-center justify-center shrink-0">
+                    <span className="text-base font-bold text-blue-600">{displayName.slice(0, 2).toUpperCase()}</span>
                 </div>
             </header>
 
