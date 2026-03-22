@@ -7,3 +7,6 @@ startCommand = "npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
+
+[deploy.env]
+PORT = "4173"
