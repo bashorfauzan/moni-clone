@@ -962,7 +962,7 @@ const MenuPage = () => {
             </button>
 
             <div className="app-surface-muted rounded-[22px] px-4 py-3 text-center pb-3">
-                <p className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">SPEND v1.0.0</p>
+                <p className="text-slate-700 text-[10px] font-bold uppercase tracking-widest">NOVA v1.0.0</p>
                 <p className="text-slate-500 text-[10px] italic mt-1">Design by bashorfauzan</p>
             </div>
 

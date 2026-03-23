@@ -1,14 +1,14 @@
 <resources>
-    <string name="app_name">SPEND Notifier</string>
-    <string name="listener_service_name">SPEND WhatsApp Listener</string>
-    <string name="setup_title">SPEND Android Helper</string>
-    <string name="setup_subtitle">App ini menangkap notifikasi WhatsApp, mengirimkannya ke backend SPEND, dan bisa membuka web app utama dalam wrapper Android.</string>
+    <string name="app_name">NOVA</string>
+    <string name="listener_service_name">NOVA WhatsApp Listener</string>
+    <string name="setup_title">NOVA Android Helper</string>
+    <string name="setup_subtitle">App ini menangkap notifikasi WhatsApp, mengirimkannya ke backend NOVA, dan bisa membuka web app utama dalam wrapper Android.</string>
     <string name="backend_url_hint">URL endpoint backend</string>
     <string name="save_button">Simpan Pengaturan</string>
     <string name="web_app_url_hint">URL web app utama</string>
     <string name="filter_keywords_hint">Filter keyword, pisahkan dengan koma</string>
     <string name="open_notification_settings">Buka Pengaturan Notification Access</string>
-    <string name="open_web_app">Buka SPEND App</string>
+    <string name="open_web_app">Buka NOVA App</string>
     <string name="status_idle">Status: belum dicek</string>
     <string name="status_enabled">Status: notification access aktif</string>
     <string name="status_disabled">Status: notification access belum aktif</string>
@@ -16,10 +16,10 @@
     <string name="status_invalid_url">URL tidak valid</string>
     <string name="last_delivery_label">Pengiriman terakhir</string>
     <string name="last_delivery_default">Belum ada pengiriman</string>
-    <string name="setup_steps">Langkah setup:\n1. URL backend dan web app utama sudah disetel otomatis ke server Railway SPEND.\n2. Atur filter keyword, misalnya bca,dana,flip,gaji,masuk,keluar\n3. Simpan pengaturan\n4. Buka Notification Access dan aktifkan SPEND Notifier\n5. Tap Buka SPEND App untuk menjalankan web app dalam wrapper Android\n6. Dari web app, tombol Buka Rekening akan mencoba deep link, fallback ke app terpasang, lalu fallback ke Play Store</string>
-    <string name="status_opening_web_app">Membuka SPEND App…</string>
-    <string name="web_app_title">SPEND App</string>
-    <string name="web_app_load_failed">Gagal membuka halaman SPEND App.</string>
+    <string name="setup_steps">Langkah setup:\n1. URL backend dan web app utama sudah disetel otomatis ke server Railway NOVA.\n2. Atur filter keyword, misalnya bca,dana,flip,gaji,masuk,keluar\n3. Simpan pengaturan\n4. Buka Notification Access dan aktifkan NOVA\n5. Tap Buka NOVA App untuk menjalankan web app dalam wrapper Android\n6. Dari web app, tombol Buka Rekening akan mencoba deep link, fallback ke app terpasang, lalu fallback ke Play Store</string>
+    <string name="status_opening_web_app">Membuka NOVA App…</string>
+    <string name="web_app_title">NOVA App</string>
+    <string name="web_app_load_failed">Gagal membuka halaman NOVA App.</string>
     <string name="web_app_invalid_url">URL web app tidak valid.</string>
     <string name="web_app_no_url">URL web app belum diisi.</string>
     <string name="open_external_browser">Buka di Browser</string>

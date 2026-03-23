@@ -9,7 +9,7 @@ export type BackupSettings = {
     lastBackupAt: string | null;
 };
 
-const BACKUP_SETTINGS_KEY = 'spend-backup-settings';
+const BACKUP_SETTINGS_KEY = 'nova-backup-settings';
 
 export const DEFAULT_BACKUP_SETTINGS: BackupSettings = {
     autoBackup: false,
@@ -59,7 +59,7 @@ export const shouldRunAutoBackup = (settings: BackupSettings, now = new Date()) 
 
 export const buildBackupFilename = (date = new Date()) => {
     const iso = date.toISOString().replace(/[:.]/g, '-');
-    return `spend-backup-${iso}.json`;
+    return `nova-backup-${iso}.json`;
 };
 
 export const downloadBackupBlob = (blob: Blob, filename: string) => {

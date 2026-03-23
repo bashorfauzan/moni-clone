@@ -133,7 +133,7 @@ const ensureDefaults = async (accountHint?: string | null) => {
 // ─── Help message ───────────────────────────────────────────────────────────
 
 const HELP_TEXT = `
-🤖 *SPEND Bot*
+🤖 *NOVA Bot*
 
 Kirim pesan dengan format:
 \`<jenis> <nominal> [rekening] [keterangan]\`
@@ -199,7 +199,7 @@ router.post('/webhook', async (req, res) => {
     // ── Commands ──────────────────────────────────────────────────────────────
 
     if (text === '/start') {
-        await sendTelegramMessage(chatId, `👋 Halo *${firstName}*!\n\nSelamat datang di *SPEND Bot*.\n\nKirim /help untuk panduan penggunaan.`);
+        await sendTelegramMessage(chatId, `👋 Halo *${firstName}*!\n\nSelamat datang di *NOVA Bot*.\n\nKirim /help untuk panduan penggunaan.`);
         return;
     }
 

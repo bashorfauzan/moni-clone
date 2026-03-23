@@ -1,6 +1,6 @@
-# SPEND Android Helper
+# NOVA Android Helper
 
-Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari perangkat Android, lalu mengirimkannya ke backend SPEND. Sekarang helper ini juga bisa membuka web app utama SPEND dalam wrapper Android WebView.
+Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari perangkat Android, lalu mengirimkannya ke backend NOVA. Sekarang helper ini juga bisa membuka web app utama NOVA dalam wrapper Android WebView.
 
 ## Yang sudah ada
 
@@ -11,7 +11,7 @@ Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari per
 - status pengiriman terakhir di layar setup
 - kirim payload ke `POST /api/webhook/notification`
 - wrapper WebView untuk membuka aplikasi utama
-- bridge native `window.SpendNativeBridge.openAccountApp(...)`
+- bridge native `window.NovaNativeBridge.openAccountApp(...)`
 - dukungan untuk:
   - `com.whatsapp`
   - `com.whatsapp.w4b`
@@ -44,7 +44,7 @@ Contoh:
 Contoh URL web app:
 - emulator Android: `http://10.0.2.2:4173`
 - HP fisik: `http://192.168.1.10:4173`
-- domain online: `https://domain-spend-anda.com`
+- domain online: `https://domain-nova-anda.com`
 
 Contoh filter:
 - `bca,dana,flip,gaji,masuk,keluar`
@@ -52,8 +52,8 @@ Contoh filter:
 
 6. Tap `Simpan Pengaturan`.
 7. Tap `Buka Pengaturan Notification Access`.
-8. Aktifkan `SPEND Notifier`.
-9. Tap `Buka SPEND App`.
+8. Aktifkan `NOVA Notifier`.
+9. Tap `Buka NOVA App`.
 10. Dari web app utama, tombol `Buka` pada rekening akan memakai bridge Android:
    - coba `deepLink`
    - fallback ke app terpasang via `packageName`
@@ -106,7 +106,7 @@ Web client sekarang sudah menyiapkan konfigurasi rekening berikut:
 Dan di sisi browser sudah ada bridge contract global:
 
 ```ts
-window.SpendNativeBridge?.openAccountApp?.({
+window.NovaNativeBridge?.openAccountApp?.({
   id: string,
   name: string,
   packageName?: string | null,
@@ -121,10 +121,10 @@ Implementasi yang sekarang sudah ada:
    - URL backend webhook
    - URL web app utama
    - filter keyword
-2. Tombol `Buka SPEND App` membuka `WebAppActivity`.
+2. Tombol `Buka NOVA App` membuka `WebAppActivity`.
 3. `WebAppActivity` memuat web app utama di `WebView`.
 4. Saat halaman selesai dimuat, activity menyuntikkan bridge:
-   - `window.SpendNativeBridge.openAccountApp(payload)`
+   - `window.NovaNativeBridge.openAccountApp(payload)`
 5. Prioritas buka app rekening:
    - pakai `deepLink` jika tersedia
    - fallback ke launcher app via `packageName`

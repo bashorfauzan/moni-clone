@@ -2,7 +2,7 @@ import type { Account } from './masterData';
 
 declare global {
     interface Window {
-        SpendNativeBridge?: {
+        NovaNativeBridge?: {
             openAccountApp?: (payload: {
                 id: string;
                 name: string;
@@ -101,7 +101,7 @@ export const launchAccountApp = async (account: Account) => {
         };
     }
 
-    const nativeBridge = window.SpendNativeBridge?.openAccountApp;
+    const nativeBridge = window.NovaNativeBridge?.openAccountApp;
     if (nativeBridge) {
         const result = await nativeBridge({
             id: account.id,

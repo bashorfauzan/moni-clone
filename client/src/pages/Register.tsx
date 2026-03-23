@@ -54,7 +54,7 @@ const Register = () => {
                 <div className="grid w-full items-stretch gap-5 lg:grid-cols-[0.95fr_1.05fr]">
                     <section className="hidden lg:flex flex-col justify-between rounded-[36px] border border-white/10 bg-white/6 p-8 backdrop-blur-xl">
                         <div>
-                            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-emerald-200">SPEND APP</p>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-emerald-200">NOVA APP</p>
                             <h1 className="mt-4 max-w-md text-4xl font-black italic leading-tight text-white">
                                 Bangun workspace keuangan yang rapi sejak akun pertama dibuat.
                             </h1>
@@ -82,7 +82,7 @@ const Register = () => {
                     <div className="w-full max-w-md justify-self-center lg:max-w-none lg:self-center">
                         <div className="mb-6 text-center lg:hidden">
                             <h1 className="text-3xl font-black italic bg-gradient-to-r from-blue-300 to-emerald-300 bg-clip-text text-transparent select-none">
-                                SPEND
+                                NOVA
                             </h1>
                             <p className="mt-2 text-sm font-medium text-slate-300">Buat akun baru</p>
                         </div>

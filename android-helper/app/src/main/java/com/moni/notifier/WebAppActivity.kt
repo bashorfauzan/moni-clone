@@ -59,7 +59,7 @@ class WebAppActivity : AppCompatActivity() {
             allowFileAccess = false
             allowContentAccess = true
         }
-        binding.webView.addJavascriptInterface(SpendNativeJsBridge(), JS_BRIDGE_NAME)
+        binding.webView.addJavascriptInterface(NovaNativeJsBridge(), JS_BRIDGE_NAME)
         binding.webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 binding.loadingBar.progress = newProgress
@@ -135,10 +135,10 @@ class WebAppActivity : AppCompatActivity() {
         binding.webView.evaluateJavascript(
             """
             (function () {
-              if (window.SpendNativeBridge && window.SpendNativeBridge.__androidReady) {
+              if (window.NovaNativeBridge && window.NovaNativeBridge.__androidReady) {
                 return;
               }
-              window.SpendNativeBridge = {
+              window.NovaNativeBridge = {
                 __androidReady: true,
                 openAccountApp: function (payload) {
                   try {
@@ -161,7 +161,7 @@ class WebAppActivity : AppCompatActivity() {
         return parsed.scheme == "http" || parsed.scheme == "https"
     }
 
-    private inner class SpendNativeJsBridge {
+    private inner class NovaNativeJsBridge {
         @JavascriptInterface
         fun openAccountApp(payloadJson: String) {
             runOnUiThread {
@@ -213,7 +213,7 @@ class WebAppActivity : AppCompatActivity() {
 
     companion object {
         private const val EXTRA_WEB_APP_URL = "web_app_url"
-        private const val JS_BRIDGE_NAME = "SpendAndroidBridge"
+        private const val JS_BRIDGE_NAME = "NovaAndroidBridge"
 
         fun createIntent(context: Context, webAppUrl: String): Intent {
             return Intent(context, WebAppActivity::class.java)

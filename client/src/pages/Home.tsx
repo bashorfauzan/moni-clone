@@ -315,7 +315,7 @@ const Home = () => {
             <header className="mb-6 flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent italic">
-                        SPEND
+                        NOVA
                     </h1>
                     <p className="text-slate-500 text-sm font-medium truncate">{greeting}, {displayName}</p>
                 </div>
