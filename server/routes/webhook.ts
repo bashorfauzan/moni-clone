@@ -3,7 +3,7 @@ import { PrismaClient, TransactionType } from '@prisma/client';
 
 const router = express.Router();
 const prisma = new PrismaClient();
-const notificationInboxClient = (prisma as PrismaClient & { notificationInbox: any }).notificationInbox;
+// Removed hacky notificationInboxClient definition
 
 type ParseStatus = 'PENDING' | 'PARSED' | 'IGNORED' | 'FAILED';
 
@@ -157,7 +157,7 @@ router.get('/notifications', async (req, res) => {
             ? req.query.parseStatus
             : undefined;
 
-        const notifications = await notificationInboxClient.findMany({
+        const notifications = await prisma.notificationInbox.findMany({
             where: parseStatus ? { parseStatus: parseStatus as ParseStatus } : undefined,
             include: {
                 transaction: {
@@ -182,7 +182,7 @@ router.get('/notifications', async (req, res) => {
 
 router.delete('/notifications/:id', async (req, res) => {
     try {
-        const notification = await notificationInboxClient.findUnique({
+        const notification = await prisma.notificationInbox.findUnique({
             where: { id: req.params.id },
             include: { transaction: true }
         });
@@ -195,7 +195,7 @@ router.delete('/notifications/:id', async (req, res) => {
             return res.status(409).json({ error: 'Notifikasi sudah terkait transaksi dan tidak bisa dihapus langsung' });
         }
 
-        await notificationInboxClient.delete({
+        await prisma.notificationInbox.delete({
             where: { id: req.params.id }
         });
 
@@ -208,7 +208,7 @@ router.delete('/notifications/:id', async (req, res) => {
 
 router.delete('/notifications', async (_req, res) => {
     try {
-        const result = await notificationInboxClient.deleteMany({
+        const result = await prisma.notificationInbox.deleteMany({
             where: {
                 transaction: null
             }
@@ -235,7 +235,7 @@ router.post('/notification', async (req, res) => {
             String(text)
         );
 
-        const notification = await notificationInboxClient.create({
+        const notification = await prisma.notificationInbox.create({
             data: {
                 sourceApp: String(appName),
                 senderName: senderName ? String(senderName) : undefined,
@@ -268,7 +268,7 @@ router.post('/notification', async (req, res) => {
 
         const { owner, activity, account } = await ensureDefaults(parsed.accountHint, String(appName));
         if (!owner || !activity || !account) {
-            await notificationInboxClient.update({
+            await prisma.notificationInbox.update({
                 where: { id: notification.id },
                 data: {
                     parseStatus: 'PENDING',
@@ -289,7 +289,7 @@ router.post('/notification', async (req, res) => {
                 amount: parsed.amount,
                 type: parsed.type,
                 date: notification.receivedAt,
-                description: `[WA Auto] ${parsed.description}`.slice(0, 190),
+                description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
                 ownerId: owner.id,
                 activityId: activity.id,
                 notificationInboxId: notification.id,
@@ -305,9 +305,13 @@ router.post('/notification', async (req, res) => {
             transaction,
             createdTransaction: true
         });
-    } catch (error) {
-        console.error('Webhook error:', error);
-        res.status(500).json({ error: 'Internal Server Error' });
+    } catch (error: any) {
+        console.error('[Webhook Error]:', error);
+        res.status(500).json({ 
+            error: 'Internal Server Error', 
+            details: error?.message,
+            stack: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+        });
     }
 });
 
