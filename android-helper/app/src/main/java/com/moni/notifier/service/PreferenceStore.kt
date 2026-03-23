@@ -41,6 +41,6 @@ class PreferenceStore(context: Context) {
         private const val DEFAULT_WEBHOOK_URL = "https://moni-clone-production.up.railway.app/api/webhook/notification"
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,bri,brimo,mandiri,livin,seabank,dana,gopay,ovo,flip,gaji,transfer,masuk,keluar,pembayaran,top up,debit,kredit"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private const val DEFAULT_WEB_APP_URL = "https://moni-clone-production.up.railway.app"
+        private const val DEFAULT_WEB_APP_URL = "https://invigorating-cat-production-291b.up.railway.app"
     }
 }
