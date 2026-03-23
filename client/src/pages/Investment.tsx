@@ -296,6 +296,9 @@ const Investment = () => {
                             <p className={`mt-1 text-xs font-bold break-all leading-snug ${totalReturnAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
                                 {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)}
                             </p>
+                            <p className={`text-[8px] font-bold mt-0.5 ${totalReturnAmount >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
+                                {totalReturnPercent.toFixed(2)}%
+                            </p>
                         </div>
                     </div>
                 </div>
