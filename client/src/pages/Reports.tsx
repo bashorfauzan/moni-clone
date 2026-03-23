@@ -6,6 +6,7 @@ import {
 import { ChevronLeft, ChevronRight, Calendar, Download } from 'lucide-react';
 import { fetchTransactions } from '../services/transactions';
 import api from '../services/api';
+import { fetchMasterMeta } from '../services/masterData';
 import Spinner from '../components/Spinner';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
@@ -19,6 +20,8 @@ const Reports = () => {
         totalIncome: 0,
         totalExpense: 0,
         totalVolume: 0,
+        totalWealth: 0,
+        zakatAmount: 0,
         categoryData: [],
         trendData: [],
         transactionsData: [],
@@ -50,7 +53,14 @@ const Reports = () => {
         const fetchReportData = async () => {
             setLoading(true);
             try {
-                const transactions = await fetchTransactions({ validated: true });
+                const [transactions, meta] = await Promise.all([
+                    fetchTransactions({ validated: true }),
+                    fetchMasterMeta()
+                ]);
+
+                const totalRdnAssets = (meta.accounts || [])
+                    .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
+                    .reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0);
 
                 // Filter by current month/year
                 const filtered = transactions.filter((tx: any) => {
@@ -70,6 +80,15 @@ const Reports = () => {
                 const totalExpense = filtered
                     .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
                     .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+                const zakatAmount = totalIncome * 0.025;
+                const lifetimeIncome = transactions
+                    .filter((tx: any) => tx.type === 'INCOME')
+                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+                const lifetimeExpense = transactions
+                    .filter((tx: any) => tx.type === 'EXPENSE')
+                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+                const liquidBalance = lifetimeIncome - lifetimeExpense;
+                const totalWealth = liquidBalance + totalRdnAssets;
 
                 // Group by Category and Type (For Donut)
                 const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
@@ -107,7 +126,16 @@ const Reports = () => {
                 });
                 const trendData = Object.values(trendMap).sort((a: any, b: any) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
 
-                setData({ totalIncome, totalExpense, totalVolume, categoryData, trendData, transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()) });
+                setData({
+                    totalIncome,
+                    totalExpense,
+                    totalVolume,
+                    totalWealth,
+                    zakatAmount,
+                    categoryData,
+                    trendData,
+                    transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                });
                 setTxPage(1);
             } catch (error) {
                 console.error('Error fetching reports:', error);
@@ -140,8 +168,13 @@ const Reports = () => {
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             {/* Header & Filter */}
             <header className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <h1 className="text-2xl font-bold italic text-slate-900">Laporan</h1>
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-start lg:gap-4">
+                        <h1 className="text-2xl font-bold italic text-slate-900">Laporan</h1>
+                        <div className="app-surface-card self-start rounded-2xl px-4 py-3 min-w-[220px]">
+                            <p className="mt-1 text-lg font-black text-slate-900 break-words">Total Kekayaan : {formatCurrency(data.totalWealth)}</p>
+                        </div>
+                    </div>
                     <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex self-start">
                         <button
                             onClick={() => setViewMode('MONTHLY')}
@@ -207,9 +240,20 @@ const Reports = () => {
                             <p className="mt-2 text-xl font-black text-rose-300 break-words">{formatCurrency(data.totalExpense)}</p>
                         </div>
                     </div>
-                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Total Perputaran</p>
-                        <p className="mt-1 text-lg font-bold text-white">{formatCurrency(data.totalVolume)}</p>
+                    <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-white/10 bg-black/10 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/60">Total Perputaran</p>
+                            <p className="mt-1 text-lg font-bold text-white">{formatCurrency(data.totalVolume)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-emerald-300/15 bg-emerald-400/10 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-100/80">
+                                Zakat {viewMode === 'MONTHLY' ? 'Bulan Ini' : 'Periode Ini'}
+                            </p>
+                            <p className="mt-1 text-lg font-bold text-emerald-200">{formatCurrency(data.zakatAmount)}</p>
+                            <p className="mt-1 text-[11px] font-medium text-emerald-100/75">
+                                Estimasi 2,5% dari total pemasukan {viewMode === 'MONTHLY' ? 'bulan aktif' : 'tahun aktif'}.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -317,7 +361,7 @@ const Reports = () => {
                     <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2">Semua Transaksi</h2>
                     <span className="self-start text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{data.transactionsData.length} Data</span>
                 </div>
-                
+
                 <div className="overflow-x-auto w-full max-w-full">
                     <table className="w-full min-w-[860px] text-left text-sm whitespace-nowrap">
                         <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
@@ -338,11 +382,10 @@ const Reports = () => {
                                         <p className="text-[10px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { year: 'numeric' })}</p>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                            tx.type === 'INCOME' ? 'bg-emerald-100 text-emerald-700' :
-                                            tx.type === 'EXPENSE' ? 'bg-rose-100 text-rose-700' :
-                                            tx.type === 'TRANSFER' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                                        }`}>
+                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${tx.type === 'INCOME' ? 'bg-emerald-100 text-emerald-700' :
+                                                tx.type === 'EXPENSE' ? 'bg-rose-100 text-rose-700' :
+                                                    tx.type === 'TRANSFER' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                                            }`}>
                                             {tx.type === 'INCOME' ? 'Pemasukan' : tx.type === 'EXPENSE' ? 'Pengeluaran' : tx.type === 'TRANSFER' ? 'Transfer' : 'Investasi'}
                                         </span>
                                     </td>
@@ -384,7 +427,7 @@ const Reports = () => {
                         </tbody>
                     </table>
                 </div>
-                
+
                 {data.transactionsData.length > TX_PER_PAGE && (
                     <div className="p-4 border-t border-slate-50 flex items-center justify-between bg-slate-50/50">
                         <button

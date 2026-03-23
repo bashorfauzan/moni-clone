@@ -140,6 +140,8 @@ const MenuPage = () => {
         accounts: false,
         owners: false
     });
+    const [resetConfirmationText, setResetConfirmationText] = useState('');
+    const [resetFeedback, setResetFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
     const fetchMeta = async () => {
         try {
@@ -496,15 +498,16 @@ const MenuPage = () => {
 
     const submitGranularReset = async () => {
         if (!Object.values(resetOptions).some(v => v)) {
-            alert("Pilih minimal 1 data yang ingin dihapus.");
+            setResetFeedback({ type: 'error', message: 'Pilih minimal 1 data yang ingin dihapus.' });
             return;
         }
-        const confirm1 = window.confirm("PERINGATAN! Data terpilih akan dihapus SELAMANYA. Apakah Anda yakin?");
-        if (!confirm1) return;
-        const check = window.prompt("Ketik 'RESET' untuk mengeksekusi penghapusan:");
-        if (check !== "RESET") { alert("Reset dibatalkan."); return; }
+        if (resetConfirmationText.trim().toUpperCase() !== 'RESET') {
+            setResetFeedback({ type: 'error', message: "Ketik 'RESET' pada kolom konfirmasi untuk mengeksekusi penghapusan." });
+            return;
+        }
 
         setResetDataLoading(true);
+        setResetFeedback(null);
         try {
             await api.post('/master/reset-data', {
                 resetTransactions: resetOptions.transactions,
@@ -514,13 +517,14 @@ const MenuPage = () => {
                 resetActivities: resetOptions.categories,
                 resetOwners: resetOptions.owners
             });
-            alert("Data berhasil direset!");
-            window.location.reload();
+            setResetFeedback({ type: 'success', message: 'Data berhasil direset. Halaman akan dimuat ulang...' });
+            window.setTimeout(() => {
+                window.location.reload();
+            }, 900);
         } catch (error: any) {
-            alert(error?.response?.data?.error || "Gagal mereset data.");
+            setResetFeedback({ type: 'error', message: error?.response?.data?.error || 'Gagal mereset data.' });
         } finally {
             setResetDataLoading(false);
-            setIsResetModalOpen(false);
         }
     };
 
@@ -813,7 +817,6 @@ const MenuPage = () => {
             <section className="space-y-3">
                 <div className="app-section-header rounded-2xl px-4 py-3">
                     <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-500">Pengaturan & Setup</p>
-                    <p className="text-sm text-slate-700 mt-1">Lengkapi data dasar aplikasi, backup, dan pengaturan akun dari satu halaman.</p>
                 </div>
                 <div className="app-surface-card rounded-[28px] overflow-hidden">
                     {/* Setup Rekening */}
@@ -931,7 +934,11 @@ const MenuPage = () => {
                     {/* Reset Data */}
                     <button
                         className="w-full flex items-center justify-between gap-3 p-4 hover:bg-rose-50/80 transition-colors text-left"
-                        onClick={() => setIsResetModalOpen(true)}
+                        onClick={() => {
+                            setResetFeedback(null);
+                            setResetConfirmationText('');
+                            setIsResetModalOpen(true);
+                        }}
                     >
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
@@ -990,14 +997,6 @@ const MenuPage = () => {
                         <div className="p-4 sm:p-5 space-y-4 overflow-y-auto overscroll-contain">
                             <div className="rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4">
                                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">
-                                            {activeThemePanel === 'app' ? 'Background App' : activeThemePanel === 'hero' ? 'Kartu Utama' : 'Skala Tampilan'}
-                                        </p>
-                                        <p className="text-sm font-semibold text-slate-900 mt-1">
-                                            {activeThemePanel === 'app' ? 'Warna dan gambar halaman utama' : activeThemePanel === 'hero' ? 'Warna dan gambar hero card utama' : 'Atur ukuran seluruh teks dan ikon'}
-                                        </p>
-                                    </div>
                                     <div
                                         className="w-full sm:w-24 aspect-[16/9] sm:h-14 sm:aspect-auto rounded-2xl border border-white/70 shadow-sm bg-center bg-cover"
                                         style={{
@@ -1005,8 +1004,8 @@ const MenuPage = () => {
                                             backgroundImage: activeThemePanel === 'app'
                                                 ? (bgImage ? `url(${bgImage})` : 'none')
                                                 : activeThemePanel === 'hero'
-                                                ? (heroCardImage ? `url(${heroCardImage})` : 'none')
-                                                : 'none'
+                                                    ? (heroCardImage ? `url(${heroCardImage})` : 'none')
+                                                    : 'none'
                                         }}
                                     >
                                         {activeThemePanel === 'font' && (
@@ -2266,7 +2265,11 @@ const MenuPage = () => {
                                 <h2 className="text-lg font-bold tracking-tight text-rose-50">Reset Data</h2>
                             </div>
                             <button
-                                onClick={() => setIsResetModalOpen(false)}
+                                onClick={() => {
+                                    setResetFeedback(null);
+                                    setResetConfirmationText('');
+                                    setIsResetModalOpen(false);
+                                }}
                                 className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 transition-colors"
                             >
                                 <X size={16} />
@@ -2277,6 +2280,15 @@ const MenuPage = () => {
                             <p className="text-[11px] text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100 font-medium">
                                 Pilih data mana saja yang ingin dihapus. Jika rekening atau kategori dihapus, otomatis semua transaksi berelasi akan ikut terhapus untuk mencegah kerusakan basis data.
                             </p>
+
+                            {resetFeedback ? (
+                                <div className={`rounded-2xl border px-4 py-3 text-sm font-medium ${resetFeedback.type === 'error'
+                                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                    : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    }`}>
+                                    {resetFeedback.message}
+                                </div>
+                            ) : null}
 
                             <div className="space-y-3">
                                 {[
@@ -2305,6 +2317,26 @@ const MenuPage = () => {
                                         </div>
                                     </label>
                                 ))}
+                            </div>
+
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+                                <label htmlFor="reset-confirmation" className="block text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                                    Konfirmasi Penghapusan
+                                </label>
+                                <p className="text-xs text-slate-600">
+                                    Ketik <span className="font-bold text-slate-900">RESET</span> untuk melanjutkan. Ini menggantikan popup konfirmasi agar lebih stabil di aplikasi Android.
+                                </p>
+                                <input
+                                    id="reset-confirmation"
+                                    type="text"
+                                    value={resetConfirmationText}
+                                    onChange={(e) => setResetConfirmationText(e.target.value)}
+                                    placeholder="Ketik RESET"
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-4 h-11 text-sm font-semibold uppercase tracking-[0.14em] text-slate-800"
+                                    autoCapitalize="characters"
+                                    autoCorrect="off"
+                                    spellCheck={false}
+                                />
                             </div>
 
                             <button
