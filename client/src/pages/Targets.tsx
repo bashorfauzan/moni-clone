@@ -174,13 +174,13 @@ const Targets = () => {
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
-            <header>
+            <header className="space-y-2">
                 <h1 className="text-2xl font-bold italic text-slate-900">Manajemen Likuiditas</h1>
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
             </header>
 
             {/* Obligation Status Card */}
-            <div className={`rounded-[32px] p-6 md:p-8 shadow-2xl relative overflow-hidden border transition-all duration-500 ${isSafe ? 'app-hero-card' : 'bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,#ff174f_0%,#e63b2e_58%,#cf3f13_100%)] border-rose-300/70'}`}>
+            <div className={`rounded-[28px] md:rounded-[32px] p-5 md:p-8 shadow-2xl relative overflow-hidden border transition-all duration-500 ${isSafe ? 'app-hero-card' : 'bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,#ff174f_0%,#e63b2e_58%,#cf3f13_100%)] border-rose-300/70'}`}>
                 <div className="relative z-10 space-y-5">
                     <div className="flex items-start justify-between gap-4">
                         <div className="flex items-center gap-2 text-white/90">
@@ -195,7 +195,7 @@ const Targets = () => {
                     <div className="grid grid-cols-1 md:grid-cols-[1.25fr_0.95fr] gap-4 items-end">
                         <div className="space-y-2">
                             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/75">Pendapatan Bank Bulan Ini</p>
-                            <h2 className="text-4xl md:text-5xl font-black tracking-tight text-white">{formatCurrency(bankIncomeMonth)}</h2>
+                            <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white break-words">{formatCurrency(bankIncomeMonth)}</h2>
                         </div>
                         <div className={`rounded-3xl border p-4 backdrop-blur-sm ${isSafe ? 'app-hero-panel' : 'border-white/15 bg-black/10'}`}>
                             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">
@@ -210,7 +210,7 @@ const Targets = () => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                         <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3">
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Total Target</p>
                             <p className="mt-1 text-lg font-extrabold text-white">{formatCurrency(totalTargetAmount)}</p>
@@ -219,7 +219,7 @@ const Targets = () => {
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Sisa Tagihan</p>
                             <p className="mt-1 text-lg font-extrabold text-white">{formatCurrency(activeRemaining)}</p>
                         </div>
-                        <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3 col-span-2 md:col-span-1">
+                        <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3">
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Status</p>
                             <p className="mt-1 text-lg font-extrabold text-white">{isSafe ? 'Target Aman' : 'Belum Tercapai'}</p>
                         </div>
@@ -246,7 +246,7 @@ const Targets = () => {
                 <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
                     <h3>Target Tagihan</h3>
                     <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                        <span>Total target aktif: {formatCurrency(totalTargetAmount)}</span>
+                        <span className="text-[11px] sm:text-xs">Total target aktif: {formatCurrency(totalTargetAmount)}</span>
                         <button
                             type="button"
                             onClick={openAddTargetModal}
@@ -272,8 +272,8 @@ const Targets = () => {
 
                             return (
                                 <div key={target.id} className="p-5 sm:p-6 space-y-4 hover:bg-slate-50/40 transition-colors">
-                                    <div className="flex justify-between items-start gap-4">
-                                        <div>
+                                    <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+                                        <div className="min-w-0">
                                             <h4 className="font-bold text-slate-900 text-base sm:text-lg">{target.title}</h4>
                                             <p className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mt-1">
                                                 {totalMonths} Bulan
@@ -282,7 +282,7 @@ const Targets = () => {
                                                 <span className={target.isActive ? 'text-blue-500' : 'text-emerald-500'}>{target.isActive ? 'Aktif' : 'Selesai'}</span>
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity self-end sm:self-auto">
                                             <button onClick={() => openEditTargetModal(target)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-xl transition-colors">
                                                 <Pencil size={15} />
                                             </button>

@@ -9,9 +9,9 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@android:drawable/sym_def_app_icon"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MoniNotifier">
@@ -27,7 +27,8 @@
 
         <activity
             android:name=".WebAppActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <service
             android:name=".service.WhatsAppNotificationListenerService"
