@@ -502,11 +502,25 @@ const MenuPage = () => {
     const handleResetOptionsChange = (key: keyof typeof resetOptions, value: boolean) => {
         let newOptions = { ...resetOptions, [key]: value };
 
-        // Auto-check dependencies logic
-        if (key === 'owners' && value) {
-            newOptions = { transactions: true, targets: true, categories: true, accounts: true, owners: true };
-        } else if ((key === 'accounts' || key === 'categories') && value) {
-            newOptions.transactions = true;
+        if (value) {
+            // Logic saat menceklis: Pastikan data 'diatasnya' yang terkait ikut tercentang
+            if (key === 'owners') {
+                // Semua Pemilik terpilih -> Berarti Reset Total
+                newOptions = { transactions: true, targets: true, categories: true, accounts: true, owners: true };
+            } else if (key === 'accounts' || key === 'categories') {
+                // Rekening & Kategori butuh Transaksi dihapus
+                newOptions.transactions = true;
+            }
+        } else {
+            // Logic saat un-ceklis: Jika data 'diatasnya' dibatalkan, data 'dibawahnya' tidak boleh tercentang
+            if (key === 'transactions') {
+                newOptions.accounts = false;
+                newOptions.categories = false;
+                newOptions.owners = false;
+            } else if (key === 'accounts' || key === 'categories' || key === 'targets') {
+                // Jika salah satu komponen dibatalkan, maka "Reset Semua Pemilik" juga batal
+                newOptions.owners = false;
+            }
         }
 
         setResetOptions(newOptions);
