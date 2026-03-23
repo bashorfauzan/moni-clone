@@ -162,7 +162,7 @@ router.get('/notifications', async (req, res) => {
             : undefined;
 
         const notifications = await prisma.notificationInbox.findMany({
-            where: parseStatus ? { parseStatus: parseStatus as ParseStatus } : undefined,
+            ...(parseStatus ? { where: { parseStatus: parseStatus as any } } : {}),
             include: {
                 transaction: {
                     include: {
@@ -242,17 +242,17 @@ router.post('/notification', async (req, res) => {
         const notification = await prisma.notificationInbox.create({
             data: {
                 sourceApp: String(appName),
-                senderName: senderName ? String(senderName) : undefined,
-                title: title ? String(title) : undefined,
+                senderName: senderName ? String(senderName) : null,
+                title: title ? String(title) : null,
                 messageText: String(text),
                 receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
-                parseStatus: parsed.parseStatus,
-                parsedType: parsed.type ?? undefined,
-                parsedAmount: parsed.amount ?? undefined,
-                parsedDescription: parsed.description,
-                parsedAccountHint: parsed.accountHint ?? undefined,
-                confidenceScore: parsed.confidenceScore,
-                parseNotes: parsed.parseNotes ?? undefined,
+                parseStatus: parsed.parseStatus as any,
+                parsedType: parsed.type ?? null,
+                parsedAmount: parsed.amount ?? null,
+                parsedDescription: parsed.description ?? null,
+                parsedAccountHint: parsed.accountHint ?? null,
+                confidenceScore: parsed.confidenceScore ?? null,
+                parseNotes: parsed.parseNotes ?? null,
                 rawPayload: rawPayload ?? req.body
             }
         });
