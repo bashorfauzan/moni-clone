@@ -65,6 +65,41 @@ class WebAppActivity : AppCompatActivity() {
                 binding.loadingBar.progress = newProgress
                 binding.loadingBar.visibility = if (newProgress >= 100) android.view.View.GONE else android.view.View.VISIBLE
             }
+
+            override fun onJsAlert(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean {
+                android.app.AlertDialog.Builder(this@WebAppActivity)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm() }
+                    .setCancelable(false)
+                    .create()
+                    .show()
+                return true
+            }
+
+            override fun onJsConfirm(view: WebView?, url: String?, message: String?, result: android.webkit.JsResult?): Boolean {
+                android.app.AlertDialog.Builder(this@WebAppActivity)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm() }
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> result?.cancel() }
+                    .setCancelable(false)
+                    .create()
+                    .show()
+                return true
+            }
+
+            override fun onJsPrompt(view: WebView?, url: String?, message: String?, defaultValue: String?, result: android.webkit.JsPromptResult?): Boolean {
+                val input = android.widget.EditText(this@WebAppActivity)
+                input.setText(defaultValue)
+                android.app.AlertDialog.Builder(this@WebAppActivity)
+                    .setMessage(message)
+                    .setView(input)
+                    .setPositiveButton(android.R.string.ok) { _, _ -> result?.confirm(input.text.toString()) }
+                    .setNegativeButton(android.R.string.cancel) { _, _ -> result?.cancel() }
+                    .setCancelable(false)
+                    .create()
+                    .show()
+                return true
+            }
         }
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
