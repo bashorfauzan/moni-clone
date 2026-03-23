@@ -13,6 +13,7 @@ import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
 import { useAuth } from '../context/AuthContext';
+import Spinner from '../components/Spinner';
 
 const Home = () => {
     const { openModal } = useTransaction();
@@ -280,11 +281,7 @@ const Home = () => {
     };
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-[60vh]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            </div>
-        );
+        return <Spinner message="Sinkronisasi Data..." />;
     }
 
     return (

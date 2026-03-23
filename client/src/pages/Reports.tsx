@@ -6,6 +6,7 @@ import {
 import { ChevronLeft, ChevronRight, Calendar, Download } from 'lucide-react';
 import { fetchTransactions } from '../services/transactions';
 import api from '../services/api';
+import Spinner from '../components/Spinner';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 
@@ -133,7 +134,7 @@ const Reports = () => {
         setCurrentDate(next);
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500">Memuat Laporan...</div>;
+    if (loading) return <Spinner message="Menganalisis Laporan..." />;
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">

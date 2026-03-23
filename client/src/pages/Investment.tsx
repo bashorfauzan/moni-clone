@@ -4,6 +4,7 @@ import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, X, Save } from 'lucid
 import { fetchMasterMeta } from '../services/masterData';
 import { fetchTransactions } from '../services/transactions';
 import { Link } from 'react-router-dom';
+import Spinner from '../components/Spinner';
 
 const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -227,7 +228,7 @@ const Investment = () => {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">Memuat Portofolio...</div>;
+    if (loading) return <Spinner message="Memuat Portofolio..." />;
 
     return (
         <div className="p-4 md:p-8 space-y-5 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">

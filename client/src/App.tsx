@@ -10,15 +10,12 @@ import Register from './pages/Register';
 import { TransactionProvider } from './context/TransactionContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import Spinner from './components/Spinner';
 
 // Guard: redirect to /login if not authenticated
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, loading } = useAuth();
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900">
-      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
-    </div>
-  );
+  if (loading) return <Spinner message="Menyiapkan Sistem..." />;
   if (!session) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };

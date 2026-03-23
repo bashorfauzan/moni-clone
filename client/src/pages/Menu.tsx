@@ -45,6 +45,7 @@ import {
     launchAccountApp
 } from '../services/accountLauncher';
 import { supabase } from '../lib/supabase';
+import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
@@ -765,11 +766,7 @@ const MenuPage = () => {
         void handleBackupNow('auto');
     }, [backupRunning, backupSettings, handleBackupNow]);
 
-    if (loading) return (
-        <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">
-            Memuat Profil...
-        </div>
-    );
+    if (loading) return <Spinner message="Memuat Profil..." />;
 
     return (
         <div className="px-3 py-4 sm:p-4 md:p-8 space-y-5 sm:space-y-6 pb-28 sm:pb-32 mx-auto w-full max-w-2xl relative">

@@ -4,6 +4,7 @@ import { Wallet, Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { fetchTargets, type TargetItem } from '../services/targets';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
+import Spinner from '../components/Spinner';
 
 const formatThousands = (raw: string) => {
     if (!raw) return '';
@@ -150,7 +151,7 @@ const Targets = () => {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500 uppercase font-bold text-xs tracking-widest">Menganalisis Likuiditas... (Bahasa Indonesia)</div>;
+    if (loading) return <Spinner message="Menganalisis Likuiditas..." />;
 
     const totalTargetAmount = targets
         .filter((target) => target.isActive)
