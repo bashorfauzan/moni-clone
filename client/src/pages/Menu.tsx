@@ -986,11 +986,11 @@ const MenuPage = () => {
             {isThemeCustomizerOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => setIsThemeCustomizerOpen(false)}
+                    onClick={() => setIsThemeCustomizerOpen(false)}
                 >
                     <div
                         className="w-full max-w-xl bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
                             <div className="min-w-0">
@@ -1274,11 +1274,11 @@ const MenuPage = () => {
             {isAccountSettingsOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => setIsAccountSettingsOpen(false)}
+                    onClick={() => setIsAccountSettingsOpen(false)}
                 >
                     <div
                         className="w-full max-w-lg bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
                             <div className="min-w-0">
@@ -1367,11 +1367,11 @@ const MenuPage = () => {
             {isHelpSupportOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => setIsHelpSupportOpen(false)}
+                    onClick={() => setIsHelpSupportOpen(false)}
                 >
                     <div
                         className="w-full max-w-2xl bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
                             <div className="min-w-0">
@@ -1576,11 +1576,11 @@ const MenuPage = () => {
             {isBackupSettingsOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => setIsBackupSettingsOpen(false)}
+                    onClick={() => setIsBackupSettingsOpen(false)}
                 >
                     <div
                         className="w-full max-w-xl bg-white rounded-t-[28px] sm:rounded-[28px] border border-slate-200 shadow-2xl overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] flex flex-col"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         <div className="px-4 sm:px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3 shrink-0">
                             <div className="min-w-0">
@@ -1995,11 +1995,11 @@ const MenuPage = () => {
             {isActivityManagerOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => { setIsActivityManagerOpen(false); setShowActivityForm(false); resetActivityForm(); }}
+                    onClick={() => { setIsActivityManagerOpen(false); setShowActivityForm(false); resetActivityForm(); }}
                 >
                     <div
                         className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
