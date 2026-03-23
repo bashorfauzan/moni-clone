@@ -489,18 +489,27 @@ router.post('/reset-data', async (req, res) => {
         resetOwners 
     } = req.body;
 
+    const shouldResetOwners = Boolean(resetOwners);
+    const shouldResetAccounts = Boolean(resetAccounts || shouldResetOwners);
+    const shouldResetActivities = Boolean(resetActivities || shouldResetOwners);
+    const shouldResetTargets = Boolean(resetTargets || shouldResetOwners);
+    const shouldResetTransactions = Boolean(
+        resetTransactions || shouldResetAccounts || shouldResetActivities || shouldResetOwners
+    );
+    const shouldResetNotifications = Boolean(resetNotifications || shouldResetTransactions);
+
     try {
         await prisma.$transaction(async (trx) => {
             // 1. Children / derived records
-            if (resetTransactions) {
+            if (shouldResetTransactions) {
                 await trx.transaction.deleteMany({});
             }
 
-            if (resetNotifications || resetTransactions) {
+            if (shouldResetNotifications) {
                 await trx.notificationInbox.deleteMany({});
             }
 
-            if (resetTargets) {
+            if (shouldResetTargets) {
                 try {
                     await trx.target.deleteMany({});
                 } catch (error: any) {
@@ -512,7 +521,7 @@ router.post('/reset-data', async (req, res) => {
                 } catch (error: any) {
                     if (!isMissingTableError(error)) throw error;
                 }
-            } else if (resetTransactions) {
+            } else if (shouldResetTransactions) {
                 try {
                     const targets = await trx.target.findMany({
                         select: { id: true, totalAmount: true }
@@ -532,28 +541,28 @@ router.post('/reset-data', async (req, res) => {
                 }
             }
 
-            if (resetTransactions && !resetAccounts) {
+            if (shouldResetTransactions && !shouldResetAccounts) {
                 await trx.account.updateMany({
                     data: { balance: 0 }
                 });
             }
 
             // 2. Parents
-            if (resetAccounts) {
+            if (shouldResetAccounts) {
                 await trx.account.deleteMany({});
             }
 
-            if (resetActivities) {
+            if (shouldResetActivities) {
                 await trx.activity.deleteMany({});
             }
 
             // 3. Grandparent
-            if (resetOwners) {
+            if (shouldResetOwners) {
                 await trx.owner.deleteMany({});
             }
         });
 
-        if (resetOwners) {
+        if (shouldResetOwners) {
             await ensurePrimaryOwner();
         }
 

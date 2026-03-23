@@ -5,10 +5,13 @@ const resolveApiBaseUrl = () => {
     if (envUrl) return envUrl;
 
     if (typeof window !== 'undefined') {
-        return `${window.location.protocol}//${window.location.hostname}:5001/api`;
+        const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+        return isLocalHost
+            ? `${window.location.protocol}//${window.location.hostname}:5001/api`
+            : '/api';
     }
 
-    return 'http://localhost:5001/api';
+    return '/api';
 };
 
 const API_BASE_URL = resolveApiBaseUrl();

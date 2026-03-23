@@ -26,7 +26,21 @@ import {
     Phone
 } from 'lucide-react';
 import { useTheme, THEME_PRESETS } from '../context/ThemeContext';
-import { fetchMasterMeta, type Owner, type Account, type Activity } from '../services/masterData';
+import {
+    createAccount,
+    createActivity,
+    createOwner,
+    deleteAccount as removeAccount,
+    deleteActivity as removeActivity,
+    deleteOwner as removeOwner,
+    fetchMasterMeta,
+    type Owner,
+    type Account,
+    type Activity,
+    updateAccount,
+    updateActivity,
+    updateOwner
+} from '../services/masterData';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -49,6 +63,14 @@ import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
+const DEFAULT_RESET_OPTIONS = {
+    transactions: true,
+    targets: true,
+    categories: false,
+    accounts: false,
+    owners: false
+};
+
 type RestorePreview = {
     fileName: string;
     exportedAt?: string | null;
@@ -133,13 +155,7 @@ const MenuPage = () => {
 
     // Reset Manager
     const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-    const [resetOptions, setResetOptions] = useState({
-        transactions: true,
-        targets: true,
-        categories: false,
-        accounts: false,
-        owners: false
-    });
+    const [resetOptions, setResetOptions] = useState(() => ({ ...DEFAULT_RESET_OPTIONS }));
     const [resetConfirmationText, setResetConfirmationText] = useState('');
     const [resetFeedback, setResetFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
@@ -343,9 +359,9 @@ const MenuPage = () => {
                 ownerId: accountForm.ownerId || meta.owners[0].id,
             };
             if (editingAccountId) {
-                await api.put(`/master/accounts/${editingAccountId}`, payload);
+                await updateAccount(editingAccountId, payload);
             } else {
-                await api.post('/master/accounts', payload);
+                await createAccount(payload);
             }
             setShowAccountForm(false);
             resetAccountForm();
@@ -359,7 +375,7 @@ const MenuPage = () => {
 
     const deleteAccount = async (id: string) => {
         try {
-            await api.delete(`/master/accounts/${id}`);
+            await removeAccount(id);
             setConfirmDeleteAccountId(null);
             await fetchMeta();
         } catch (error: any) {
@@ -413,9 +429,9 @@ const MenuPage = () => {
         setSaving(true);
         try {
             if (editingActivityId) {
-                await api.put(`/master/activities/${editingActivityId}`, { name: activityForm.name.trim() });
+                await updateActivity(editingActivityId, activityForm.name.trim());
             } else {
-                await api.post('/master/activities', { name: activityForm.name.trim() });
+                await createActivity(activityForm.name.trim());
             }
             setShowActivityForm(false);
             resetActivityForm();
@@ -429,7 +445,7 @@ const MenuPage = () => {
 
     const deleteActivity = async (id: string) => {
         try {
-            await api.delete(`/master/activities/${id}`);
+            await removeActivity(id);
             setConfirmDeleteActivityId(null);
             await fetchMeta();
         } catch (error: any) {
@@ -459,9 +475,9 @@ const MenuPage = () => {
         setSaving(true);
         try {
             if (editingOwnerId) {
-                await api.put(`/master/owners/${editingOwnerId}`, { name: ownerForm.name.trim() });
+                await updateOwner(editingOwnerId, ownerForm.name.trim());
             } else {
-                await api.post('/master/owners', { name: ownerForm.name.trim() });
+                await createOwner(ownerForm.name.trim());
             }
             setShowOwnerForm(false);
             resetOwnerForm();
@@ -475,7 +491,7 @@ const MenuPage = () => {
 
     const deleteOwner = async (id: string) => {
         try {
-            await api.delete(`/master/owners/${id}`);
+            await removeOwner(id);
             setConfirmDeleteOwnerId(null);
             await fetchMeta();
         } catch (error: any) {
@@ -937,6 +953,7 @@ const MenuPage = () => {
                         onClick={() => {
                             setResetFeedback(null);
                             setResetConfirmationText('');
+                            setResetOptions({ ...DEFAULT_RESET_OPTIONS });
                             setIsResetModalOpen(true);
                         }}
                     >

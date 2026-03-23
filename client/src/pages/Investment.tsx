@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { Wallet, TrendingUp, TrendingDown, ArrowRightLeft, X, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { fetchTransactions } from '../services/transactions';
 import { Link } from 'react-router-dom';
@@ -277,35 +277,32 @@ const Investment = () => {
             )}
 
             {/* Summary Card */}
-            <div className="app-hero-card rounded-[28px] sm:rounded-[32px] p-5 sm:p-8 relative overflow-hidden">
-                <div className="relative z-10 flex flex-col gap-5">
-                    <div className="flex items-center gap-2 text-white/60">
-                        <Wallet size={18} />
-                        <span className="text-[10px] font-bold uppercase tracking-[0.16em] sm:tracking-[0.24em] text-white/70">Total Nilai Aset RDN</span>
-                    </div>
-
+            <div className="app-hero-card rounded-3xl p-4 sm:p-6 mb-6 relative overflow-hidden min-h-[132px] sm:min-h-[148px]">
+                <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
+                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between">
                     <div>
-                        <h2 className="text-[2rem] leading-tight sm:text-4xl font-bold text-white break-words">{formatCurrency(totalValue)}</h2>
-                        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                            <div>
-                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.18em]">Total Modal Disetor</p>
-                                <p className="text-white text-sm font-semibold">{formatCurrency(totalModal)}</p>
-                            </div>
-                            <div className="hidden sm:block h-8 w-px bg-white/14 mx-2"></div>
-                            <div>
-                                <p className="text-white/55 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-[0.18em]">Total Return</p>
-                                <p className={`text-sm font-bold flex flex-wrap items-center gap-1 break-words ${totalReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {totalReturnAmount >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                    {formatCurrency(totalReturnAmount)} ({totalReturnPercent.toFixed(2)}%)
-                                </p>
-                            </div>
-                        </div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Portofolio Saya</p>
                     </div>
                 </div>
-                <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full blur-3xl" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.22 }}></div>
-                <div className="absolute -left-10 -bottom-10 w-48 h-48 rounded-full blur-3xl" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.14 }}></div>
-            </div>
 
+                <div className="relative z-10 mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Nilai Aset</p>
+                        <p className="mt-1 text-sm font-bold text-sky-300 break-words">{formatCurrency(totalValue)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Modal Disetor</p>
+                        <p className="mt-1 text-sm font-bold text-white break-words">{formatCurrency(totalModal)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Return</p>
+                        <p className={`mt-1 text-sm font-bold flex flex-wrap items-center gap-1 break-words ${totalReturnAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                            {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)} ({totalReturnPercent.toFixed(2)}%)
+                        </p>
+                    </div>
+                </div>
+            </div>
             {/* RDN List */}
             <section className="space-y-4">
                 <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest text-slate-600">

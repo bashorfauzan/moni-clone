@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
-import { Wallet, Plus, Trash2, X, Save, Pencil } from 'lucide-react';
+import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { fetchTargets, type TargetItem } from '../services/targets';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
@@ -181,68 +181,61 @@ const Targets = () => {
             </header>
 
             {/* Obligation Status Card */}
-            <div className={`rounded-[28px] md:rounded-[32px] p-5 md:p-8 shadow-2xl relative overflow-hidden border transition-all duration-500 ${isSafe ? 'app-hero-card' : 'bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,#ff174f_0%,#e63b2e_58%,#cf3f13_100%)] border-rose-300/70'}`}>
-                <div className="relative z-10 space-y-5">
-                    <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-2 text-white/90">
-                            <Wallet size={18} />
-                            <span className="text-[10px] font-bold uppercase tracking-[0.26em] text-white">Budget Alert Bulan Ini</span>
-                        </div>
-                        <div className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.22em] ${isSafe ? 'bg-white/18 text-white' : 'bg-black/15 text-white'}`}>
+            <div className={`rounded-3xl p-4 sm:p-6 mb-6 relative overflow-hidden min-h-[132px] sm:min-h-[148px] border transition-all duration-500 ${isSafe ? 'app-hero-card' : 'bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,#ff174f_0%,#e63b2e_58%,#cf3f13_100%)] border-rose-300/70'}`}>
+                <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16 bg-white/10"></div>
+                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14 bg-black/10"></div>
+                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between mb-4">
+                    <div className="flex items-center justify-between w-full">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Budget Alert Bulan Ini</p>
+                        <div className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] ${isSafe ? 'bg-white/18 text-white' : 'bg-black/15 text-white'}`}>
                             {isSafe ? 'Aman' : 'Warning'}
                         </div>
                     </div>
+                </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-[1.25fr_0.95fr] gap-4 items-end">
-                        <div className="space-y-2">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-white/75">Pendapatan Bank Bulan Ini</p>
-                            <h2 className="text-3xl md:text-5xl font-black tracking-tight text-white break-words">{formatCurrency(bankIncomeMonth)}</h2>
-                        </div>
-                        <div className={`rounded-3xl border p-4 backdrop-blur-sm ${isSafe ? 'app-hero-panel' : 'border-white/15 bg-black/10'}`}>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">
-                                {isSafe ? 'Kelebihan Dana' : 'Masih Kurang'}
-                            </p>
-                            <p className="mt-2 text-2xl font-black text-white">
-                                {formatCurrency(isSafe ? surplusIncome : activeRemaining)}
-                            </p>
-                            <p className="mt-2 text-[11px] font-semibold text-white/80">
-                                {isSafe ? 'Target tagihan bulan ini sudah tertutup.' : 'Tambahan dana masih dibutuhkan untuk menutup tagihan aktif.'}
-                            </p>
-                        </div>
+                <div className="relative z-10 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Pendapatan Masuk</p>
+                        <p className="mt-1 text-sm font-bold text-white break-words">{formatCurrency(bankIncomeMonth)}</p>
                     </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Total Target</p>
-                            <p className="mt-1 text-lg font-extrabold text-white">{formatCurrency(totalTargetAmount)}</p>
-                        </div>
-                        <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Sisa Tagihan</p>
-                            <p className="mt-1 text-lg font-extrabold text-white">{formatCurrency(activeRemaining)}</p>
-                        </div>
-                        <div className="rounded-2xl bg-black/10 border border-white/10 px-4 py-3">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/65">Status</p>
-                            <p className="mt-1 text-lg font-extrabold text-white">{isSafe ? 'Target Aman' : 'Belum Tercapai'}</p>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex justify-between text-[11px] font-bold text-white uppercase tracking-[0.16em]">
-                            <span>Progress Penutupan Tagihan</span>
-                            <span>{Math.round(progressBase)}%</span>
-                        </div>
-                        <div className="w-full bg-black/15 h-3 rounded-full overflow-hidden p-[2px]">
-                            <div
-                                className={`h-full rounded-full transition-all duration-1000 ${isSafe ? 'bg-white shadow-[0_0_24px_rgba(255,255,255,0.9)]' : 'bg-amber-200 shadow-[0_0_20px_rgba(253,230,138,0.7)]'}`}
-                                style={{ width: `${progressBase}%` }}
-                            />
-                        </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
+                            {isSafe ? 'Kelebihan Dana' : 'Masih Kurang'}
+                        </p>
+                        <p className="mt-1 text-sm font-bold text-white break-words">
+                            {formatCurrency(isSafe ? surplusIncome : activeRemaining)}
+                        </p>
                     </div>
                 </div>
-                <div className="absolute -right-14 -top-14 w-56 h-56 bg-white/15 rounded-full blur-3xl"></div>
-                <div className="absolute -left-10 -bottom-16 w-48 h-48 bg-black/10 rounded-full blur-3xl"></div>
-            </div>
 
+                <div className="relative z-10 mt-2 sm:mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Target</p>
+                        <p className="mt-1 text-sm font-bold text-white">{formatCurrency(totalTargetAmount)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Sisa Tagihan</p>
+                        <p className="mt-1 text-sm font-bold text-emerald-300">{formatCurrency(activeRemaining)}</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Status</p>
+                        <p className="mt-1 text-sm font-bold text-white">{isSafe ? 'Aman' : 'Tunggakan'}</p>
+                    </div>
+                </div>
+
+                <div className="relative z-10 mt-4 space-y-2">
+                    <div className="flex justify-between text-[11px] font-bold text-white uppercase tracking-[0.16em]">
+                        <span>Progress</span>
+                        <span>{Math.round(progressBase)}%</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-black/20 rounded-full overflow-hidden">
+                        <div
+                            className="h-full bg-white transition-all duration-1000 ease-out"
+                            style={{ width: `${progressBase}%` }}
+                        />
+                    </div>
+                </div>
+            </div>
             <section className="space-y-4">
                 <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
                     <h3>Target Tagihan</h3>

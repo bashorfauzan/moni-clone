@@ -41,7 +41,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
                 android:minHeight="56dp"
-                android:text="https://moni-clone-production.up.railway.app/api/webhook/notification" />
+                android:text="https://invigorating-cat-production-291b.up.railway.app/api/webhook/notification" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
