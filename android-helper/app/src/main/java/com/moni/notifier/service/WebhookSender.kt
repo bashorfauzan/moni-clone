@@ -2,6 +2,8 @@ package com.moni.notifier.service
 
 import android.util.Log
 import org.json.JSONObject
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.net.HttpURLConnection
 import java.net.URL
@@ -33,18 +35,42 @@ class WebhookSender(
                 }
 
                 val responseCode = connection.responseCode
-                Log.d("MoniNotifier", "Webhook sent: $responseCode")
+                val responseBody = readResponse(connection)
                 val summary = payload.optString("text").take(48)
-                preferenceStore.setLastDeliveryStatus(
-                    "Berhasil ${timeFormatter.format(Date())} • HTTP $responseCode • $summary"
-                )
+                if (responseCode in 200..299) {
+                    Log.d(LOG_TAG, "Webhook sent: $responseCode")
+                    preferenceStore.setLastDeliveryStatus(
+                        "Berhasil ${timeFormatter.format(Date())} • HTTP $responseCode • $summary"
+                    )
+                } else {
+                    Log.e(LOG_TAG, "Webhook failed: $responseCode $responseBody")
+                    preferenceStore.setLastDeliveryStatus(
+                        "Gagal ${timeFormatter.format(Date())} • HTTP $responseCode • ${responseBody.take(80)}"
+                    )
+                }
                 connection.disconnect()
             } catch (error: Exception) {
-                Log.e("MoniNotifier", "Failed to send webhook", error)
+                Log.e(LOG_TAG, "Failed to send webhook", error)
                 preferenceStore.setLastDeliveryStatus(
                     "Gagal ${timeFormatter.format(Date())} • ${error.message ?: "unknown error"}"
                 )
             }
         }
+    }
+
+    private fun readResponse(connection: HttpURLConnection): String {
+        val stream = if (connection.responseCode >= 400) {
+            connection.errorStream
+        } else {
+            connection.inputStream
+        } ?: return ""
+
+        return BufferedReader(InputStreamReader(stream)).use { reader ->
+            reader.readText().replace("\\s+".toRegex(), " ").trim()
+        }
+    }
+
+    companion object {
+        private const val LOG_TAG = "NovaHelper"
     }
 }

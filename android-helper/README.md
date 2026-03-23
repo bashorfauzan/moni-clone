@@ -1,6 +1,6 @@
-# NOVA Android Helper
+# NOVA Android Bridge
 
-Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari perangkat Android, lalu mengirimkannya ke backend NOVA. Sekarang helper ini juga bisa membuka web app utama NOVA dalam wrapper Android WebView.
+Android helper ini menangkap notifikasi bank dan e-wallet dari perangkat Android, lalu mengirimkannya ke backend NOVA. Sekarang helper ini juga bisa membuka web app utama NOVA dalam wrapper Android WebView.
 
 ## Yang sudah ada
 
@@ -12,14 +12,12 @@ Android helper ini menangkap notifikasi WhatsApp atau WhatsApp Business dari per
 - kirim payload ke `POST /api/webhook/notification`
 - wrapper WebView untuk membuka aplikasi utama
 - bridge native `window.NovaNativeBridge.openAccountApp(...)`
-- dukungan untuk:
-  - `com.whatsapp`
-  - `com.whatsapp.w4b`
+- dukungan untuk app keuangan populer seperti BCA, BRImo, Livin', BNI, Jago, SeaBank, DANA, OVO, GoPay, dan ShopeePay
 
 ## Struktur penting
 
 - [MainActivity.kt](/Users/bashorfauzan/Documents/coba2/android-helper/app/src/main/java/com/moni/notifier/MainActivity.kt)
-- [WhatsAppNotificationListenerService.kt](/Users/bashorfauzan/Documents/coba2/android-helper/app/src/main/java/com/moni/notifier/service/WhatsAppNotificationListenerService.kt)
+- [AccountNotificationListenerService.kt](/Users/bashorfauzan/Documents/coba2/android-helper/app/src/main/java/com/moni/notifier/service/AccountNotificationListenerService.kt)
 - [WebhookSender.kt](/Users/bashorfauzan/Documents/coba2/android-helper/app/src/main/java/com/moni/notifier/service/WebhookSender.kt)
 
 ## Cara buka
@@ -52,13 +50,13 @@ Contoh filter:
 
 6. Tap `Simpan Pengaturan`.
 7. Tap `Buka Pengaturan Notification Access`.
-8. Aktifkan `NOVA Notifier`.
+8. Aktifkan `NOVA Notifikasi Keuangan`.
 9. Tap `Buka NOVA App`.
 10. Dari web app utama, tombol `Buka` pada rekening akan memakai bridge Android:
    - coba `deepLink`
    - fallback ke app terpasang via `packageName`
    - fallback ke `storeUrl`
-11. Pastikan notifikasi WhatsApp muncul di perangkat.
+11. Pastikan notifikasi bank atau e-wallet muncul di perangkat.
 12. Cek `Pengiriman terakhir` di layar helper.
 
 ## Payload yang dikirim
@@ -67,16 +65,16 @@ Contoh payload:
 
 ```json
 {
-  "appName": "WhatsApp",
-  "title": "BCA Mobile",
-  "senderName": "Notifikasi Bank",
-  "text": "masuk Rp 250.000 gaji bca",
+  "appName": "BRI",
+  "title": "BRImo",
+  "senderName": "",
+  "text": "24/03/2026 05:09:05 - Pembayaran BRIVA 1124483217400526 sebesar Rp2.700.000,00 berhasil",
   "receivedAt": "2026-03-20T09:30:00.000Z",
   "rawPayload": {
-    "packageName": "com.whatsapp",
+    "packageName": "id.co.bri.brimo",
     "notificationKey": "...",
     "postTime": 1774000000000,
-    "androidTitle": "BCA Mobile"
+    "androidTitle": "BRImo"
   }
 }
 ```
@@ -85,7 +83,7 @@ Contoh payload:
 
 - `localhost` di HP tidak menunjuk ke laptop Anda.
 - Untuk HP fisik, backend Express harus bind ke jaringan lokal agar bisa diakses.
-- Beberapa notifikasi WhatsApp bisa ringkas atau terpotong tergantung versi Android dan sumber pesan.
+- Beberapa notifikasi bank bisa ringkas atau terpotong tergantung versi Android dan implementasi app sumber.
 - Filter keyword dipakai untuk mengurangi spam. Jika terlalu ketat, notifikasi valid bisa ikut terlewat.
 - App ini belum melakukan retry queue, enkripsi payload, atau batching.
 

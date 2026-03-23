@@ -1,10 +1,11 @@
 package com.moni.notifier.service
 
+import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.json.JSONObject
 
-class WhatsAppNotificationListenerService : NotificationListenerService() {
+class AccountNotificationListenerService : NotificationListenerService() {
     private lateinit var preferenceStore: PreferenceStore
     private lateinit var webhookSender: WebhookSender
 
@@ -16,29 +17,42 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName ?: return
-        val isSupported = SUPPORTED_PACKAGES.contains(packageName) || 
-                          packageName.contains("bank", ignoreCase = true) ||
-                          packageName.contains("bca", ignoreCase = true) ||
-                          packageName.contains("livin", ignoreCase = true) ||
-                          packageName.contains("bri", ignoreCase = true) ||
-                          packageName.contains("bni", ignoreCase = true) ||
-                          packageName.contains("jago", ignoreCase = true) ||
-                          packageName.contains("dana", ignoreCase = true) ||
-                          packageName.contains("ovo", ignoreCase = true) ||
-                          packageName.contains("gojek", ignoreCase = true) ||
-                          packageName.contains("shopee", ignoreCase = true)
+        val isSupported = SUPPORTED_PACKAGES.contains(packageName) ||
+            packageName.contains("bank", ignoreCase = true) ||
+            packageName.contains("bca", ignoreCase = true) ||
+            packageName.contains("livin", ignoreCase = true) ||
+            packageName.contains("bri", ignoreCase = true) ||
+            packageName.contains("bni", ignoreCase = true) ||
+            packageName.contains("jago", ignoreCase = true) ||
+            packageName.contains("dana", ignoreCase = true) ||
+            packageName.contains("ovo", ignoreCase = true) ||
+            packageName.contains("gojek", ignoreCase = true) ||
+            packageName.contains("shopee", ignoreCase = true)
         if (!isSupported) return
 
         val extras = sbn.notification.extras
-        val title = extras.getCharSequence("android.title")?.toString().orEmpty()
-        val text = extras.getCharSequence("android.text")?.toString().orEmpty()
-        val bigText = extras.getCharSequence("android.bigText")?.toString().orEmpty()
-        val senderName = extras.getCharSequence("android.subText")?.toString().orEmpty()
+        val title = firstNonBlank(
+            extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras.getCharSequence("android.title.big")?.toString()
+        )
+        val text = firstNonBlank(
+            extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString(),
+            joinTextLines(extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES))
+        )
+        val senderName = firstNonBlank(
+            extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString()
+        )
 
         val messageText = when {
-            bigText.isNotBlank() -> bigText
             text.isNotBlank() -> text
-            else -> return
+            title.isNotBlank() -> title
+            else -> {
+                preferenceStore.setLastDeliveryStatus("Diabaikan • isi notifikasi kosong")
+                return
+            }
         }
 
         val fullText = listOf(title, senderName, messageText)
@@ -57,11 +71,11 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
         }
 
         val appNameStr = when {
-            packageName.contains("whatsapp", ignoreCase = true) -> "WhatsApp"
             packageName.contains("bca", ignoreCase = true) -> "BCA"
             packageName.contains("mandiri", ignoreCase = true) || packageName.contains("livin", ignoreCase = true) -> "Mandiri"
             packageName.contains("brimo", ignoreCase = true) || packageName.contains("bri", ignoreCase = true) -> "BRI"
             packageName.contains("bni", ignoreCase = true) -> "BNI"
+            packageName.contains("bsi", ignoreCase = true) -> "BSI"
             packageName.contains("jago", ignoreCase = true) -> "Jago"
             packageName.contains("seabank", ignoreCase = true) -> "SeaBank"
             packageName.contains("jenius", ignoreCase = true) || packageName.contains("btpn", ignoreCase = true) -> "Jenius"
@@ -69,6 +83,7 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
             packageName.contains("ovo", ignoreCase = true) -> "OVO"
             packageName.contains("gojek", ignoreCase = true) -> "GoPay"
             packageName.contains("shopee", ignoreCase = true) -> "ShopeePay"
+            packageName.contains("flip", ignoreCase = true) -> "Flip"
             else -> packageName
         }
 
@@ -94,19 +109,40 @@ class WhatsAppNotificationListenerService : NotificationListenerService() {
 
     companion object {
         private val SUPPORTED_PACKAGES = setOf(
-            "com.whatsapp", "com.whatsapp.w4b",
+            // BCA
             "com.bca", "com.bca.mybca", "com.bcadigital.blu",
+            // Mandiri
             "id.co.bankmandiri.livin.android",
+            // BRI
             "id.co.bri.brimo",
-            "src.com.bni",
+            // BNI
+            "src.com.bni", "id.co.bni.mobilebanking",
+            // BSI
+            "com.bsi.mobile", "id.bsi.bsimobile", "id.co.bsi.mobile",
+            // Bank Jago
             "com.jago.transactionApp",
+            // SeaBank
             "com.bke.seabank",
+            // Jenius (BTPN)
             "com.btpn.dc.madison",
+            // E-Wallets
             "com.gojek.app",
             "ovo.id",
             "id.dana",
-            "com.telkom.mwallet",
-            "com.shopee.id"
+            "com.shopee.id",
+            "com.flip.android"
         )
+
+        private fun firstNonBlank(vararg values: String?): String {
+            return values.firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
+        }
+
+        private fun joinTextLines(values: Array<CharSequence>?): String {
+            return values
+                ?.map { it.toString().trim() }
+                ?.filter { it.isNotBlank() }
+                ?.joinToString(" ")
+                .orEmpty()
+        }
     }
 }

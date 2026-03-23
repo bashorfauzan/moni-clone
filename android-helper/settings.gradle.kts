@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MoniNotifier"
+rootProject.name = "NovaHelper"
 include(":app")

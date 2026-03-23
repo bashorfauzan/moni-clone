@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">NOVA</string>
-    <string name="listener_service_name">NOVA WhatsApp Listener</string>
-    <string name="setup_title">NOVA Android Helper</string>
-    <string name="setup_subtitle">App ini menangkap notifikasi WhatsApp, mengirimkannya ke backend NOVA, dan bisa membuka web app utama dalam wrapper Android.</string>
+    <string name="listener_service_name">NOVA Notifikasi Keuangan</string>
+    <string name="setup_title">NOVA Penghubung Android</string>
+    <string name="setup_subtitle">App ini menangkap notifikasi bank dan e-wallet, mengirimkannya ke backend NOVA, dan bisa membuka web app utama dalam wrapper Android.</string>
     <string name="backend_url_hint">URL endpoint backend</string>
     <string name="save_button">Simpan Pengaturan</string>
     <string name="web_app_url_hint">URL web app utama</string>

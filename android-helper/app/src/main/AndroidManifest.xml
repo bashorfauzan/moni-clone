@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="QueryAllPackagesPermission" />
+        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
 
     <application
         android:allowBackup="true"
@@ -14,7 +14,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.MoniNotifier">
+        android:theme="@style/Theme.NovaHelper">
 
         <activity
             android:name=".MainActivity"
@@ -31,7 +31,7 @@
             android:windowSoftInputMode="adjustResize" />
 
         <service
-            android:name=".service.WhatsAppNotificationListenerService"
+            android:name=".service.AccountNotificationListenerService"
             android:label="@string/listener_service_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
             android:exported="false">
