@@ -150,6 +150,10 @@ const ensureDefaults = async (accountHint?: string | null, sourceApp?: string | 
     return { owner, activity, account };
 };
 
+router.get('/test', (_req, res) => {
+    res.json({ ok: true, message: 'Webhook router is working' });
+});
+
 router.get('/notifications', async (req, res) => {
     try {
         const limit = Number(req.query.limit);
