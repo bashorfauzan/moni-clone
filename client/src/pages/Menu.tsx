@@ -539,20 +539,49 @@ const MenuPage = () => {
         setResetDataLoading(true);
         setResetFeedback(null);
         try {
-            await api.post('/master/reset-data', {
-                resetTransactions: resetOptions.transactions,
-                resetNotifications: resetOptions.transactions,
-                resetTargets: resetOptions.targets,
-                resetAccounts: resetOptions.accounts,
-                resetActivities: resetOptions.categories,
-                resetOwners: resetOptions.owners
-            });
+            if (supabase) {
+                // Delete in FK-safe order: children first, parents last
+                if (resetOptions.transactions) {
+                    const { error: e1 } = await supabase.from('Transaction').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e1) throw new Error(e1.message);
+                    const { error: e2 } = await supabase.from('NotificationInbox').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e2 && !e2.message.includes('does not exist')) throw new Error(e2.message);
+                }
+                if (resetOptions.targets) {
+                    const { error: e3 } = await supabase.from('Target').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e3 && !e3.message.includes('does not exist')) throw new Error(e3.message);
+                    const { error: e4 } = await supabase.from('Budget').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e4 && !e4.message.includes('does not exist')) throw new Error(e4.message);
+                }
+                if (resetOptions.accounts) {
+                    const { error: e5 } = await supabase.from('Account').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e5) throw new Error(e5.message);
+                }
+                if (resetOptions.categories) {
+                    const { error: e6 } = await supabase.from('Activity').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e6) throw new Error(e6.message);
+                }
+                if (resetOptions.owners) {
+                    const { error: e7 } = await supabase.from('Owner').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (e7) throw new Error(e7.message);
+                }
+            } else {
+                // Fallback to backend API
+                await api.post('/master/reset-data', {
+                    resetTransactions: resetOptions.transactions,
+                    resetNotifications: resetOptions.transactions,
+                    resetTargets: resetOptions.targets,
+                    resetAccounts: resetOptions.accounts,
+                    resetActivities: resetOptions.categories,
+                    resetOwners: resetOptions.owners
+                });
+            }
             setResetFeedback({ type: 'success', message: 'Data berhasil direset. Halaman akan dimuat ulang...' });
             window.setTimeout(() => {
                 window.location.reload();
             }, 900);
         } catch (error: any) {
-            setResetFeedback({ type: 'error', message: error?.response?.data?.error || 'Gagal mereset data.' });
+            setResetFeedback({ type: 'error', message: error?.message || error?.response?.data?.error || 'Gagal mereset data.' });
         } finally {
             setResetDataLoading(false);
         }
