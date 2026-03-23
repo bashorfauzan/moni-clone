@@ -226,38 +226,33 @@ const Reports = () => {
                 </div>
             </header>
 
-            <section className="app-hero-card rounded-3xl p-4 sm:p-6 mb-6 relative overflow-hidden min-h-[132px] sm:min-h-[148px]">
+            <section className="app-hero-card rounded-3xl p-4 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
                 <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Periode</p>
-                    </div>
-                </div>
+                <div className="relative z-10">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Periode</p>
 
-                <div className="relative z-10 mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Pemasukan</p>
-                        <p className="mt-1 text-sm font-bold text-emerald-300 break-words">{formatCurrency(data.totalIncome)}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pemasukan</p>
+                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.totalIncome)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pengeluaran</p>
+                            <p className="mt-1 text-xs font-bold text-rose-300 break-all leading-snug">{formatCurrency(data.totalExpense)}</p>
+                        </div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Pengeluaran</p>
-                        <p className="mt-1 text-sm font-bold text-rose-300 break-words">{formatCurrency(data.totalExpense)}</p>
-                    </div>
-                </div>
-                <div className="relative z-10 mt-2 sm:mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Perputaran</p>
-                        <p className="mt-1 text-sm font-bold text-white break-words">{formatCurrency(data.totalVolume)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
-                            Zakat {viewMode === 'MONTHLY' ? 'Bulan Ini' : 'Periode Ini'}
-                        </p>
-                        <p className="mt-1 text-sm font-bold text-emerald-300">{formatCurrency(data.zakatAmount)}</p>
-                        <p className="mt-1 text-[9px] font-medium text-white/55">
-                            Estimasi 2,5% dari total pemasukan {viewMode === 'MONTHLY' ? 'bulan aktif' : 'tahun aktif'}.
-                        </p>
+                    <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Perputaran</p>
+                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(data.totalVolume)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">
+                                Zakat {viewMode === 'MONTHLY' ? 'Bulan Ini' : 'Thn Ini'}
+                            </p>
+                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.zakatAmount)}</p>
+                        </div>
                     </div>
                 </div>
             </section>

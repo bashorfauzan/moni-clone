@@ -277,29 +277,26 @@ const Investment = () => {
             )}
 
             {/* Summary Card */}
-            <div className="app-hero-card rounded-3xl p-4 sm:p-6 mb-6 relative overflow-hidden min-h-[132px] sm:min-h-[148px]">
+            <div className="app-hero-card rounded-3xl p-4 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
                 <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
-                <div className="relative z-10 flex flex-col sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Portofolio Saya</p>
-                    </div>
-                </div>
-
-                <div className="relative z-10 mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Nilai Aset</p>
-                        <p className="mt-1 text-sm font-bold text-sky-300 break-words">{formatCurrency(totalValue)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Modal Disetor</p>
-                        <p className="mt-1 text-sm font-bold text-white break-words">{formatCurrency(totalModal)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Total Return</p>
-                        <p className={`mt-1 text-sm font-bold flex flex-wrap items-center gap-1 break-words ${totalReturnAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                            {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)} ({totalReturnPercent.toFixed(2)}%)
-                        </p>
+                <div className="relative z-10">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Portofolio Saya</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Nilai Aset</p>
+                            <p className="mt-1 text-xs font-bold text-sky-300 break-all leading-snug">{formatCurrency(totalValue)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Modal</p>
+                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(totalModal)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Return</p>
+                            <p className={`mt-1 text-xs font-bold break-all leading-snug ${totalReturnAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                                {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

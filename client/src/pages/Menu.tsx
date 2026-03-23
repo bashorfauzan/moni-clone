@@ -1726,11 +1726,11 @@ const MenuPage = () => {
             {isAccountManagerOpen && (
                 <div
                     className="fixed inset-0 z-[120] bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
-                    onMouseDown={() => { setIsAccountManagerOpen(false); setShowAccountForm(false); resetAccountForm(); }}
+                    onClick={() => { setIsAccountManagerOpen(false); setShowAccountForm(false); resetAccountForm(); }}
                 >
                     <div
                         className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden"
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
                         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">

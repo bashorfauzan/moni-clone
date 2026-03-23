@@ -324,32 +324,27 @@ const Home = () => {
                 </div>
             </header>
 
-            <section className="app-hero-card rounded-3xl p-4 sm:p-6 mb-6 relative overflow-hidden min-h-[132px] sm:min-h-[148px]">
+            <section className="app-hero-card rounded-3xl p-4 mb-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
                 <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
                 <div className="relative z-10">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Kas</p>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Kas</p>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
                         <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Dana Likuid</p>
-                            <p className="mt-1 text-sm font-bold text-white break-words">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Dana Likuid</p>
+                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">
                                 {displayCurrency(summaryData.liquidBalance)}
                             </p>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Pemasukan Bulan Ini</p>
-                            <p className="mt-1 text-sm font-bold text-emerald-300 break-words">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pemasukan</p>
+                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">
                                 +{displayCurrency(summaryData.incomeMonth)}
                             </p>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Pengeluaran Bulan Ini</p>
-                            <p className="mt-1 text-sm font-bold text-rose-300 break-words">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pengeluaran</p>
+                            <p className="mt-1 text-xs font-bold text-rose-300 break-all leading-snug">
                                 -{displayCurrency(summaryData.expenseMonth)}
                             </p>
                         </div>
