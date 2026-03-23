@@ -32,15 +32,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
+console.log('[Server] Mounting routes...');
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/master', masterRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/telegram', telegramRoutes);
+console.log('[Server] Routes mounted successfully');
 
 app.get('/', (_req, res) => {
-    res.send('API Aplikasi Keuangan Pribadi berjalan lancar!');
+    res.send('API Aplikasi Keuangan Pribadi (v2 - 2026-03-24 07:05) berjalan lancar!');
 });
 
 app.listen(Number(PORT), HOST, () => {
