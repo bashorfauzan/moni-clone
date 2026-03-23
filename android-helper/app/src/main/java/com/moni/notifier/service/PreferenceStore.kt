@@ -38,9 +38,9 @@ class PreferenceStore(context: Context) {
         private const val KEY_FILTER_KEYWORDS = "filter_keywords"
         private const val KEY_LAST_DELIVERY_STATUS = "last_delivery_status"
         private const val KEY_WEB_APP_URL = "web_app_url"
-        private const val DEFAULT_WEBHOOK_URL = "https://invigorating-cat-production-291b.up.railway.app/api/webhook/notification"
-        private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,bri,mandiri,seabank,dana,gopay,ovo,flip,gaji,transfer,masuk,keluar,top up"
+        private const val DEFAULT_WEBHOOK_URL = "https://moni-clone-production.up.railway.app/api/webhook/notification"
+        private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,bri,brimo,mandiri,livin,seabank,dana,gopay,ovo,flip,gaji,transfer,masuk,keluar,pembayaran,top up,debit,kredit"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private const val DEFAULT_WEB_APP_URL = "https://invigorating-cat-production-291b.up.railway.app"
+        private const val DEFAULT_WEB_APP_URL = "https://moni-clone-production.up.railway.app"
     }
 }

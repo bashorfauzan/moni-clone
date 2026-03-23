@@ -17,18 +17,19 @@ type ParsedNotification = {
     parseNotes: string | null;
 };
 
-const ACCOUNT_HINTS = ['bca', 'bni', 'bri', 'mandiri', 'seabank', 'jago', 'blu', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
-const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji'];
-const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit'];
-const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim'];
-const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo'];
+const ACCOUNT_HINTS = ['bca', 'bni', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
+const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'setor tunai', 'penerimaan', 'pemasukan'];
+const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan'];
+const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
+const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 
 const normalizeText = (value: string) => value.toLowerCase().trim();
 
 const extractAmount = (text: string) => {
+    // Handle Indonesian format: Rp2.700.000,00 OR Rp 2.700.000
     const candidates = [
-        text.match(/rp\s*([\d.]+)/i),
-        text.match(/\b(\d{1,3}(?:\.\d{3})+)\b/),
+        text.match(/rp\s*([\d.,]+)/i),
+        text.match(/\b(\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?)\b/),
         text.match(/\b(\d{5,})\b/)
     ];
 
@@ -36,7 +37,9 @@ const extractAmount = (text: string) => {
         const raw = match?.[1];
         if (!raw) continue;
 
-        const amount = Number(raw.replace(/\./g, ''));
+        // Remove trailing decimal like ,00
+        const normalized = raw.replace(/[,.]\d{1,2}$/, '').replace(/[.,]/g, '');
+        const amount = Number(normalized);
         if (Number.isFinite(amount) && amount > 0) {
             return amount;
         }
@@ -102,7 +105,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     };
 };
 
-const ensureDefaults = async (accountHint?: string | null) => {
+const ensureDefaults = async (accountHint?: string | null, sourceApp?: string | null) => {
     let owner = await prisma.owner.findFirst({ orderBy: { createdAt: 'asc' } });
     if (!owner) {
         owner = await prisma.owner.create({ data: { name: 'Owner Utama' } });
@@ -117,6 +120,7 @@ const ensureDefaults = async (accountHint?: string | null) => {
     }
 
     let account = null;
+    // Try matching by account hint first (text in notification)
     if (accountHint) {
         account = await prisma.account.findFirst({
             where: {
@@ -126,6 +130,15 @@ const ensureDefaults = async (accountHint?: string | null) => {
                     { accountNumber: { contains: accountHint, mode: 'insensitive' } }
                 ]
             },
+            orderBy: { createdAt: 'asc' }
+        });
+    }
+
+    // If no match by hint, try matching by source app name (e.g. 'BRI', 'BCA')
+    if (!account && sourceApp) {
+        const appShort = sourceApp.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        account = await prisma.account.findFirst({
+            where: { name: { contains: appShort, mode: 'insensitive' } },
             orderBy: { createdAt: 'asc' }
         });
     }
@@ -253,7 +266,7 @@ router.post('/notification', async (req, res) => {
             });
         }
 
-        const { owner, activity, account } = await ensureDefaults(parsed.accountHint);
+        const { owner, activity, account } = await ensureDefaults(parsed.accountHint, String(appName));
         if (!owner || !activity || !account) {
             await notificationInboxClient.update({
                 where: { id: notification.id },
