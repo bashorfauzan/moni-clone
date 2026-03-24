@@ -1,5 +1,5 @@
 import api from './api';
-import { supabase, useDirectSupabaseData } from '../lib/supabase';
+import { supabase, hasSupabaseEnv } from '../lib/supabase';
 
 export type TargetItem = {
     id: string;
@@ -35,7 +35,7 @@ const normalizeTarget = (row: any): TargetItem => ({
 });
 
 export const fetchTargets = async (): Promise<TargetsResponse> => {
-    if (useDirectSupabaseData && supabase) {
+    if (hasSupabaseEnv && supabase) {
         const { data, error } = await supabase
             .from('Target')
             .select(`
