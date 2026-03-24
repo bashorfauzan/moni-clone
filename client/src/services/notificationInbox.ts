@@ -52,6 +52,7 @@ export const fetchNotificationInbox = async (limit = 8): Promise<NotificationIte
                 confidenceScore,
                 transaction:Transaction(id)
             `)
+            .neq('parseStatus', 'IGNORED')
             .order('receivedAt', { ascending: false })
             .limit(limit);
 

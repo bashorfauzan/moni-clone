@@ -281,6 +281,7 @@ router.post('/', async (req, res) => {
                     sourceAccountId: sourceAccountId || undefined,
                     destinationAccountId: destinationAccountId || undefined,
                     date: date ? new Date(date) : new Date(),
+                    notificationInboxId: notificationInboxId || undefined
                 }
             });
 
@@ -301,7 +302,6 @@ router.post('/', async (req, res) => {
                     where: { id: notificationInboxId },
                     data: {
                         parseStatus: 'PARSED',
-                        transactionId: createdTx.id,
                         parsedType: txType,
                         parsedAmount: parsedAmount
                     }

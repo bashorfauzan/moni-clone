@@ -359,6 +359,14 @@ router.post('/notification', async (req, res) => {
             String(text)
         );
 
+        // Jangan simpan notifikasi ke database jika tidak ada nominal/dignenore
+        if (parsed.parseStatus === 'IGNORED') {
+            return res.status(200).json({
+                message: 'Notifikasi diabaikan karena tidak mengandung nominal transaksi',
+                parsed
+            });
+        }
+
         const notification = await prisma.notificationInbox.create({
             data: {
                 sourceApp: String(appName),
