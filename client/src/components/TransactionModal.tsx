@@ -35,43 +35,44 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 }).format(value);
 
 const TransactionModal = () => {
-    const { isModalOpen, modalType, modalPayload, closeModal } = useTransaction();
+    const { isModalOpen, modalType, modalPayload, editTransactionId, closeModal } = useTransaction();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
     const [form, setForm] = useState(initialForm);
     const [submitting, setSubmitting] = useState(false);
     const [pickerType, setPickerType] = useState<PickerType>(null);
     const [pickerQuery, setPickerQuery] = useState('');
+    const isEditing = Boolean(editTransactionId);
 
     const typeConfig = useMemo(() => {
         const config: Record<TransactionType, { title: string; accent: string; submit: string; helper: string }> = {
             INCOME: {
-                title: 'Tambah Pemasukan',
+                title: isEditing ? 'Edit Pemasukan' : 'Tambah Pemasukan',
                 accent: 'text-emerald-400',
-                submit: 'Simpan Pemasukan',
+                submit: isEditing ? 'Simpan Perubahan' : 'Simpan Pemasukan',
                 helper: 'Catat dana yang masuk ke rekening tujuan.'
             },
             EXPENSE: {
-                title: 'Catat Pengeluaran',
+                title: isEditing ? 'Edit Pengeluaran' : 'Catat Pengeluaran',
                 accent: 'text-rose-400',
-                submit: 'Simpan Pengeluaran',
+                submit: isEditing ? 'Simpan Perubahan' : 'Simpan Pengeluaran',
                 helper: 'Pilih rekening sumber untuk mengurangi saldo.'
             },
             TRANSFER: {
-                title: 'Transfer Dana',
+                title: isEditing ? 'Edit Transfer Dana' : 'Transfer Dana',
                 accent: 'text-blue-400',
-                submit: 'Simpan Transfer',
+                submit: isEditing ? 'Simpan Perubahan' : 'Simpan Transfer',
                 helper: 'Pindahkan saldo antar rekening Anda.'
             },
             INVESTMENT: {
-                title: 'Setor ke Investasi',
+                title: isEditing ? 'Edit Setor ke Investasi' : 'Setor ke Investasi',
                 accent: 'text-amber-400',
-                submit: 'Simpan Setoran',
+                submit: isEditing ? 'Simpan Perubahan' : 'Simpan Setoran',
                 helper: 'Catat dana keluar untuk setor modal atau beli investasi.'
             }
         };
 
         return config[modalType as TransactionType] || config.EXPENSE;
-    }, [modalType]);
+    }, [isEditing, modalType]);
 
     useEffect(() => {
         if (!isModalOpen) {
@@ -86,7 +87,7 @@ const TransactionModal = () => {
 
                 setForm((prev) => ({
                     ...initialForm,
-                    ownerId: payload.owners[0]?.id || prev.ownerId,
+                    ownerId: modalPayload?.ownerId || payload.owners[0]?.id || prev.ownerId,
                     amount: modalPayload?.amount ? String(modalPayload.amount) : initialForm.amount,
                     description: modalPayload?.description || initialForm.description,
                     sourceAccountId: modalPayload?.sourceAccountId || initialForm.sourceAccountId,
@@ -96,7 +97,7 @@ const TransactionModal = () => {
             .catch((error) => {
                 console.error('Error fetching modal meta:', error);
             });
-    }, [isModalOpen, modalType]);
+    }, [isModalOpen, modalPayload, modalType]);
 
     const isIncome = modalType === 'INCOME';
     const isExpense = modalType === 'EXPENSE';
@@ -114,6 +115,8 @@ const TransactionModal = () => {
             acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
 
         if (!matchesQuery) return false;
+        if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
+        if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
         if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
         if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
         if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet'; // destination for income
@@ -169,7 +172,17 @@ const TransactionModal = () => {
         setSubmitting(true);
 
         try {
-            if (modalPayload?.pendingTransactionId) {
+            if (editTransactionId) {
+                const payload = {
+                    amount: Number(form.amount),
+                    description: form.description,
+                    ownerId: form.ownerId,
+                    type: isInvestment ? 'TRANSFER' : modalType,
+                    sourceAccountId: showSource ? form.sourceAccountId : undefined,
+                    destinationAccountId: showDestination ? form.destinationAccountId : undefined,
+                };
+                await api.put(`/transactions/${editTransactionId}`, payload);
+            } else if (modalPayload?.pendingTransactionId) {
                 const payload = {
                     action: 'APPROVE',
                     amount: Number(form.amount),

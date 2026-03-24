@@ -551,6 +551,98 @@ router.put('/:id/validate', async (req, res) => {
     }
 });
 
+// Endpoint untuk Edit Transaksi yang sudah Ada
+router.put('/:id', async (req, res) => {
+    const { id } = req.params;
+    const { type, amount, description, ownerId, sourceAccountId, destinationAccountId } = req.body;
+
+    try {
+        const parsedAmount = Number(amount);
+        const txType = normalizeTransactionType(type);
+
+        if (!txType) {
+            return res.status(400).json({ error: 'Jenis transaksi tidak valid' });
+        }
+
+        // Validasi payload baru
+        const payloadError = validateTransactionPayload({
+            type: txType,
+            amount: parsedAmount,
+            ownerId,
+            sourceAccountId,
+            destinationAccountId
+        });
+
+        if (payloadError) {
+            return res.status(400).json({ error: payloadError });
+        }
+
+        const updatedTx = await prisma.$transaction(async (trx) => {
+            // Ambil data transaksi lama
+            const oldTx = await trx.transaction.findUnique({ where: { id } });
+            if (!oldTx) {
+                throw new Error('Transaksi tidak ditemukan');
+            }
+
+            // 1. Rollback saldo akibat transaksi LAMA (kebalikan)
+            if (oldTx.type === TransactionType.INCOME && oldTx.destinationAccountId) {
+                await trx.account.update({
+                    where: { id: oldTx.destinationAccountId },
+                    data: { balance: { decrement: oldTx.amount } }
+                });
+            } else if ((oldTx.type === TransactionType.EXPENSE || oldTx.type === TransactionType.INVESTMENT_OUT) && oldTx.sourceAccountId) {
+                await trx.account.update({
+                    where: { id: oldTx.sourceAccountId },
+                    data: { balance: { increment: oldTx.amount } }
+                });
+            } else if (oldTx.type === TransactionType.TRANSFER && oldTx.sourceAccountId && oldTx.destinationAccountId) {
+                await trx.account.update({
+                    where: { id: oldTx.sourceAccountId },
+                    data: { balance: { increment: oldTx.amount } }
+                });
+                await trx.account.update({
+                    where: { id: oldTx.destinationAccountId },
+                    data: { balance: { decrement: oldTx.amount } }
+                });
+            }
+
+            // 2. Periksa saldo cukup untuk transaksi BARU
+            const sourceFundsError = await ensureSourceAccountHasFunds(trx, txType, parsedAmount, sourceAccountId);
+            if (sourceFundsError) {
+                throw new Error(sourceFundsError);
+            }
+
+            // 3. Resolusi kategori/aktivitas
+            const resolvedActivityId = await resolveActivityId(trx, txType, oldTx.activityId);
+
+            // 4. Update record transaksi
+            const updated = await trx.transaction.update({
+                where: { id },
+                data: {
+                    type: txType,
+                    amount: parsedAmount,
+                    description: description || null,
+                    ownerId,
+                    activityId: resolvedActivityId,
+                    sourceAccountId: sourceAccountId || null,
+                    destinationAccountId: destinationAccountId || null,
+                }
+            });
+
+            // 5. Terapkan saldo BARU
+            await applyAccountBalanceChanges(trx, txType, parsedAmount, sourceAccountId, destinationAccountId);
+
+            return updated;
+        });
+
+        res.json(updatedTx);
+    } catch (error) {
+        console.error('Edit transaction error:', error);
+        const message = error instanceof Error ? error.message : 'Gagal mengedit transaksi';
+        res.status(400).json({ error: message });
+    }
+});
+
 // Endpoint untuk Master Data (Pendukung dropdown)
 router.get('/meta', async (_req, res) => {
     try {

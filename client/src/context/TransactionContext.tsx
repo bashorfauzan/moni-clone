@@ -6,6 +6,7 @@ export interface TransactionModalPayload {
     amount?: number;
     description?: string;
     type?: TransactionType;
+    ownerId?: string;
     sourceAccountId?: string;
     destinationAccountId?: string;
     notificationInboxId?: string;
@@ -16,7 +17,9 @@ interface TransactionContextType {
     isModalOpen: boolean;
     modalType: TransactionType;
     modalPayload?: TransactionModalPayload;
+    editTransactionId?: string;
     openModal: (type?: TransactionType, payload?: TransactionModalPayload) => void;
+    openEditModal: (id: string, type?: TransactionType, payload?: TransactionModalPayload) => void;
     closeModal: () => void;
 }
 
@@ -26,9 +29,18 @@ export const TransactionProvider = ({ children }: { children: ReactNode }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalType, setModalType] = useState<TransactionType>('EXPENSE');
     const [modalPayload, setModalPayload] = useState<TransactionModalPayload | undefined>(undefined);
+    const [editTransactionId, setEditTransactionId] = useState<string | undefined>(undefined);
 
     const openModal = (type: TransactionType = 'EXPENSE', payload?: TransactionModalPayload) => {
         setModalType(type);
+        setModalPayload(payload);
+        setEditTransactionId(undefined);
+        setIsModalOpen(true);
+    };
+
+    const openEditModal = (id: string, type: TransactionType = 'EXPENSE', payload?: TransactionModalPayload) => {
+        setModalType(type);
+        setEditTransactionId(id);
         setModalPayload(payload);
         setIsModalOpen(true);
     };
@@ -36,10 +48,11 @@ export const TransactionProvider = ({ children }: { children: ReactNode }) => {
     const closeModal = () => {
         setIsModalOpen(false);
         setModalPayload(undefined);
+        setEditTransactionId(undefined);
     };
 
     return (
-        <TransactionContext.Provider value={{ isModalOpen, modalType, modalPayload, openModal, closeModal }}>
+        <TransactionContext.Provider value={{ isModalOpen, modalType, modalPayload, editTransactionId, openModal, openEditModal, closeModal }}>
             {children}
         </TransactionContext.Provider>
     );

@@ -3,15 +3,18 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download } from 'lucide-react';
-import { fetchTransactions } from '../services/transactions';
+import { ChevronLeft, ChevronRight, Calendar, Download, Pencil } from 'lucide-react';
+import { useTransaction } from '../context/TransactionContext';
+import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import Spinner from '../components/Spinner';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
+type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 
 const Reports = () => {
+    const { openEditModal } = useTransaction();
     const [viewMode, setViewMode] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [txPage, setTxPage] = useState(1);
@@ -49,102 +52,111 @@ const Reports = () => {
         }
     };
 
+    const fetchReportData = async () => {
+        setLoading(true);
+        try {
+            const [transactions, meta] = await Promise.all([
+                fetchTransactions({ validated: true }),
+                fetchMasterMeta()
+            ]);
+
+            const totalRdnAssets = (meta.accounts || [])
+                .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
+                .reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0);
+
+            // Filter by current month/year
+            const filtered = transactions.filter((tx: any) => {
+                const txDate = new Date(tx.date);
+                if (viewMode === 'MONTHLY') {
+                    return txDate.getMonth() === currentDate.getMonth()
+                        && txDate.getFullYear() === currentDate.getFullYear();
+                }
+
+                return txDate.getFullYear() === currentDate.getFullYear();
+            });
+
+            // Calculate Totals
+            const totalIncome = filtered
+                .filter((tx: any) => tx.type === 'INCOME')
+                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const totalExpense = filtered
+                .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
+                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const zakatAmount = totalIncome * 0.025;
+            const lifetimeIncome = transactions
+                .filter((tx: any) => tx.type === 'INCOME')
+                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const lifetimeExpense = transactions
+                .filter((tx: any) => tx.type === 'EXPENSE')
+                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const liquidBalance = lifetimeIncome - lifetimeExpense;
+            const totalWealth = liquidBalance + totalRdnAssets;
+
+            // Group by Category and Type (For Donut)
+            const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
+
+            const catMap: any = {};
+            filtered.forEach((tx: any) => {
+                let name = tx.activity?.name;
+                if (!name) {
+                    if (tx.type === 'INCOME') name = 'Pemasukan';
+                    else if (tx.type === 'TRANSFER') name = 'Transfer';
+                    else if (tx.type === 'INVESTMENT_IN') name = 'Pencairan Investasi';
+                    else if (tx.type === 'INVESTMENT_OUT') name = 'Investasi Keluar';
+                    else name = 'Lainnya';
+                }
+                catMap[name] = (catMap[name] || 0) + tx.amount;
+            });
+            const categoryData = Object.keys(catMap).map(name => ({
+                name,
+                value: catMap[name]
+            })).sort((a, b) => b.value - a.value);
+
+            // Trend Data (Last 6 months/years)
+            const trendMap: any = {};
+            filtered.forEach((tx: any) => {
+                const date = new Date(tx.date);
+                const label = viewMode === 'MONTHLY' ? date.getDate().toString() : (date.getMonth() + 1).toString();
+                if (!trendMap[label]) {
+                    trendMap[label] = { label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`, Pemasukan: 0, Pengeluaran: 0 };
+                }
+                if (tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') {
+                    trendMap[label].Pemasukan += tx.amount;
+                } else if (tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') {
+                    trendMap[label].Pengeluaran += tx.amount;
+                }
+            });
+            const trendData = Object.values(trendMap).sort((a: any, b: any) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
+
+            setData({
+                totalIncome,
+                totalExpense,
+                totalVolume,
+                totalWealth,
+                zakatAmount,
+                categoryData,
+                trendData,
+                transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            });
+            setTxPage(1);
+        } catch (error) {
+            console.error('Error fetching reports:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
-        const fetchReportData = async () => {
-            setLoading(true);
-            try {
-                const [transactions, meta] = await Promise.all([
-                    fetchTransactions({ validated: true }),
-                    fetchMasterMeta()
-                ]);
+        fetchReportData();
+    }, [viewMode, currentDate]);
 
-                const totalRdnAssets = (meta.accounts || [])
-                    .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
-                    .reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0);
-
-                // Filter by current month/year
-                const filtered = transactions.filter((tx: any) => {
-                    const txDate = new Date(tx.date);
-                    if (viewMode === 'MONTHLY') {
-                        return txDate.getMonth() === currentDate.getMonth() &&
-                            txDate.getFullYear() === currentDate.getFullYear();
-                    } else {
-                        return txDate.getFullYear() === currentDate.getFullYear();
-                    }
-                });
-
-                // Calculate Totals
-                const totalIncome = filtered
-                    .filter((tx: any) => tx.type === 'INCOME')
-                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-                const totalExpense = filtered
-                    .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
-                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-                const zakatAmount = totalIncome * 0.025;
-                const lifetimeIncome = transactions
-                    .filter((tx: any) => tx.type === 'INCOME')
-                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-                const lifetimeExpense = transactions
-                    .filter((tx: any) => tx.type === 'EXPENSE')
-                    .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-                const liquidBalance = lifetimeIncome - lifetimeExpense;
-                const totalWealth = liquidBalance + totalRdnAssets;
-
-                // Group by Category and Type (For Donut)
-                const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
-
-                const catMap: any = {};
-                filtered.forEach((tx: any) => {
-                    let name = tx.activity?.name;
-                    if (!name) {
-                        if (tx.type === 'INCOME') name = 'Pemasukan';
-                        else if (tx.type === 'TRANSFER') name = 'Transfer';
-                        else if (tx.type === 'INVESTMENT_IN') name = 'Pencairan Investasi';
-                        else if (tx.type === 'INVESTMENT_OUT') name = 'Investasi Keluar';
-                        else name = 'Lainnya';
-                    }
-                    catMap[name] = (catMap[name] || 0) + tx.amount;
-                });
-                const categoryData = Object.keys(catMap).map(name => ({
-                    name,
-                    value: catMap[name]
-                })).sort((a, b) => b.value - a.value);
-
-                // Trend Data (Last 6 months/years)
-                const trendMap: any = {};
-                filtered.forEach((tx: any) => {
-                    const date = new Date(tx.date);
-                    const label = viewMode === 'MONTHLY' ? date.getDate().toString() : (date.getMonth() + 1).toString();
-                    if (!trendMap[label]) {
-                        trendMap[label] = { label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`, Pemasukan: 0, Pengeluaran: 0 };
-                    }
-                    if (tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') {
-                        trendMap[label].Pemasukan += tx.amount;
-                    } else if (tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') {
-                        trendMap[label].Pengeluaran += tx.amount;
-                    }
-                });
-                const trendData = Object.values(trendMap).sort((a: any, b: any) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
-
-                setData({
-                    totalIncome,
-                    totalExpense,
-                    totalVolume,
-                    totalWealth,
-                    zakatAmount,
-                    categoryData,
-                    trendData,
-                    transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                });
-                setTxPage(1);
-            } catch (error) {
-                console.error('Error fetching reports:', error);
-            } finally {
-                setLoading(false);
-            }
+    useEffect(() => {
+        const handleDataChanged = () => {
+            void fetchReportData();
         };
 
-        fetchReportData();
+        window.addEventListener('nova:data-changed', handleDataChanged);
+        return () => window.removeEventListener('nova:data-changed', handleDataChanged);
     }, [viewMode, currentDate]);
 
     const formatCurrency = (val: number) => {
@@ -160,6 +172,21 @@ const Reports = () => {
         if (viewMode === 'MONTHLY') next.setMonth(next.getMonth() + offset);
         else next.setFullYear(next.getFullYear() + offset);
         setCurrentDate(next);
+    };
+
+    const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
+        const isInvestmentTransfer = tx.type === 'TRANSFER'
+            && ['RDN', 'Sekuritas'].includes(tx.destinationAccount?.type || '');
+
+        if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') {
+            return 'INVESTMENT';
+        }
+
+        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER') {
+            return tx.type;
+        }
+
+        return 'INCOME';
     };
 
     if (loading) return <Spinner message="Menganalisis Laporan..." />;
@@ -408,6 +435,7 @@ const Reports = () => {
                                 <th className="px-6 py-4">Kategori / Catatan</th>
                                 <th className="px-6 py-4">Rekening</th>
                                 <th className="px-6 py-4 text-right">Nominal</th>
+                                <th className="px-6 py-4 text-center">Aksi</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100/50">
@@ -451,11 +479,28 @@ const Reports = () => {
                                     <td className={`px-6 py-4 text-right font-bold ${tx.type === 'INCOME' ? 'text-emerald-600' : 'text-slate-900'}`}>
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
                                     </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => openEditModal(tx.id, getEditableModalType(tx as TransactionItem), {
+                                                amount: tx.amount,
+                                                description: tx.description || tx.activity?.name,
+                                                ownerId: tx.ownerId,
+                                                sourceAccountId: tx.sourceAccountId,
+                                                destinationAccountId: tx.destinationAccountId,
+                                            })}
+                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                                            title="Edit transaksi"
+                                            aria-label="Edit transaksi"
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {data.transactionsData.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-10 text-center text-slate-400 text-sm italic">
+                                    <td colSpan={7} className="px-6 py-10 text-center text-slate-400 text-sm italic">
                                         Tidak ada transaksi pada periode ini
                                     </td>
                                 </tr>

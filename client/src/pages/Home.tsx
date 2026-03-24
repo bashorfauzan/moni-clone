@@ -9,15 +9,19 @@ import {
 } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
-import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
+import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell, Pencil } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
 import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
+import { useNavigate } from 'react-router-dom';
+
+type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 
 const Home = () => {
-    const { openModal } = useTransaction();
+    const { openModal, openEditModal } = useTransaction();
+    const navigate = useNavigate();
     const { user } = useAuth();
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[] }>({ owners: [], accounts: [] });
     const [summaryData, setSummaryData] = useState({
@@ -26,7 +30,6 @@ const Home = () => {
         expenseMonth: 0
     });
     const [recentTransactions, setRecentTransactions] = useState<TransactionItem[]>([]);
-    const [allRecentTransactions, setAllRecentTransactions] = useState<TransactionItem[] | null>(null);
     const [pendingTransactions, setPendingTransactions] = useState<TransactionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [loading, setLoading] = useState(true);
@@ -35,8 +38,6 @@ const Home = () => {
     const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
     const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
     const [clearingNotifications, setClearingNotifications] = useState(false);
-    const [isShowingAllRecent, setIsShowingAllRecent] = useState(false);
-    const [loadingAllRecent, setLoadingAllRecent] = useState(false);
     const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
     const refreshTimeoutRef = useRef<number | null>(null);
 
@@ -211,6 +212,21 @@ const Home = () => {
         return destination || source || tx.owner?.name || 'Rekening belum terhubung';
     };
 
+    const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
+        const isInvestmentTransfer = tx.type === 'TRANSFER'
+            && ['RDN', 'Sekuritas'].includes(tx.destinationAccount?.type || '');
+
+        if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') {
+            return 'INVESTMENT';
+        }
+
+        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER') {
+            return tx.type;
+        }
+
+        return 'INCOME';
+    };
+
     const wealthDistribution = meta.owners.map(owner => {
         // Filter untuk mengikutsertakan RDN, Rekening Bank, E-Wallet, dan Sekuritas seperti permintaan user
         const ownerAccounts = meta.accounts.filter(acc => 
@@ -286,34 +302,6 @@ const Home = () => {
             setClearingNotifications(false);
         }
     };
-
-    const handleToggleRecentTransactions = async () => {
-        if (isShowingAllRecent) {
-            setIsShowingAllRecent(false);
-            return;
-        }
-
-        if (allRecentTransactions) {
-            setIsShowingAllRecent(true);
-            return;
-        }
-
-        setLoadingAllRecent(true);
-        try {
-            const allValidatedTransactions = await fetchTransactions({ validated: true });
-            setAllRecentTransactions(allValidatedTransactions);
-            setIsShowingAllRecent(true);
-        } catch (error) {
-            console.error('Error fetching all recent transactions:', error);
-            alert('Gagal memuat semua transaksi');
-        } finally {
-            setLoadingAllRecent(false);
-        }
-    };
-
-    const displayedRecentTransactions = isShowingAllRecent && allRecentTransactions
-        ? allRecentTransactions
-        : recentTransactions;
 
     if (loading) {
         return <Spinner message="Sinkronisasi Data..." />;
@@ -530,18 +518,17 @@ const Home = () => {
                     <h3 className="font-bold text-slate-900 text-sm">Transaksi Terakhir</h3>
                     <button
                         type="button"
-                        onClick={() => void handleToggleRecentTransactions()}
-                        disabled={loadingAllRecent}
-                        className="text-[10px] text-blue-600 font-bold uppercase tracking-widest hover:text-blue-700 transition-colors disabled:opacity-50"
+                        onClick={() => navigate('/reports')}
+                        className="text-[10px] text-blue-600 font-bold uppercase tracking-widest hover:text-blue-700 transition-colors"
                     >
-                        {loadingAllRecent ? 'MEMUAT...' : isShowingAllRecent ? 'RINGKAS' : 'LIHAT SEMUA'}
+                        LIHAT SEMUA
                     </button>
                 </div>
                 <div className="space-y-2.5">
-                    {displayedRecentTransactions.length > 0 ? (
-                        displayedRecentTransactions.map((tx, i: number) => (
-                            <div key={i} className="flex items-center justify-between gap-3 p-4 bg-white border border-slate-100/60 rounded-[20px] hover:bg-slate-50/50 transition-colors shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)]">
-                                <div className="flex items-center gap-3.5 min-w-0">
+                    {recentTransactions.length > 0 ? (
+                        recentTransactions.map((tx) => (
+                            <div key={tx.id} className="flex items-center justify-between gap-3 p-4 bg-white border border-slate-100/60 rounded-[20px] hover:bg-slate-50/50 transition-colors shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)]">
+                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
                                     <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${tx.type === 'INCOME' ? 'bg-emerald-50 text-emerald-600' :
                                         tx.type === 'EXPENSE' ? 'bg-rose-50 text-rose-600' :
                                             tx.type === 'TRANSFER' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
@@ -557,9 +544,26 @@ const Home = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <p className={`font-bold text-sm shrink-0 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
-                                    {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
-                                </p>
+                                <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                        type="button"
+                                        onClick={() => openEditModal(tx.id, getEditableModalType(tx), {
+                                            amount: tx.amount,
+                                            description: tx.description || tx.activity?.name,
+                                            ownerId: tx.ownerId,
+                                            sourceAccountId: tx.sourceAccountId,
+                                            destinationAccountId: tx.destinationAccountId,
+                                        })}
+                                        className="h-9 w-9 rounded-full border border-slate-200 bg-slate-50 text-slate-500 flex items-center justify-center hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                                        title="Edit transaksi"
+                                        aria-label="Edit transaksi"
+                                    >
+                                        <Pencil size={14} />
+                                    </button>
+                                    <p className={`font-bold text-sm shrink-0 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
+                                        {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
+                                    </p>
+                                </div>
                             </div>
                         ))
                     ) : (
