@@ -3,6 +3,8 @@ import api from '../services/api';
 import { X, ChevronDown, Search } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta } from '../services/masterData';
+import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
+import { fetchTransactions } from '../services/transactions';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 type PickerType = 'source' | 'destination' | null;
@@ -37,6 +39,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 const TransactionModal = () => {
     const { isModalOpen, modalType, modalPayload, editTransactionId, closeModal } = useTransaction();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
+    const [accountUsage, setAccountUsage] = useState<AccountUsageFrequency>({});
     const [form, setForm] = useState(initialForm);
     const [submitting, setSubmitting] = useState(false);
     const [pickerType, setPickerType] = useState<PickerType>(null);
@@ -78,13 +81,21 @@ const TransactionModal = () => {
         if (!isModalOpen) {
             setForm(initialForm);
             setPickerType(null);
+            setPickerQuery('');
             return;
         }
 
-        fetchMasterMeta()
-            .then((payload) => {
-                setMeta(payload);
+        let isActive = true;
 
+        Promise.all([
+            fetchMasterMeta(),
+            fetchTransactions({ validated: true })
+        ])
+            .then(([payload, transactions]) => {
+                if (!isActive) return;
+
+                setMeta(payload);
+                setAccountUsage(buildAccountUsageFrequency(transactions));
                 setForm((prev) => ({
                     ...initialForm,
                     ownerId: modalPayload?.ownerId || payload.owners[0]?.id || prev.ownerId,
@@ -97,6 +108,10 @@ const TransactionModal = () => {
             .catch((error) => {
                 console.error('Error fetching modal meta:', error);
             });
+
+        return () => {
+            isActive = false;
+        };
     }, [isModalOpen, modalPayload, modalType]);
 
     const isIncome = modalType === 'INCOME';
@@ -110,22 +125,38 @@ const TransactionModal = () => {
     const accountById = (id: string) => meta.accounts.find((acc) => acc.id === id);
     const selectedSourceAccount = accountById(form.sourceAccountId);
 
-    const filteredAccounts = meta.accounts.filter((acc) => {
-        const matchesQuery = acc.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
-            acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
+    const filteredAccounts = useMemo(() => {
+        const accounts = meta.accounts.filter((acc) => {
+            const matchesQuery = acc.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
+                acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
 
-        if (!matchesQuery) return false;
-        if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
-        if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
-        if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
-        if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
-        if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet'; // destination for income
-        if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet'; // source for expense
-        if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
-        if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
+            if (!matchesQuery) return false;
+            if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
+            if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
+            if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
+            if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
 
-        return true;
-    });
+            return true;
+        });
+
+        return sortAccountsByUsage(accounts, accountUsage);
+    }, [
+        accountUsage,
+        form.destinationAccountId,
+        form.sourceAccountId,
+        isEditing,
+        isExpense,
+        isIncome,
+        isInvestment,
+        isTransfer,
+        meta.accounts,
+        pickerQuery,
+        pickerType
+    ]);
 
     const openPicker = (type: PickerType) => {
         setPickerQuery('');

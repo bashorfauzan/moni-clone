@@ -8,6 +8,7 @@ import {
     type NotificationItem
 } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
+import { buildAccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell, Pencil } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
@@ -68,11 +69,7 @@ const Home = () => {
                 .reduce((sum: number, acc: Account) => sum + acc.balance, 0);
 
             // Hitung frekuensi penggunaan rekening dari semua transaksi yang berhasil dimuat
-            const freq: Record<string, number> = {};
-            allValidatedTransactions.forEach((tx: any) => {
-                if (tx.sourceAccountId) freq[tx.sourceAccountId] = (freq[tx.sourceAccountId] || 0) + 1;
-                if (tx.destinationAccountId) freq[tx.destinationAccountId] = (freq[tx.destinationAccountId] || 0) + 1;
-            });
+            const freq = buildAccountUsageFrequency(allValidatedTransactions);
 
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -229,19 +226,9 @@ const Home = () => {
 
     const wealthDistribution = meta.owners.map(owner => {
         // Filter untuk mengikutsertakan RDN, Rekening Bank, E-Wallet, dan Sekuritas seperti permintaan user
-        const ownerAccounts = meta.accounts.filter(acc => 
+        const ownerAccounts = sortAccountsByUsage(meta.accounts.filter(acc => 
             acc.ownerId === owner.id && ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type)
-        );
-
-        // Urutkan berdasarkan frekuensi transaksi terbanyak (descending), jika sama baru berdasarkan saldo terbesar
-        ownerAccounts.sort((a, b) => {
-            const freqA = accountFreq[a.id] || 0;
-            const freqB = accountFreq[b.id] || 0;
-            if (freqA !== freqB) {
-                return freqB - freqA;
-            }
-            return b.balance - a.balance;
-        });
+        ), accountFreq);
 
         const total = ownerAccounts.reduce((sum, acc) => sum + acc.balance, 0);
         return { ...owner, total, accountCount: ownerAccounts.length, accounts: ownerAccounts };
@@ -554,12 +541,11 @@ const Home = () => {
                                             sourceAccountId: tx.sourceAccountId,
                                             destinationAccountId: tx.destinationAccountId,
                                         })}
-                                        className="inline-flex h-10 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 text-[11px] font-bold uppercase tracking-wider text-blue-700 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors"
                                         title="Edit transaksi"
                                         aria-label="Edit transaksi"
                                     >
                                         <Pencil size={14} />
-                                        <span className="hidden sm:inline">Edit</span>
                                     </button>
                                     <p className={`font-bold text-sm shrink-0 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
