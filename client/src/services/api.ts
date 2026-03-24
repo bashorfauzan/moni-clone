@@ -6,12 +6,14 @@ const resolveApiBaseUrl = () => {
 
     if (typeof window !== 'undefined') {
         const isLocalHost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-        return isLocalHost
-            ? `${window.location.protocol}//${window.location.hostname}:5001/api`
-            : '/api';
+        if (isLocalHost) {
+            return `${window.location.protocol}//${window.location.hostname}:5001/api`;
+        }
+        // Fallback ke production backend URL karena frontend & backend beda domain di Railway
+        return 'https://moni-clone-production.up.railway.app/api';
     }
 
-    return '/api';
+    return 'https://moni-clone-production.up.railway.app/api';
 };
 
 const API_BASE_URL = resolveApiBaseUrl();

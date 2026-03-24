@@ -1,18 +1,25 @@
 package com.moni.notifier.service
 
 import android.app.Notification
+import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import org.json.JSONObject
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 class AccountNotificationListenerService : NotificationListenerService() {
     private lateinit var preferenceStore: PreferenceStore
     private lateinit var webhookSender: WebhookSender
+    private val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+        .withZone(ZoneId.systemDefault())
 
     override fun onCreate() {
         super.onCreate()
         preferenceStore = PreferenceStore(this)
         webhookSender = WebhookSender(preferenceStore)
+        NotificationHelper.createChannel(this)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -30,19 +37,17 @@ class AccountNotificationListenerService : NotificationListenerService() {
             packageName.contains("shopee", ignoreCase = true)
         if (!isSupported) return
 
+        val appNameStr = resolveAppName(packageName)
         val extras = sbn.notification.extras
         val title = firstNonBlank(
             extras.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString(),
             extras.getCharSequence("android.title.big")?.toString()
         )
-        val text = firstNonBlank(
-            extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
-            extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString(),
-            joinTextLines(extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES))
-        )
+        val text = extractMessageText(sbn.notification, extras)
         val senderName = firstNonBlank(
             extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            extras.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE)?.toString(),
             extras.getCharSequence(Notification.EXTRA_TITLE_BIG)?.toString()
         )
 
@@ -56,6 +61,8 @@ class AccountNotificationListenerService : NotificationListenerService() {
         }
 
         val fullText = listOf(title, senderName, messageText)
+            .plus(appNameStr)
+            .plus(packageName)
             .joinToString(" ")
             .lowercase()
         val filters = preferenceStore.getFilterKeywords()
@@ -64,27 +71,11 @@ class AccountNotificationListenerService : NotificationListenerService() {
             .filter { it.isNotBlank() }
 
         if (filters.isNotEmpty() && filters.none { keyword -> fullText.contains(keyword) }) {
+            val timeStr = timeFormatter.format(Instant.ofEpochMilli(sbn.postTime))
             preferenceStore.setLastDeliveryStatus(
-                "Diabaikan ${java.time.Instant.ofEpochMilli(sbn.postTime)} • tidak cocok filter"
+                "Diabaikan $timeStr • tidak cocok filter"
             )
             return
-        }
-
-        val appNameStr = when {
-            packageName.contains("bca", ignoreCase = true) -> "BCA"
-            packageName.contains("mandiri", ignoreCase = true) || packageName.contains("livin", ignoreCase = true) -> "Mandiri"
-            packageName.contains("brimo", ignoreCase = true) || packageName.contains("bri", ignoreCase = true) -> "BRI"
-            packageName.contains("bni", ignoreCase = true) -> "BNI"
-            packageName.contains("bsi", ignoreCase = true) -> "BSI"
-            packageName.contains("jago", ignoreCase = true) -> "Jago"
-            packageName.contains("seabank", ignoreCase = true) -> "SeaBank"
-            packageName.contains("jenius", ignoreCase = true) || packageName.contains("btpn", ignoreCase = true) -> "Jenius"
-            packageName.contains("dana", ignoreCase = true) -> "DANA"
-            packageName.contains("ovo", ignoreCase = true) -> "OVO"
-            packageName.contains("gojek", ignoreCase = true) -> "GoPay"
-            packageName.contains("shopee", ignoreCase = true) -> "ShopeePay"
-            packageName.contains("flip", ignoreCase = true) -> "Flip"
-            else -> packageName
         }
 
         val payload = JSONObject().apply {
@@ -92,19 +83,37 @@ class AccountNotificationListenerService : NotificationListenerService() {
             put("title", title)
             put("senderName", senderName)
             put("text", messageText)
-            put("receivedAt", java.time.Instant.ofEpochMilli(sbn.postTime).toString())
+            put("receivedAt", Instant.ofEpochMilli(sbn.postTime).toString())
             put(
                 "rawPayload",
                 JSONObject().apply {
                     put("packageName", packageName)
                     put("notificationKey", sbn.key)
+                    put("groupKey", sbn.groupKey)
+                    put("isGroup", sbn.isGroup)
                     put("postTime", sbn.postTime)
+                    put("isClearable", sbn.isClearable)
+                    put("tag", sbn.tag)
+                    put("channelId", sbn.notification.channelId)
+                    put("category", sbn.notification.category)
+                    put("extrasKeys", extras.keySet().joinToString(","))
                     put("androidTitle", title)
+                    put("androidText", text)
                 }
             )
         }
 
-        webhookSender.send(payload)
+        webhookSender.send(payload) {
+            val webAppUrl = preferenceStore.getWebAppUrl()
+            if (webAppUrl.isNotBlank()) {
+                NotificationHelper.showTransactionNotification(
+                    context = this,
+                    webAppUrl = webAppUrl,
+                    appName = appNameStr,
+                    text = messageText
+                )
+            }
+        }
     }
 
     companion object {
@@ -133,6 +142,25 @@ class AccountNotificationListenerService : NotificationListenerService() {
             "com.flip.android"
         )
 
+        private fun resolveAppName(packageName: String): String {
+            return when {
+                packageName.contains("bca", ignoreCase = true) -> "BCA"
+                packageName.contains("mandiri", ignoreCase = true) || packageName.contains("livin", ignoreCase = true) -> "Mandiri"
+                packageName.contains("brimo", ignoreCase = true) || packageName.contains("bri", ignoreCase = true) -> "BRI"
+                packageName.contains("bni", ignoreCase = true) -> "BNI"
+                packageName.contains("bsi", ignoreCase = true) -> "BSI"
+                packageName.contains("jago", ignoreCase = true) -> "Jago"
+                packageName.contains("seabank", ignoreCase = true) -> "SeaBank"
+                packageName.contains("jenius", ignoreCase = true) || packageName.contains("btpn", ignoreCase = true) -> "Jenius"
+                packageName.contains("dana", ignoreCase = true) -> "DANA"
+                packageName.contains("ovo", ignoreCase = true) -> "OVO"
+                packageName.contains("gojek", ignoreCase = true) -> "GoPay"
+                packageName.contains("shopee", ignoreCase = true) -> "ShopeePay"
+                packageName.contains("flip", ignoreCase = true) -> "Flip"
+                else -> packageName
+            }
+        }
+
         private fun firstNonBlank(vararg values: String?): String {
             return values.firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
         }
@@ -143,6 +171,30 @@ class AccountNotificationListenerService : NotificationListenerService() {
                 ?.filter { it.isNotBlank() }
                 ?.joinToString(" ")
                 .orEmpty()
+        }
+
+        private fun extractMessageText(notification: Notification, extras: Bundle): String {
+            return firstNonBlank(
+                extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+                joinTextLines(extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)),
+                joinMessagingTexts(extras.getParcelableArray(Notification.EXTRA_MESSAGES)),
+                joinMessagingTexts(extras.getParcelableArray(Notification.EXTRA_HISTORIC_MESSAGES)),
+                extras.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+                extras.getCharSequence("android.bigText")?.toString(),
+                extras.getCharSequence("android.text")?.toString(),
+                extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString(),
+                notification.tickerText?.toString()
+            )
+        }
+
+        private fun joinMessagingTexts(values: Array<android.os.Parcelable>?): String {
+            if (values.isNullOrEmpty()) return ""
+
+            return Notification.MessagingStyle.Message.getMessagesFromBundleArray(values)
+                .mapNotNull { it.text?.toString()?.trim() }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .joinToString(" ")
         }
     }
 }

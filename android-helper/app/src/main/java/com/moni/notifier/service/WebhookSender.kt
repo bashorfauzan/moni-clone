@@ -18,7 +18,7 @@ class WebhookSender(
     private val executor = Executors.newSingleThreadExecutor()
     private val timeFormatter = SimpleDateFormat("dd MMM HH:mm:ss", Locale("id", "ID"))
 
-    fun send(payload: JSONObject) {
+    fun send(payload: JSONObject, onSuccess: (() -> Unit)? = null) {
         executor.execute {
             val endpoint = preferenceStore.getWebhookUrl()
             try {
@@ -40,8 +40,9 @@ class WebhookSender(
                 if (responseCode in 200..299) {
                     Log.d(LOG_TAG, "Webhook sent: $responseCode")
                     preferenceStore.setLastDeliveryStatus(
-                        "Berhasil ${timeFormatter.format(Date())} • HTTP $responseCode • $summary"
+                        buildSuccessStatus(responseCode, responseBody, summary)
                     )
+                    onSuccess?.invoke()
                 } else {
                     Log.e(LOG_TAG, "Webhook failed: $responseCode $responseBody")
                     preferenceStore.setLastDeliveryStatus(
@@ -67,6 +68,28 @@ class WebhookSender(
 
         return BufferedReader(InputStreamReader(stream)).use { reader ->
             reader.readText().replace("\\s+".toRegex(), " ").trim()
+        }
+    }
+
+    private fun buildSuccessStatus(responseCode: Int, responseBody: String, summary: String): String {
+        val timestamp = timeFormatter.format(Date())
+        return try {
+            val json = JSONObject(responseBody)
+            val createdTransaction = json.optBoolean("createdTransaction", false)
+            val reason = json.optString("reason").takeIf { it.isNotBlank() }
+            val statusLabel = when {
+                createdTransaction -> "Masuk ${timestamp} • transaksi dibuat"
+                responseCode == 202 -> "Masuk ${timestamp} • inbox saja"
+                else -> "Berhasil ${timestamp} • HTTP $responseCode"
+            }
+
+            listOfNotNull(
+                statusLabel,
+                reason?.take(48),
+                summary.takeIf { it.isNotBlank() }
+            ).joinToString(" • ")
+        } catch (_: Exception) {
+            "Berhasil ${timestamp} • HTTP $responseCode • $summary"
         }
     }
 

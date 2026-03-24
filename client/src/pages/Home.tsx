@@ -541,7 +541,7 @@ const Home = () => {
                                     ) : null}
 
                                     {!item.transaction ? (
-                                        <div className="mt-3 flex justify-end">
+                                        <div className="mt-3 flex justify-end gap-2">
                                             <button
                                                 type="button"
                                                 onClick={() => void handleDeleteNotification(item.id)}
@@ -549,6 +549,23 @@ const Home = () => {
                                                 className="h-8 px-3 rounded-lg bg-white/80 border border-slate-200 text-[11px] font-bold uppercase tracking-wide text-rose-600 hover:bg-rose-50 transition-colors disabled:opacity-50"
                                             >
                                                 {deletingNotificationId === item.id ? 'Menghapus...' : 'Hapus'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    openModal(
+                                                        (item.parsedType as any) || 'EXPENSE',
+                                                        {
+                                                            amount: item.parsedAmount || undefined,
+                                                            description: item.parseNotes || item.messageText,
+                                                            type: (item.parsedType as any) || undefined,
+                                                            notificationInboxId: item.id
+                                                        }
+                                                    );
+                                                }}
+                                                className="h-8 px-3 rounded-lg bg-blue-600 border border-transparent text-[11px] font-bold uppercase tracking-wide text-white hover:bg-blue-700 transition-colors"
+                                            >
+                                                Buat Transaksi
                                             </button>
                                         </div>
                                     ) : null}

@@ -165,48 +165,53 @@ const Reports = () => {
     if (loading) return <Spinner message="Menganalisis Laporan..." />;
 
     return (
-        <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
+        <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-32 pt-4 md:space-y-8 md:p-8">
             {/* Header & Filter */}
-            <header className="flex flex-col gap-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between lg:justify-start lg:gap-4">
-                        <h1 className="text-2xl font-bold italic text-slate-900">Laporan</h1>
-                        <div className="app-surface-card self-start rounded-2xl px-4 py-3 min-w-[220px]">
-                            <p className="mt-1 text-lg font-black text-slate-900 break-words">Total Kekayaan : {formatCurrency(data.totalWealth)}</p>
+            <header className="space-y-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="space-y-3">
+                        <div>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-400">Analisis Keuangan</p>
+                            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">Laporan</h1>
+                            <p className="mt-1 text-sm text-slate-500">Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif.</p>
+                        </div>
+                        <div className="app-surface-card rounded-[24px] px-4 py-3 sm:px-5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Kekayaan Tercatat</p>
+                            <p className="mt-1 text-xl font-black leading-tight text-slate-900 break-words">{formatCurrency(data.totalWealth)}</p>
                         </div>
                     </div>
-                    <div className="bg-slate-100 p-1 rounded-xl border border-slate-200 flex self-start">
+                    <div className="bg-slate-100 p-1 rounded-2xl border border-slate-200 flex self-start">
                         <button
                             onClick={() => setViewMode('MONTHLY')}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'MONTHLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${viewMode === 'MONTHLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
                         >
                             BULANAN
                         </button>
                         <button
                             onClick={() => setViewMode('YEARLY')}
-                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'YEARLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${viewMode === 'YEARLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
                         >
                             TAHUNAN
                         </button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
                     <div className="app-surface-card rounded-[28px] px-4 py-4 sm:px-5">
-                        <div className="flex items-center justify-between gap-2 sm:gap-3">
+                        <div className="flex items-center justify-between gap-3">
                             <button onClick={() => changeDate(-1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
                                 <ChevronLeft size={20} />
                             </button>
-                            <div className="min-w-0 text-center flex-1 px-1">
-                                <div className="inline-flex max-w-full items-center justify-center gap-2">
+                            <div className="min-w-0 flex-1 px-1 text-center">
+                                <div className="inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
                                     <Calendar size={16} className="text-blue-600 shrink-0" />
-                                    <span className="min-w-0 text-center font-bold text-xs sm:text-sm uppercase tracking-[0.12em] sm:tracking-[0.18em] text-slate-700 break-words">
+                                    <span className="min-w-0 text-center font-bold text-xs uppercase tracking-[0.12em] sm:text-sm sm:tracking-[0.18em] text-slate-700 break-words">
                                         {viewMode === 'MONTHLY'
                                             ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
                                             : currentDate.getFullYear()}
                                     </span>
                                 </div>
-                                <p className="mt-1 text-[10px] sm:text-[11px] font-semibold text-slate-500">
+                                <p className="mt-2 text-[10px] font-semibold text-slate-500 sm:text-[11px]">
                                     {viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif'}
                                 </p>
                             </div>
@@ -219,39 +224,47 @@ const Reports = () => {
                     <button
                         onClick={exportExcel}
                         disabled={exporting || loading}
-                        className="app-surface-card w-full lg:w-auto px-4 sm:px-6 h-14 rounded-[28px] flex items-center justify-center gap-2 text-center text-slate-600 font-bold uppercase tracking-[0.14em] sm:tracking-widest text-[11px] sm:text-xs leading-tight hover:bg-white/70 transition-all disabled:opacity-50"
+                        className="app-surface-card h-14 w-full rounded-[28px] px-4 text-center text-[11px] font-bold uppercase leading-tight tracking-[0.14em] text-slate-600 transition-all hover:bg-white/70 disabled:opacity-50 sm:px-6 sm:text-xs sm:tracking-widest md:w-auto"
                     >
                         <Download size={16} /> {exporting ? 'Mengekspor...' : 'Export (Excel)'}
                     </button>
                 </div>
             </header>
 
-            <section className="app-hero-card rounded-3xl p-4 mb-6 relative overflow-hidden">
+            <section className="app-hero-card relative mb-6 overflow-hidden rounded-3xl p-4 sm:p-5">
                 <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
                 <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
                 <div className="relative z-10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Periode</p>
-
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pemasukan</p>
-                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.totalIncome)}</p>
+                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Periode</p>
+                            <p className="mt-1 text-sm text-white/70">Angka utama untuk periode yang sedang Anda lihat.</p>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pengeluaran</p>
-                            <p className="mt-1 text-xs font-bold text-rose-300 break-all leading-snug">{formatCurrency(data.totalExpense)}</p>
+                        <div className="self-start rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
+                            {viewMode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
                         </div>
                     </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Perputaran</p>
-                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(data.totalVolume)}</p>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pemasukan</p>
+                            <p className="mt-1 text-sm font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.totalIncome)}</p>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pengeluaran</p>
+                            <p className="mt-1 text-sm font-bold text-rose-300 break-all leading-snug">{formatCurrency(data.totalExpense)}</p>
+                        </div>
+                    </div>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Perputaran</p>
+                            <p className="mt-1 text-sm font-bold text-white break-all leading-snug">{formatCurrency(data.totalVolume)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
                             <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">
                                 Zakat {viewMode === 'MONTHLY' ? 'Bulan Ini' : 'Thn Ini'}
                             </p>
-                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.zakatAmount)}</p>
+                            <p className="mt-1 text-sm font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.zakatAmount)}</p>
                         </div>
                     </div>
                 </div>
@@ -259,60 +272,77 @@ const Reports = () => {
 
             {/* Donut Chart Section */}
             <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-sm">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 pb-6 border-b border-slate-50">Komposisi Transaksi</h2>
-
-                <div className="relative mt-6 h-[220px] sm:h-64">
-                    {data.categoryData.length > 0 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie
-                                    data={data.categoryData}
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius="54%"
-                                    outerRadius="78%"
-                                    paddingAngle={5}
-                                    dataKey="value"
-                                >
-                                    {data.categoryData.map((_: any, index: number) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                    ))}
-                                </Pie>
-                                <ChartTooltip
-                                    contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                    itemStyle={{ color: '#0f172a' }}
-                                />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="h-full flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-slate-50 text-center px-6">
-                            <p className="text-sm font-semibold text-slate-500">Tidak ada data transaksi pada periode ini.</p>
-                            <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Perputaran</p>
-                            <p className="mt-1 text-lg font-black text-slate-800">{formatCurrency(data.totalVolume)}</p>
-                        </div>
-                    )}
-                    {data.categoryData.length > 0 ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-10 text-center">
-                            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-[0.18em] mb-0.5">Perputaran</span>
-                            <span className="max-w-[8rem] sm:max-w-[9rem] text-sm font-black text-slate-800 tracking-tight break-words">{formatCurrency(data.totalVolume)}</span>
-                        </div>
-                    ) : null}
+                <div className="flex flex-col gap-2 border-b border-slate-50 px-2 pb-5 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Komposisi Transaksi</h2>
+                        <p className="mt-2 text-sm text-slate-500">Lihat kategori mana yang paling banyak membentuk perputaran pada periode ini.</p>
+                    </div>
+                    <div className="self-start rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                        {data.categoryData.length} kategori aktif
+                    </div>
                 </div>
 
-                {/* Category List */}
-                <div className="space-y-4 pt-6 border-t border-slate-50 mt-6">
-                    {data.categoryData.map((item: any, index: number) => (
-                        <div key={index} className="flex items-center justify-between gap-3 group">
-                            <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                                <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                                <span className="text-sm font-bold text-slate-600 break-words">{item.name}</span>
+                <div className={`mt-6 grid gap-5 ${data.categoryData.length > 0 ? 'lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:items-center' : ''}`}>
+                    {data.categoryData.length > 0 ? (
+                        <>
+                            <div className="relative h-[240px] sm:h-64">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={data.categoryData}
+                                            cx="50%"
+                                            cy="50%"
+                                            innerRadius="54%"
+                                            outerRadius="78%"
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {data.categoryData.map((_: any, index: number) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <ChartTooltip
+                                            contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                            itemStyle={{ color: '#0f172a' }}
+                                        />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
+                                    <span className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</span>
+                                    <span className="max-w-[8rem] break-words text-sm font-black tracking-tight text-slate-800 sm:max-w-[9rem]">{formatCurrency(data.totalVolume)}</span>
+                                </div>
                             </div>
-                            <div className="text-right shrink-0">
-                                <p className="text-sm font-bold text-slate-900">{formatCurrency(item.value)}</p>
-                                <p className="text-[10px] text-slate-400 font-bold">{data.totalVolume > 0 ? ((item.value / data.totalVolume) * 100).toFixed(1) : 0}%</p>
+
+                            <div className="space-y-3">
+                                {data.categoryData.map((item: any, index: number) => (
+                                    <div key={index} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
+                                        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                                            <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                            <div className="min-w-0">
+                                                <p className="break-words text-sm font-bold text-slate-700">{item.name}</p>
+                                                <p className="text-[11px] font-semibold text-slate-400">
+                                                    {data.totalVolume > 0 ? ((item.value / data.totalVolume) * 100).toFixed(1) : 0}% dari total
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <p className="shrink-0 text-right text-sm font-black text-slate-900">{formatCurrency(item.value)}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </>
+                    ) : (
+                        <div className="rounded-[28px] border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
+                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">%</div>
+                            <p className="mt-4 text-base font-bold text-slate-700">Belum ada komposisi transaksi</p>
+                            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                                Saat transaksi tervalidasi mulai masuk di periode ini, ringkasan kategori akan muncul di sini.
+                            </p>
+                            <div className="mt-5 rounded-2xl bg-white px-4 py-3 shadow-sm">
+                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran Saat Ini</p>
+                                <p className="mt-1 text-lg font-black text-slate-800">{formatCurrency(data.totalVolume)}</p>
                             </div>
                         </div>
-                    ))}
+                    )}
                 </div>
             </section>
 
@@ -323,35 +353,42 @@ const Reports = () => {
                     <span className="flex items-center gap-1 text-[10px] text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Pemasukan</span>
                     <span className="flex items-center gap-1 text-[10px] text-rose-500"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Pengeluaran</span>
                 </h2>
-                <div className="h-48 w-full mt-6">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={data.trendData}>
-                            <XAxis
-                                dataKey="label"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
-                            />
-                            <Bar
-                                dataKey="Pemasukan"
-                                fill="#10b981"
-                                radius={[4, 4, 0, 0]}
-                                barSize={12}
-                            />
-                            <Bar
-                                dataKey="Pengeluaran"
-                                fill="#f43f5e"
-                                radius={[4, 4, 0, 0]}
-                                barSize={12}
-                            />
-                            <ChartTooltip
-                                cursor={{ fill: '#f8fafc' }}
-                                contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '8px', fontSize: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                labelStyle={{ display: 'none' }}
-                            />
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+                {data.trendData.length > 0 ? (
+                    <div className="mt-6 h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={data.trendData}>
+                                <XAxis
+                                    dataKey="label"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
+                                />
+                                <Bar
+                                    dataKey="Pemasukan"
+                                    fill="#10b981"
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={12}
+                                />
+                                <Bar
+                                    dataKey="Pengeluaran"
+                                    fill="#f43f5e"
+                                    radius={[4, 4, 0, 0]}
+                                    barSize={12}
+                                />
+                                <ChartTooltip
+                                    cursor={{ fill: '#f8fafc' }}
+                                    contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '8px', fontSize: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    labelStyle={{ display: 'none' }}
+                                />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <div className="mt-6 rounded-[28px] border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
+                        <p className="text-sm font-bold text-slate-700">Belum ada tren untuk ditampilkan</p>
+                        <p className="mt-2 text-sm text-slate-500">Grafik akan muncul setelah ada transaksi tervalidasi pada periode yang dipilih.</p>
+                    </div>
+                )}
             </section>
 
             {/* Transactions Table */}

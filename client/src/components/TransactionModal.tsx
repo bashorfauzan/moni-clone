@@ -35,7 +35,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 }).format(value);
 
 const TransactionModal = () => {
-    const { isModalOpen, modalType, closeModal } = useTransaction();
+    const { isModalOpen, modalType, modalPayload, closeModal } = useTransaction();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
     const [form, setForm] = useState(initialForm);
     const [submitting, setSubmitting] = useState(false);
@@ -87,6 +87,10 @@ const TransactionModal = () => {
                 setForm((prev) => ({
                     ...initialForm,
                     ownerId: payload.owners[0]?.id || prev.ownerId,
+                    amount: modalPayload?.amount ? String(modalPayload.amount) : initialForm.amount,
+                    description: modalPayload?.description || initialForm.description,
+                    sourceAccountId: modalPayload?.sourceAccountId || initialForm.sourceAccountId,
+                    destinationAccountId: modalPayload?.destinationAccountId || initialForm.destinationAccountId,
                 }));
             })
             .catch((error) => {
@@ -171,6 +175,7 @@ const TransactionModal = () => {
                 type: isInvestment ? 'TRANSFER' : modalType,
                 sourceAccountId: showSource ? form.sourceAccountId : undefined,
                 destinationAccountId: showDestination ? form.destinationAccountId : undefined,
+                notificationInboxId: modalPayload?.notificationInboxId,
             };
 
             await api.post('/transactions', payload);

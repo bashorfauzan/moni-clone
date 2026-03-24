@@ -234,7 +234,7 @@ router.get('/', async (req, res) => {
 router.post('/', async (req, res) => {
     const {
         type, amount, description, ownerId, activityId,
-        sourceAccountId, destinationAccountId, date
+        sourceAccountId, destinationAccountId, date, notificationInboxId
     } = req.body;
 
     try {
@@ -294,6 +294,18 @@ router.post('/', async (req, res) => {
 
             if (shouldReduceTargets(txType)) {
                 await reduceActiveTargets(trx, ownerId, parsedAmount);
+            }
+
+            if (notificationInboxId) {
+                await trx.notificationInbox.update({
+                    where: { id: notificationInboxId },
+                    data: {
+                        parseStatus: 'PARSED',
+                        transactionId: createdTx.id,
+                        parsedType: txType,
+                        parsedAmount: parsedAmount
+                    }
+                });
             }
 
             return createdTx;
