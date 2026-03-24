@@ -551,6 +551,9 @@ const Home = () => {
                 notifications={notifications}
                 onClearAll={handleClearNotifications}
                 onDelete={handleDeleteNotification}
+                onRejectTransaction={async (txId) => {
+                    await handleValidate(txId, 'REJECT', {});
+                }}
                 onMakeTransaction={(item) => {
                     setIsNotificationDrawerOpen(false); // Tutup drawer dulu
                     openModal(

@@ -14,7 +14,7 @@ export type NotificationItem = {
     parsedAccountHint?: string;
     parseNotes?: string;
     confidenceScore?: number;
-    transaction?: { id: string } | null;
+    transaction?: { id: string; isValidated: boolean } | null;
 };
 
 const normalizeNotificationRow = (row: any): NotificationItem => ({
@@ -30,7 +30,10 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
     parsedAccountHint: row.parsedAccountHint ?? row.parsed_account_hint ?? undefined,
     parseNotes: row.parseNotes ?? row.parse_notes ?? undefined,
     confidenceScore: row.confidenceScore ?? row.confidence_score ?? undefined,
-    transaction: row.transaction ? { id: row.transaction.id } : null
+    transaction: row.transaction ? { 
+        id: row.transaction.id, 
+        isValidated: row.transaction.isValidated ?? row.transaction.is_validated 
+    } : null
 });
 
 export const fetchNotificationInbox = async (limit = 8): Promise<NotificationItem[]> => {
@@ -50,7 +53,7 @@ export const fetchNotificationInbox = async (limit = 8): Promise<NotificationIte
                 parsedAccountHint,
                 parseNotes,
                 confidenceScore,
-                transaction:Transaction(id)
+                transaction:Transaction(id, isValidated)
             `)
             .neq('parseStatus', 'IGNORED')
             .order('receivedAt', { ascending: false })

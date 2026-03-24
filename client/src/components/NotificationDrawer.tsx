@@ -7,6 +7,7 @@ interface NotificationDrawerProps {
     notifications: NotificationItem[];
     onClearAll: () => Promise<void>;
     onDelete: (id: string) => Promise<void>;
+    onRejectTransaction: (txId: string) => Promise<void>;
     onMakeTransaction: (item: NotificationItem) => void;
     clearingNotifications: boolean;
     deletingNotificationId: string | null;
@@ -62,6 +63,7 @@ const NotificationDrawer = ({
     notifications,
     onClearAll,
     onDelete,
+    onRejectTransaction,
     onMakeTransaction,
     clearingNotifications,
     deletingNotificationId
@@ -159,9 +161,15 @@ const NotificationDrawer = ({
                                                 Confidence: {Math.round(item.confidenceScore * 100)}%
                                             </span>
                                         ) : null}
-                                        <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide ${item.transaction ? 'bg-blue-100 text-blue-700 border-blue-200' : 'bg-white/80 text-slate-500 border border-white'}`}>
-                                            {item.transaction ? 'Sudah jadi transaksi' : 'Belum Transaksi'}
-                                        </span>
+                                        {item.transaction ? (
+                                            <span className={`text-[10px] px-2 py-1 rounded-full font-bold uppercase tracking-wide ${item.transaction.isValidated ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-blue-100 text-blue-700 border-blue-200'}`}>
+                                                {item.transaction.isValidated ? 'Transaksi Valid' : 'Menunggu Persetujuan'}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] px-2 py-1 rounded-full bg-slate-100 text-slate-500 border border-slate-200 font-bold uppercase tracking-wide">
+                                                Belum Jadi Transaksi
+                                            </span>
+                                        )}
                                     </div>
 
                                     {item.parseNotes ? (
@@ -170,22 +178,28 @@ const NotificationDrawer = ({
                                         </p>
                                     ) : null}
 
-                                    {!item.transaction ? (
+                                    {(!item.transaction || !item.transaction.isValidated) ? (
                                         <div className="mt-3 flex justify-end gap-2 border-t border-black/5 pt-3">
                                             <button
                                                 type="button"
-                                                onClick={() => void onDelete(item.id)}
-                                                disabled={deletingNotificationId === item.id}
+                                                onClick={() => {
+                                                    if (item.transaction) {
+                                                        void onRejectTransaction(item.transaction.id);
+                                                    } else {
+                                                        void onDelete(item.id);
+                                                    }
+                                                }}
+                                                disabled={!!(deletingNotificationId === item.id || (item.transaction && deletingNotificationId === item.transaction.id))}
                                                 className="h-8 px-3 rounded-lg bg-white/50 hover:bg-white text-[11px] font-bold uppercase tracking-wide text-rose-600 transition-colors disabled:opacity-50"
                                             >
-                                                {deletingNotificationId === item.id ? 'Menghapus...' : 'Hapus'}
+                                                {deletingNotificationId === item.id ? 'Menghapus...' : 'Hapus / Tolak'}
                                             </button>
                                             <button
                                                 type="button"
                                                 onClick={() => onMakeTransaction(item)}
                                                 className="h-8 px-3 rounded-lg bg-blue-600 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
                                             >
-                                                Buat Transaksi
+                                                {item.transaction ? 'Verifikasi' : 'Buat Transaksi'}
                                             </button>
                                         </div>
                                     ) : null}
