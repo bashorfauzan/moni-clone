@@ -190,7 +190,7 @@ const MenuPage = () => {
             const img = new Image();
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const maxDimension = 1600;
+                const maxDimension = 800; // Dikurangi dari 1600 agar file hasil Base64 tidak terlalu besar untuk localStorage
                 let sourceX = 0;
                 let sourceY = 0;
                 let sourceWidth = img.width;
@@ -230,7 +230,8 @@ const MenuPage = () => {
                     canvas.width,
                     canvas.height
                 );
-                resolve(canvas.toDataURL('image/jpeg', 0.78));
+                // Turunkan kualitas JPEG menjadi 60% agar ukuran file string bersahabat dengan limit PWA Safari/Chrome
+                resolve(canvas.toDataURL('image/jpeg', 0.6));
             };
             img.onerror = () => reject(new Error('Gagal memuat gambar'));
             img.src = String(reader.result);

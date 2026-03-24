@@ -64,16 +64,26 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const saved = localStorage.getItem('app-hero-image-mode');
         return saved === 'app-and-hero' ? 'app-and-hero' : 'app-only';
     });
+    const safeSetItem = (key: string, value: string) => {
+        try {
+            localStorage.setItem(key, value);
+        } catch (e: any) {
+            console.error('Storage limit reached or blocked', e);
+            if (e.name === 'QuotaExceededError') {
+                alert('Gagal menyimpan gambar: Ruang penyimpanan PWA (LocalStorage) di HP kamu sudah penuh. Coba gunakan gambar lain yang ukurannya lebih kecil atau bersihkan cache browser.');
+            }
+        }
+    };
 
     const setBgColor = (color: string) => {
         setBgColorState(color);
-        localStorage.setItem('app-bg-color', color);
+        safeSetItem('app-bg-color', color);
     };
 
     const setBgImage = (image: string | null) => {
         setBgImageState(image);
         if (image) {
-            localStorage.setItem('app-bg-image', image);
+            safeSetItem('app-bg-image', image);
         } else {
             localStorage.removeItem('app-bg-image');
         }
@@ -81,13 +91,13 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const setHeroColor = (color: string) => {
         setHeroColorState(color);
-        localStorage.setItem('app-hero-color', color);
+        safeSetItem('app-hero-color', color);
     };
 
     const setHeroCardImage = (image: string | null) => {
         setHeroCardImageState(image);
         if (image) {
-            localStorage.setItem('app-hero-card-image', image);
+            safeSetItem('app-hero-card-image', image);
         } else {
             localStorage.removeItem('app-hero-card-image');
         }
@@ -95,24 +105,23 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     const setBgOverlay = (value: number) => {
         setBgOverlayState(value);
-        localStorage.setItem('app-bg-overlay', String(value));
+        safeSetItem('app-bg-overlay', String(value));
     };
 
     const setBgBlur = (value: number) => {
         setBgBlurState(value);
-        localStorage.setItem('app-bg-blur', String(value));
+        safeSetItem('app-bg-blur', String(value));
     };
 
     const setHeroImageMode = (value: 'app-only' | 'app-and-hero') => {
         setHeroImageModeState(value);
-        localStorage.setItem('app-hero-image-mode', value);
+        safeSetItem('app-hero-image-mode', value);
     };
 
     const setAppScale = (scale: number) => {
         setAppScaleState(scale);
-        localStorage.setItem('app-scale', String(scale));
+        safeSetItem('app-scale', String(scale));
     };
-
     useEffect(() => {
         // Apply root font-size scaling for standard layout rem values
         document.documentElement.style.fontSize = `${appScale * 16}px`;
