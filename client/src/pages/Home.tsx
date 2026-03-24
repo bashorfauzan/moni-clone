@@ -150,7 +150,16 @@ const Home = () => {
                 amount: tx.amount,
                 type: tx.type
             });
-            await fetchData(); // Refresh data after approval/rejection
+
+            // Optimistic Update: Remove from local state immediately
+            setPendingTransactions(prev => prev.filter(t => t.id !== id));
+            if (action === 'REJECT') {
+                // If rejected, the notification should also be hidden from drawer (status becomes IGNORED)
+                setNotifications(prev => prev.filter(n => n.transaction?.id !== id));
+                alert('Transaksi berhasil ditolak dan dihapus dari daftar.');
+            }
+
+            await fetchData(); // Refresh all other data
         } catch (error: any) {
             console.error('Error validating transaction:', error);
             const msg = error.response?.data?.error || error.message || 'Error tidak diketahui';
