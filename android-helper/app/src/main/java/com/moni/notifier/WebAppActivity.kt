@@ -38,6 +38,8 @@ class WebAppActivity : AppCompatActivity() {
         binding.closeButton.setOnClickListener { finish() }
 
         setupWebView()
+        binding.webView.clearCache(true)
+        binding.webView.clearHistory()
         binding.webView.loadUrl(webAppUrl)
     }
 
@@ -58,6 +60,7 @@ class WebAppActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             allowFileAccess = false
             allowContentAccess = true
+            cacheMode = WebSettings.LOAD_NO_CACHE
         }
         binding.webView.addJavascriptInterface(NovaNativeJsBridge(), JS_BRIDGE_NAME)
         binding.webView.webChromeClient = object : WebChromeClient() {

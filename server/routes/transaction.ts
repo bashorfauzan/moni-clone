@@ -441,14 +441,26 @@ router.put('/:id/validate', async (req, res) => {
     try {
         if (action === 'REJECT') {
             await prisma.$transaction(async (trx) => {
-                const txToReject = await trx.transaction.findUnique({ where: { id } });
-                if (txToReject?.notificationInboxId) {
-                    await trx.notificationInbox.update({
+                const txToReject = await trx.transaction.findUnique({
+                    where: { id },
+                    select: { id: true, notificationInboxId: true }
+                });
+
+                if (!txToReject) {
+                    throw new Error('Transaksi tidak ditemukan');
+                }
+
+                if (txToReject.notificationInboxId) {
+                    await trx.notificationInbox.updateMany({
                         where: { id: txToReject.notificationInboxId },
-                        data: { parseStatus: 'IGNORED' }
+                        data: {
+                            parseStatus: 'IGNORED',
+                            parseNotes: 'Transaksi ditolak dari antrean validasi'
+                        }
                     });
                 }
-                await trx.transaction.delete({ where: { id } });
+
+                await trx.transaction.deleteMany({ where: { id } });
             });
             return res.json({ message: 'Transaksi ditolak dan ditiadakan' });
         }

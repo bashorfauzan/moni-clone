@@ -123,10 +123,15 @@ const Home = () => {
             'Transaction',
             scheduleRefresh
         );
+        const handleDataChanged = () => {
+            scheduleRefresh();
+        };
+        window.addEventListener('nova:data-changed', handleDataChanged);
 
         return () => {
             unsubscribeNotifications();
             unsubscribeTransactions();
+            window.removeEventListener('nova:data-changed', handleDataChanged);
             if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current);
             }
@@ -464,8 +469,8 @@ const Home = () => {
                         </h3>
                     </div>
                     <div className="space-y-3">
-                        {pendingTransactions.map((tx, i: number) => (
-                            <div key={i} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-amber-50/50 border border-amber-200 rounded-2xl shadow-sm shadow-amber-100/50">
+                        {pendingTransactions.map((tx) => (
+                            <div key={tx.id} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-amber-50/50 border border-amber-200 rounded-2xl shadow-sm shadow-amber-100/50">
                                 <div className="flex items-center gap-4 min-w-0">
                                     <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-lg text-amber-600">
                                         🔔

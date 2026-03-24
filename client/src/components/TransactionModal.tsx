@@ -114,11 +114,12 @@ const TransactionModal = () => {
             acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
 
         if (!matchesQuery) return false;
-        if (isInvestment && pickerType === 'source') return acc.type === 'Bank';
-        if (isInvestment && pickerType === 'destination') return acc.type === 'RDN';
-        if (isIncome || isExpense) return acc.type === 'Bank';
+        if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+        if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
+        if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet'; // destination for income
+        if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet'; // source for expense
         if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
-        if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN';
+        if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
 
         return true;
     });
@@ -194,7 +195,7 @@ const TransactionModal = () => {
             }
 
             closeModal();
-            window.location.reload();
+            window.dispatchEvent(new Event('nova:data-changed'));
         } catch (error: any) {
             console.error('Error creating transaction:', error);
             alert(error?.response?.data?.error || 'Gagal menyimpan transaksi');

@@ -280,9 +280,12 @@ router.get('/notifications', async (req, res) => {
         const parseStatus = typeof req.query.parseStatus === 'string'
             ? req.query.parseStatus
             : undefined;
+        const where = parseStatus
+            ? { parseStatus: parseStatus as any }
+            : { parseStatus: { not: 'IGNORED' as any } };
 
         const notifications = await prisma.notificationInbox.findMany({
-            ...(parseStatus ? { where: { parseStatus: parseStatus as any } } : {}),
+            where,
             include: {
                 transaction: {
                     include: {

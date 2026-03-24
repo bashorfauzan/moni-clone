@@ -1,5 +1,5 @@
 import api from './api';
-import { hasSupabaseEnv, supabase } from '../lib/supabase';
+import { supabase, useDirectSupabaseData } from '../lib/supabase';
 
 export type NotificationItem = {
     id: string;
@@ -37,7 +37,7 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
 });
 
 export const fetchNotificationInbox = async (limit = 8): Promise<NotificationItem[]> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { data, error } = await supabase
             .from('NotificationInbox')
             .select(`
