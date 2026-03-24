@@ -489,11 +489,12 @@ const Reports = () => {
                                                 sourceAccountId: tx.sourceAccountId,
                                                 destinationAccountId: tx.destinationAccountId,
                                             })}
-                                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                                            className="inline-flex h-10 items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 text-[11px] font-bold uppercase tracking-wider text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
                                             title="Edit transaksi"
                                             aria-label="Edit transaksi"
                                         >
                                             <Pencil size={14} />
+                                            <span>Edit</span>
                                         </button>
                                     </td>
                                 </tr>
