@@ -168,17 +168,31 @@ const TransactionModal = () => {
         setSubmitting(true);
 
         try {
-            const payload = {
-                amount: Number(form.amount),
-                description: form.description,
-                ownerId: form.ownerId,
-                type: isInvestment ? 'TRANSFER' : modalType,
-                sourceAccountId: showSource ? form.sourceAccountId : undefined,
-                destinationAccountId: showDestination ? form.destinationAccountId : undefined,
-                notificationInboxId: modalPayload?.notificationInboxId,
-            };
+            if (modalPayload?.pendingTransactionId) {
+                const payload = {
+                    action: 'APPROVE',
+                    amount: Number(form.amount),
+                    description: form.description,
+                    ownerId: form.ownerId,
+                    type: isInvestment ? 'TRANSFER' : modalType,
+                    sourceAccountId: showSource ? form.sourceAccountId : undefined,
+                    destinationAccountId: showDestination ? form.destinationAccountId : undefined,
+                    categoryId: undefined, // categoryId optional/will be resolved by backend
+                };
+                await api.put(`/transactions/${modalPayload.pendingTransactionId}/validate`, payload);
+            } else {
+                const payload = {
+                    amount: Number(form.amount),
+                    description: form.description,
+                    ownerId: form.ownerId,
+                    type: isInvestment ? 'TRANSFER' : modalType,
+                    sourceAccountId: showSource ? form.sourceAccountId : undefined,
+                    destinationAccountId: showDestination ? form.destinationAccountId : undefined,
+                    notificationInboxId: modalPayload?.notificationInboxId,
+                };
+                await api.post('/transactions', payload);
+            }
 
-            await api.post('/transactions', payload);
             closeModal();
             window.location.reload();
         } catch (error: any) {

@@ -9,6 +9,7 @@ export interface TransactionModalPayload {
     sourceAccountId?: string;
     destinationAccountId?: string;
     notificationInboxId?: string;
+    pendingTransactionId?: string;
 }
 
 interface TransactionContextType {

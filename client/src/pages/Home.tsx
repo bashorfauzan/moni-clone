@@ -605,9 +605,18 @@ const Home = () => {
                                 </div>
                                 <div className="flex items-center gap-2 sm:ml-2 self-end sm:self-auto">
                                     <button
-                                        onClick={() => handleValidate(tx.id, 'APPROVE', tx)}
+                                        onClick={() => {
+                                            openModal((tx.type as any) || 'EXPENSE', {
+                                                amount: tx.amount,
+                                                description: tx.description || tx.activity?.name,
+                                                type: (tx.type as any) || undefined,
+                                                sourceAccountId: tx.sourceAccountId || undefined,
+                                                destinationAccountId: tx.destinationAccountId || undefined,
+                                                pendingTransactionId: tx.id
+                                            });
+                                        }}
                                         className="w-10 h-10 flex items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-colors border border-emerald-100 font-bold text-lg"
-                                        title="Setujui"
+                                        title="Setujui dan Lengkapi"
                                     >
                                         ✓
                                     </button>

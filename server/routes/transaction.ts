@@ -440,7 +440,16 @@ router.put('/:id/validate', async (req, res) => {
 
     try {
         if (action === 'REJECT') {
-            await prisma.transaction.delete({ where: { id } });
+            await prisma.$transaction(async (trx) => {
+                const txToReject = await trx.transaction.findUnique({ where: { id } });
+                if (txToReject?.notificationInboxId) {
+                    await trx.notificationInbox.update({
+                        where: { id: txToReject.notificationInboxId },
+                        data: { parseStatus: 'IGNORED' }
+                    });
+                }
+                await trx.transaction.delete({ where: { id } });
+            });
             return res.json({ message: 'Transaksi ditolak dan ditiadakan' });
         }
 
