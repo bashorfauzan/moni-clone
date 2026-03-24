@@ -529,6 +529,14 @@ router.put('/:id/validate', async (req, res) => {
                     await reduceActiveTargets(trx, updatedTx.ownerId, parsedAmount);
                 }
 
+                // Update parseStatus notifikasi menjadi PARSED setelah transaksi disetujui
+                if (updatedTx.notificationInboxId) {
+                    await trx.notificationInbox.update({
+                        where: { id: updatedTx.notificationInboxId },
+                        data: { parseStatus: 'PARSED' }
+                    });
+                }
+
                 return updatedTx;
             });
 

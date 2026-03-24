@@ -158,9 +158,9 @@ const Home = () => {
 
             // Optimistic Update: Remove from local state immediately
             setPendingTransactions(prev => prev.filter(t => t.id !== id));
+            // After any action (APPROVE or REJECT), hide the notification from the drawer immediately
+            setNotifications(prev => prev.filter(n => n.transaction?.id !== id));
             if (action === 'REJECT') {
-                // If rejected, the notification should also be hidden from drawer (status becomes IGNORED)
-                setNotifications(prev => prev.filter(n => n.transaction?.id !== id));
                 alert('Transaksi berhasil ditolak dan dihapus dari daftar.');
             }
 
