@@ -145,9 +145,10 @@ const Home = () => {
                 type: tx.type
             });
             fetchData(); // Refresh data after approval/rejection
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error validating transaction:', error);
-            alert('Gagal memvalidasi transaksi');
+            const msg = error.response?.data?.error || error.message || 'Error tidak diketahui';
+            alert(`Gagal memproses transaksi: ${msg}\n\nPastikan Anda sudah memuat ulang (Refresh) aplikasi versi terbaru.`);
         }
     };
 
