@@ -134,6 +134,12 @@ const Home = () => {
     }, []);
 
     const handleValidate = async (id: string, action: 'APPROVE' | 'REJECT', tx: any) => {
+        if (action === 'REJECT') {
+            const confirmed = window.confirm('Apakah Anda yakin ingin menolak dan menghapus transaksi pending ini?');
+            if (!confirmed) return;
+        }
+
+        setLoading(true);
         try {
             // For MVP, we send back the same data, but user could ideally edit it in a modal
             await api.put(`/transactions/${id}/validate`, {
@@ -144,11 +150,13 @@ const Home = () => {
                 amount: tx.amount,
                 type: tx.type
             });
-            fetchData(); // Refresh data after approval/rejection
+            await fetchData(); // Refresh data after approval/rejection
         } catch (error: any) {
             console.error('Error validating transaction:', error);
             const msg = error.response?.data?.error || error.message || 'Error tidak diketahui';
             alert(`Gagal memproses transaksi: ${msg}\n\nPastikan Anda sudah memuat ulang (Refresh) aplikasi versi terbaru.`);
+        } finally {
+            setLoading(false);
         }
     };
 
