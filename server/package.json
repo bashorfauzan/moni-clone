@@ -5,8 +5,9 @@
   "main": "index.ts",
   "type": "module",
   "scripts": {
-    "start": "prisma generate && prisma db push && node --loader ts-node/esm index.ts",
-    "start:prod": "prisma generate && prisma db push && node --loader ts-node/esm index.ts",
+    "start": "prisma generate && node --loader ts-node/esm index.ts",
+    "start:prod": "prisma generate && node --loader ts-node/esm index.ts",
+    "db:push": "prisma db push",
     "dev": "node --loader ts-node/esm --watch index.ts",
     "build": "prisma generate",
     "postinstall": "prisma generate",
