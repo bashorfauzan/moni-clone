@@ -61,15 +61,10 @@ const Home = () => {
             ]);
             const isInvestmentAccount = (accountType?: string) => accountType === 'RDN' || accountType === 'Sekuritas';
             const isInvestmentIncome = (tx: TransactionItem) => tx.type === 'INCOME' && isInvestmentAccount(tx.destinationAccount?.type);
-            const totalIncome = allValidatedTransactions
-                .filter((tx: any) => tx.type === 'INCOME')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
-            const totalExpense = allValidatedTransactions
-                .filter((tx: any) => tx.type === 'EXPENSE')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-
-            const liquidBalance = totalIncome - totalExpense;
+            const liquidBalance = meta.accounts
+                .filter((acc: Account) => acc.type === 'Bank' || acc.type === 'E-Wallet')
+                .reduce((sum: number, acc: Account) => sum + acc.balance, 0);
 
             // Hitung frekuensi penggunaan rekening dari semua transaksi yang berhasil dimuat
             const freq: Record<string, number> = {};
