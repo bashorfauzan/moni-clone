@@ -370,6 +370,29 @@ router.post('/notification', async (req, res) => {
             });
         }
 
+        // Cek duplikasi (Debounce): Apakah ada notifikasi dari aplikasi yang sama, 
+        // dengan nominal yang HAMPIR SAMA masuk dalam 5 menit terakhir?
+        if (parsed.amount) {
+            const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+            const duplicate = await prisma.notificationInbox.findFirst({
+                where: {
+                    sourceApp: String(appName),
+                    parsedAmount: parsed.amount,
+                    receivedAt: { gte: fiveMinsAgo },
+                    parseStatus: { not: 'IGNORED' } // Hanya cek terhadap notif yg valid
+                }
+            });
+
+            if (duplicate) {
+                return res.status(200).json({
+                    message: `Notifikasi diabaikan karena dideteksi sebagai duplikat dari transaksi Rp${parsed.amount}`,
+                    parsed,
+                    isDuplicate: true,
+                    duplicateOfId: duplicate.id
+                });
+            }
+        }
+
         const notification = await prisma.notificationInbox.create({
             data: {
                 sourceApp: String(appName),
