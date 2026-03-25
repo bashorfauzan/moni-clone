@@ -447,20 +447,16 @@ router.post('/notification', async (req, res) => {
             )
             : null;
 
-        if (!owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason) {
+        const isMissingCriticalFields = !owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason;
+
+        // Perbarui saja parseStatus menjadi PENDING jika data kurang lengkap, tapi TETAP buat transaksinya.
+        if (isMissingCriticalFields) {
             await prisma.notificationInbox.update({
                 where: { id: notification.id },
                 data: {
                     parseStatus: 'PENDING',
                     parseNotes: missingAccountReason ?? 'Master owner/activity/account belum lengkap'
                 }
-            });
-
-            return res.status(202).json({
-                success: true,
-                notification,
-                createdTransaction: false,
-                reason: missingAccountReason ?? 'Master data belum lengkap'
             });
         }
 
