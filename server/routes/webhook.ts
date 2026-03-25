@@ -411,11 +411,8 @@ router.post('/notification', async (req, res) => {
             }
         });
 
-        if (
-            parsed.parseStatus !== 'PARSED'
-            || !parsed.amount
-            || !parsed.type
-        ) {
+        // Jika tidak ada amount atau type, hanya simpan ke inbox saja (tidak bisa buat transaksi)
+        if (!parsed.amount || !parsed.type) {
             return res.status(202).json({
                 success: true,
                 notification,
@@ -424,6 +421,8 @@ router.post('/notification', async (req, res) => {
             });
         }
 
+        // Selalu coba buat transaksi (pending) jika ada amount + type, apapun confidence-nya
+        // Transaksi akan dibuat dengan isValidated: false agar user bisa approve/reject di Home
         const { owner, activity, account, sourceAccount, destinationAccount } = await ensureDefaults(parsed, String(appName));
         const sourceAccountId = parsed.type === TransactionType.TRANSFER
             ? sourceAccount?.id ?? null
@@ -465,6 +464,7 @@ router.post('/notification', async (req, res) => {
             });
         }
 
+        // Buat transaksi pending — isValidated: false agar muncul di Home dengan tombol ✓/✗
         const transaction = await prisma.transaction.create({
             data: {
                 amount: parsed.amount,
@@ -473,6 +473,7 @@ router.post('/notification', async (req, res) => {
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
                 ownerId: owner.id,
                 activityId: activity.id,
+                isValidated: false,
                 notificationInboxId: notification.id,
                 ...(sourceAccountId ? { sourceAccountId } : {}),
                 ...(destinationAccountId ? { destinationAccountId } : {})
