@@ -29,7 +29,14 @@ const formatCompactTime = (value: string) => new Date(value).toLocaleString('id-
     minute: '2-digit'
 });
 
-const notificationTone = (status: NotificationItem['parseStatus']) => {
+const notificationTone = (status: NotificationItem['parseStatus'], isSecurityAlert?: boolean) => {
+    if (isSecurityAlert) {
+        return {
+            shell: 'bg-orange-50 border-orange-200',
+            badge: 'bg-orange-100 text-orange-700',
+            dot: 'bg-orange-500'
+        };
+    }
     switch (status) {
         case 'PARSED':
             return {
@@ -116,18 +123,23 @@ const NotificationDrawer = ({
 
                     {notifications.length > 0 ? (
                         notifications.map((item) => {
-                            const tone = notificationTone(item.parseStatus);
+                            const isSecurityAlert = item.parseStatus === 'FAILED' && !item.parsedAmount && (item.parseNotes?.includes('Peringatan Keamanan') ?? false);
+                            const tone = notificationTone(item.parseStatus, isSecurityAlert);
                             return (
                                 <div key={item.id} className={`border rounded-2xl p-4 shadow-sm ${tone.shell}`}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                             <div className="flex items-center gap-2 mb-2">
-                                                <span className={`w-2.5 h-2.5 rounded-full ${tone.dot}`}></span>
+                                                {isSecurityAlert ? (
+                                                    <span className="text-base">🛡️</span>
+                                                ) : (
+                                                    <span className={`w-2.5 h-2.5 rounded-full ${tone.dot}`}></span>
+                                                )}
                                                 <p className="text-sm font-bold text-slate-900 line-clamp-1">
                                                     {item.title || item.senderName || item.sourceApp}
                                                 </p>
                                                 <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide ${tone.badge}`}>
-                                                    {item.parseStatus}
+                                                    {isSecurityAlert ? 'KEAMANAN' : item.parseStatus}
                                                 </span>
                                             </div>
                                             <p className="text-sm text-slate-700 leading-relaxed">
@@ -195,13 +207,15 @@ const NotificationDrawer = ({
                                             >
                                                 {deletingNotificationId === item.id ? 'Menghapus...' : 'Hapus / Tolak'}
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => onMakeTransaction(item)}
-                                                className="h-8 px-3 rounded-lg bg-blue-600 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
-                                            >
-                                                {item.transaction ? 'Verifikasi' : 'Buat Transaksi'}
-                                            </button>
+                                            {!isSecurityAlert && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onMakeTransaction(item)}
+                                                    className="h-8 px-3 rounded-lg bg-blue-600 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
+                                                >
+                                                    {item.transaction ? 'Verifikasi' : 'Buat Transaksi'}
+                                                </button>
+                                            )}
                                         </div>
                                     ) : null}
                                 </div>

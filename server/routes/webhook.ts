@@ -25,6 +25,19 @@ const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana kel
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
+const SECURITY_ALERT_KEYWORDS = [
+    'login gagal', 'masuk gagal', 'gagal masuk', 'percobaan login', 'percobaan masuk',
+    'aktivitas mencurigakan', 'suspicious activity', 'failed login', 'login failed',
+    'akses tidak dikenal', 'perangkat baru', 'new device', 'unauthorized', 'unauthorized access',
+    'verifikasi keamanan', 'otp salah', 'pin salah', 'password salah', 'kata sandi salah',
+    'akun diblokir', 'akun dikunci', 'too many attempts', 'terlalu banyak percobaan',
+    'login dari perangkat', 'login dari lokasi', 'masuk dari perangkat'
+];
+
+const detectSecurityAlert = (text: string): boolean => {
+    const lower = normalizeText(text);
+    return SECURITY_ALERT_KEYWORDS.some((keyword) => lower.includes(keyword));
+};
 
 const normalizeText = (value: string) => value.toLowerCase().trim();
 
@@ -362,11 +375,41 @@ router.post('/notification', async (req, res) => {
             String(text)
         );
 
-        // Jangan simpan notifikasi ke database jika tidak ada nominal/dignenore
-        if (parsed.parseStatus === 'IGNORED') {
+        // Cek apakah ini adalah peringatan keamanan (login gagal, aktivitas mencurigakan, dll)
+        const isSecurityAlert = detectSecurityAlert(`${title || ''} ${text}`);
+
+        // Jangan simpan notifikasi ke database jika tidak ada nominal dan bukan peringatan keamanan
+        if (parsed.parseStatus === 'IGNORED' && !isSecurityAlert) {
             return res.status(200).json({
                 message: 'Notifikasi diabaikan karena tidak mengandung nominal transaksi',
                 parsed
+            });
+        }
+
+        // Simpan peringatan keamanan ke inbox meskipun tidak ada nominal
+        if (parsed.parseStatus === 'IGNORED' && isSecurityAlert) {
+            const securityNotification = await prisma.notificationInbox.create({
+                data: {
+                    sourceApp: String(appName),
+                    senderName: senderName ? String(senderName) : null,
+                    title: title ? String(title) : null,
+                    messageText: String(text),
+                    receivedAt: receivedAt ? new Date(receivedAt) : new Date(),
+                    parseStatus: 'FAILED' as any,
+                    parsedType: null,
+                    parsedAmount: null,
+                    parsedDescription: String(text).slice(0, 160),
+                    parsedAccountHint: null,
+                    confidenceScore: 0,
+                    parseNotes: '⚠️ Peringatan Keamanan: Aktivitas login mencurigakan terdeteksi',
+                    rawPayload: rawPayload ?? req.body
+                }
+            });
+            return res.status(201).json({
+                success: true,
+                notification: securityNotification,
+                createdTransaction: false,
+                reason: 'security_alert'
             });
         }
 
