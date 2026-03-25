@@ -1,5 +1,4 @@
 import api from './api';
-import { supabase, hasSupabaseEnv } from '../lib/supabase';
 
 export type NotificationItem = {
     id: string;
@@ -37,34 +36,6 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
 });
 
 export const fetchNotificationInbox = async (limit = 8): Promise<NotificationItem[]> => {
-    if (hasSupabaseEnv && supabase) {
-        const { data, error } = await supabase
-            .from('NotificationInbox')
-            .select(`
-                id,
-                sourceApp,
-                title,
-                senderName,
-                messageText,
-                receivedAt,
-                parseStatus,
-                parsedType,
-                parsedAmount,
-                parsedAccountHint,
-                parseNotes,
-                confidenceScore,
-                transaction:Transaction(id, isValidated)
-            `)
-            .neq('parseStatus', 'IGNORED')
-            .order('receivedAt', { ascending: false })
-            .limit(limit);
-
-        if (!error && Array.isArray(data)) {
-            return data.map(normalizeNotificationRow);
-        }
-
-        console.warn('Supabase notification query failed, falling back to backend API.', error);
-    }
 
     const response = await api.get(`/webhook/notifications?limit=${limit}`);
     return response.data.map(normalizeNotificationRow);

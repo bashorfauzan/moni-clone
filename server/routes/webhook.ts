@@ -158,7 +158,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         || containsAny(lowerText, TRANSFER_KEYWORDS)
     ) {
         type = TransactionType.TRANSFER;
-        confidenceScore = 0.72;
+        confidenceScore = 0.78;
     }
 
     if (!amount) {
