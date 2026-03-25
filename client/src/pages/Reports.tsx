@@ -1,17 +1,60 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
-    PieChart, Pie, Cell, ResponsiveContainer,
+    PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
+import {
+    ChevronLeft,
+    ChevronRight,
+    Calendar,
+    Download,
+    Pencil,
+    Trash2,
+    PieChart as PieChartIcon,
+    ArrowUpRight,
+    ArrowDownRight,
+} from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import Spinner from '../components/Spinner';
 
-const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
+const COLORS = ['#2563eb', '#0f766e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+
+type CategoryDatum = {
+    name: string;
+    value: number;
+};
+
+type TrendDatum = {
+    label: string;
+    Pemasukan: number;
+    Pengeluaran: number;
+};
+
+type ReportData = {
+    totalIncome: number;
+    totalExpense: number;
+    totalVolume: number;
+    totalWealth: number;
+    zakatAmount: number;
+    categoryData: CategoryDatum[];
+    trendData: TrendDatum[];
+    transactionsData: TransactionItem[];
+};
+
+const initialData: ReportData = {
+    totalIncome: 0,
+    totalExpense: 0,
+    totalVolume: 0,
+    totalWealth: 0,
+    zakatAmount: 0,
+    categoryData: [],
+    trendData: [],
+    transactionsData: [],
+};
 
 const Reports = () => {
     const { openEditModal } = useTransaction();
@@ -19,16 +62,7 @@ const Reports = () => {
     const [currentDate, setCurrentDate] = useState(new Date());
     const [txPage, setTxPage] = useState(1);
     const TX_PER_PAGE = 10;
-    const [data, setData] = useState<any>({
-        totalIncome: 0,
-        totalExpense: 0,
-        totalVolume: 0,
-        totalWealth: 0,
-        zakatAmount: 0,
-        categoryData: [],
-        trendData: [],
-        transactionsData: [],
-    });
+    const [data, setData] = useState<ReportData>(initialData);
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
 
@@ -62,6 +96,15 @@ const Reports = () => {
         }
     };
 
+    const requestDelete = (id: string) => {
+        const pin = prompt('Masukkan Password Transaksi untuk menghapus:');
+        if (pin === '123456') {
+            void handleDelete(id);
+        } else if (pin !== null) {
+            alert('Password Transaksi Salah!');
+        }
+    };
+
     const fetchReportData = async () => {
         setLoading(true);
         try {
@@ -74,8 +117,7 @@ const Reports = () => {
                 .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
                 .reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0);
 
-            // Filter by current month/year
-            const filtered = transactions.filter((tx: any) => {
+            const filtered = transactions.filter((tx: TransactionItem) => {
                 const txDate = new Date(tx.date);
                 if (viewMode === 'MONTHLY') {
                     return txDate.getMonth() === currentDate.getMonth()
@@ -85,28 +127,21 @@ const Reports = () => {
                 return txDate.getFullYear() === currentDate.getFullYear();
             });
 
-            // Calculate Totals
             const totalIncome = filtered
-                .filter((tx: any) => tx.type === 'INCOME')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+                .filter((tx) => tx.type === 'INCOME')
+                .reduce((acc, tx) => acc + tx.amount, 0);
             const totalExpense = filtered
-                .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+                .filter((tx) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
+                .reduce((acc, tx) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
-            const lifetimeIncome = transactions
-                .filter((tx: any) => tx.type === 'INCOME')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const lifetimeExpense = transactions
-                .filter((tx: any) => tx.type === 'EXPENSE')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const liquidBalance = lifetimeIncome - lifetimeExpense;
+            const liquidBalance = (meta.accounts || [])
+                .filter((acc: any) => acc.type === 'Bank' || acc.type === 'E-Wallet')
+                .reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
             const totalWealth = liquidBalance + totalRdnAssets;
+            const totalVolume = filtered.reduce((acc, tx) => acc + tx.amount, 0);
 
-            // Group by Category and Type (For Donut)
-            const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
-
-            const catMap: any = {};
-            filtered.forEach((tx: any) => {
+            const catMap: Record<string, number> = {};
+            filtered.forEach((tx) => {
                 let name = tx.activity?.name;
                 if (!name) {
                     if (tx.type === 'INCOME') name = 'Pemasukan';
@@ -117,26 +152,36 @@ const Reports = () => {
                 }
                 catMap[name] = (catMap[name] || 0) + tx.amount;
             });
-            const categoryData = Object.keys(catMap).map(name => ({
-                name,
-                value: catMap[name]
-            })).sort((a, b) => b.value - a.value);
 
-            // Trend Data (Last 6 months/years)
-            const trendMap: any = {};
-            filtered.forEach((tx: any) => {
+            const categoryData = Object.keys(catMap)
+                .map((name) => ({ name, value: catMap[name] }))
+                .sort((a, b) => b.value - a.value);
+
+            const trendMap: Record<string, TrendDatum> = {};
+            filtered.forEach((tx) => {
                 const date = new Date(tx.date);
-                const label = viewMode === 'MONTHLY' ? date.getDate().toString() : (date.getMonth() + 1).toString();
+                const label = viewMode === 'MONTHLY'
+                    ? date.getDate().toString()
+                    : (date.getMonth() + 1).toString();
+
                 if (!trendMap[label]) {
-                    trendMap[label] = { label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`, Pemasukan: 0, Pengeluaran: 0 };
+                    trendMap[label] = {
+                        label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`,
+                        Pemasukan: 0,
+                        Pengeluaran: 0,
+                    };
                 }
+
                 if (tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') {
                     trendMap[label].Pemasukan += tx.amount;
                 } else if (tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') {
                     trendMap[label].Pengeluaran += tx.amount;
                 }
             });
-            const trendData = Object.values(trendMap).sort((a: any, b: any) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
+
+            const trendData = Object.values(trendMap).sort(
+                (a, b) => parseInt(a.label.split(' ')[1], 10) - parseInt(b.label.split(' ')[1], 10)
+            );
 
             setData({
                 totalIncome,
@@ -146,7 +191,9 @@ const Reports = () => {
                 zakatAmount,
                 categoryData,
                 trendData,
-                transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                transactionsData: filtered.sort(
+                    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+                )
             });
             setTxPage(1);
         } catch (error) {
@@ -157,7 +204,7 @@ const Reports = () => {
     };
 
     useEffect(() => {
-        fetchReportData();
+        void fetchReportData();
     }, [viewMode, currentDate]);
 
     useEffect(() => {
@@ -169,14 +216,11 @@ const Reports = () => {
         return () => window.removeEventListener('nova:data-changed', handleDataChanged);
     }, [viewMode, currentDate]);
 
-    const formatCurrency = (val: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(val);
-    };
+    const formatCurrency = (val: number) => new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+    }).format(val).replace('Rp', 'Rp ');
 
     const changeDate = (offset: number) => {
         const next = new Date(currentDate);
@@ -200,366 +244,534 @@ const Reports = () => {
         return 'INCOME';
     };
 
+    const getTransactionLabel = (type: string) => {
+        if (type === 'INCOME') return 'Masuk';
+        if (type === 'EXPENSE') return 'Keluar';
+        if (type === 'TRANSFER') return 'Transfer';
+        if (type === 'INVESTMENT_IN') return 'Cair';
+        return 'Invest';
+    };
+
+    const getTransactionTone = (type: string) => {
+        if (type === 'INCOME') return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
+        if (type === 'EXPENSE') return 'bg-rose-50 text-rose-700 border border-rose-100';
+        if (type === 'TRANSFER') return 'bg-blue-50 text-blue-700 border border-blue-100';
+        return 'bg-amber-50 text-amber-700 border border-amber-100';
+    };
+
+    const getAmountTone = (type: string) => {
+        if (type === 'INCOME' || type === 'INVESTMENT_IN') return 'text-emerald-600';
+        if (type === 'EXPENSE' || type === 'INVESTMENT_OUT') return 'text-rose-600';
+        return 'text-slate-900';
+    };
+
+    const getAmountPrefix = (type: string) => {
+        if (type === 'INCOME' || type === 'INVESTMENT_IN') return '+';
+        if (type === 'EXPENSE' || type === 'INVESTMENT_OUT') return '-';
+        return '';
+    };
+
+    const getTransactionAccountInfo = (tx: TransactionItem) => {
+        const source = tx.sourceAccount?.name;
+        const destination = tx.destinationAccount?.name;
+
+        if (tx.type === 'TRANSFER' && source && destination) {
+            return `${source} -> ${destination}`;
+        }
+
+        if ((tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') && destination) {
+            return destination;
+        }
+
+        if ((tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') && source) {
+            return source;
+        }
+
+        return destination || source || 'Rekening belum terhubung';
+    };
+
+    const periodLabel = viewMode === 'MONTHLY'
+        ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+        : currentDate.getFullYear().toString();
+    const periodHint = viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif';
+    const totalPages = Math.max(1, Math.ceil(data.transactionsData.length / TX_PER_PAGE));
+    const visibleTransactions = data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE);
+
     if (loading) return <Spinner message="Menganalisis Laporan..." />;
 
     return (
-        <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-32 pt-4 md:space-y-8 md:p-8">
-            {/* Header & Filter */}
-            <header className="space-y-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="space-y-3 flex-1">
-                        <div>
-                            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-400">Analisis Keuangan</p>
-                            <div className="flex items-center gap-3">
-                                <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">Laporan</h1>
-                                <button
-                                    onClick={exportExcel}
-                                    disabled={exporting || loading}
-                                    className="mt-1 flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50 border border-blue-100"
-                                    title="Export Excel"
-                                >
-                                    <Download size={14} /> 
-                                    {exporting ? 'Exporting...' : '(Excel)'}
-                                </button>
-                            </div>
-                            <p className="mt-1 text-sm text-slate-500">Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif.</p>
-                        </div>
-                        <div className="app-surface-card rounded-[24px] px-4 py-3 sm:px-5 inline-block">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Kekayaan Tercatat</p>
-                            <p className="mt-1 text-xl font-black leading-tight text-slate-900 break-words">{formatCurrency(data.totalWealth)}</p>
-                        </div>
-                    </div>
-                    <div className="bg-slate-100 p-1 rounded-2xl border border-slate-200 flex self-start">
-                        <button
-                            onClick={() => setViewMode('MONTHLY')}
-                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${viewMode === 'MONTHLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
-                        >
-                            BULANAN
-                        </button>
-                        <button
-                            onClick={() => setViewMode('YEARLY')}
-                            className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all ${viewMode === 'YEARLY' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
-                        >
-                            TAHUNAN
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3">
-                    <div className="app-surface-card rounded-[28px] px-4 py-4 sm:px-5">
-                        <div className="flex items-center justify-between gap-3">
-                            <button onClick={() => changeDate(-1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
-                                <ChevronLeft size={20} />
-                            </button>
-                            <div className="min-w-0 flex-1 px-1 text-center">
-                                <div className="inline-flex max-w-full items-center justify-center gap-2 rounded-full bg-slate-100 px-3 py-1.5">
-                                    <Calendar size={16} className="text-blue-600 shrink-0" />
-                                    <span className="min-w-0 text-center font-bold text-xs uppercase tracking-[0.12em] sm:text-sm sm:tracking-[0.18em] text-slate-700 break-words">
-                                        {viewMode === 'MONTHLY'
-                                            ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
-                                            : currentDate.getFullYear()}
-                                    </span>
-                                </div>
-                                <p className="mt-2 text-[10px] font-semibold text-slate-500 sm:text-[11px]">
-                                    {viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif'}
-                                </p>
-                            </div>
-                            <button onClick={() => changeDate(1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
-                                <ChevronRight size={20} />
-                            </button>
-                        </div>
-                    </div>
-                </div>
+        <div className="mx-auto w-full max-w-6xl space-y-5 px-4 pb-32 pt-4 md:space-y-6 md:px-8 md:pt-8">
+            <header className="space-y-2 px-1">
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Laporan</h1>
+                <p className="max-w-2xl text-sm leading-relaxed text-slate-500 sm:text-[15px]">
+                    Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif dalam tampilan yang lebih ringkas.
+                </p>
             </header>
 
-            <section className="app-hero-card relative mb-6 overflow-hidden rounded-3xl p-4 sm:p-5">
-                <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
-                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
-                <div className="relative z-10">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Ringkasan Periode</p>
-                            <p className="mt-1 text-sm text-white/70">Angka utama untuk periode yang sedang Anda lihat.</p>
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+                <div className="app-surface-card rounded-[30px] p-5 sm:p-6">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-2">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
+                            <p className="text-3xl font-black tracking-tight text-slate-950 sm:text-[2.5rem]">
+                                {formatCurrency(data.totalWealth)}
+                            </p>
+                            <p className="text-sm leading-relaxed text-slate-500">
+                                Nilai ini menggabungkan saldo likuid dan aset investasi yang sudah tercatat.
+                            </p>
                         </div>
-                        <div className="self-start rounded-full border border-white/10 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70">
-                            {viewMode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600/10 text-blue-700">
+                            <PieChartIcon size={22} strokeWidth={2.2} />
                         </div>
                     </div>
 
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pemasukan</p>
-                            <p className="mt-1 text-sm font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.totalIncome)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pengeluaran</p>
-                            <p className="mt-1 text-sm font-bold text-rose-300 break-all leading-snug">{formatCurrency(data.totalExpense)}</p>
-                        </div>
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 sm:gap-3">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Perputaran</p>
-                            <p className="mt-1 text-sm font-bold text-white break-all leading-snug">{formatCurrency(data.totalVolume)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-3">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">
-                                Zakat {viewMode === 'MONTHLY' ? 'Bulan Ini' : 'Thn Ini'}
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-slate-50/90 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Mode Aktif</p>
+                            <p className="mt-1 text-sm font-bold text-slate-800">
+                                {viewMode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
                             </p>
-                            <p className="mt-1 text-sm font-bold text-emerald-300 break-all leading-snug">{formatCurrency(data.zakatAmount)}</p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50/90 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Periode</p>
+                            <p className="mt-1 text-sm font-bold uppercase tracking-[0.12em] text-slate-800">
+                                {periodLabel}
+                            </p>
                         </div>
                     </div>
+                </div>
+
+                <div className="grid gap-4">
+                    <div className="app-surface-card rounded-[30px] p-4 sm:p-5">
+                        <div className="inline-flex rounded-full bg-slate-100 p-1">
+                            {(['MONTHLY', 'YEARLY'] as const).map((mode) => (
+                                <button
+                                    key={mode}
+                                    type="button"
+                                    onClick={() => setViewMode(mode)}
+                                    className={`rounded-full px-5 py-2.5 text-[11px] font-bold uppercase tracking-[0.16em] transition-all ${
+                                        viewMode === mode
+                                            ? 'bg-white text-blue-700 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-700'
+                                    }`}
+                                >
+                                    {mode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="mt-4 flex items-center gap-3 rounded-[24px] bg-slate-50/90 p-3 sm:p-4">
+                            <button
+                                type="button"
+                                onClick={() => changeDate(-1)}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-100"
+                                aria-label="Periode sebelumnya"
+                            >
+                                <ChevronLeft size={18} />
+                            </button>
+
+                            <div className="min-w-0 flex-1 text-center">
+                                <div className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-700 shadow-sm">
+                                    <Calendar size={15} className="text-blue-600" />
+                                    <span className="truncate">{periodLabel}</span>
+                                </div>
+                                <p className="mt-2 text-xs text-slate-500">{periodHint}</p>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => changeDate(1)}
+                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-100"
+                                aria-label="Periode berikutnya"
+                            >
+                                <ChevronRight size={18} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={exportExcel}
+                        disabled={exporting || loading}
+                        className="app-surface-card flex min-h-[88px] items-center justify-between rounded-[30px] px-5 py-4 text-left transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        <div>
+                            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">Export Data</p>
+                            <p className="mt-1 text-sm font-semibold text-slate-700">
+                                {exporting ? 'Sedang menyiapkan file Excel...' : 'Unduh laporan periode aktif'}
+                            </p>
+                        </div>
+                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
+                            <Download size={18} />
+                        </div>
+                    </button>
                 </div>
             </section>
 
-            {/* Donut Chart Section */}
-            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-sm">
-                <div className="flex flex-col gap-2 border-b border-slate-50 px-2 pb-5 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Komposisi Transaksi</h2>
-                        <p className="mt-2 text-sm text-slate-500">Lihat kategori mana yang paling banyak membentuk perputaran pada periode ini.</p>
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="app-surface-card rounded-[26px] p-4">
+                    <div className="flex items-center gap-2 text-emerald-600">
+                        <ArrowUpRight size={16} />
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Pemasukan</p>
                     </div>
-                    <div className="self-start rounded-full bg-slate-100 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                        {data.categoryData.length} kategori aktif
-                    </div>
+                    <p className="mt-3 text-xl font-black tracking-tight text-slate-950">{formatCurrency(data.totalIncome)}</p>
                 </div>
 
-                <div className={`mt-6 grid gap-5 ${data.categoryData.length > 0 ? 'lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] lg:items-center' : ''}`}>
+                <div className="app-surface-card rounded-[26px] p-4">
+                    <div className="flex items-center gap-2 text-rose-600">
+                        <ArrowDownRight size={16} />
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Pengeluaran</p>
+                    </div>
+                    <p className="mt-3 text-xl font-black tracking-tight text-slate-950">{formatCurrency(data.totalExpense)}</p>
+                </div>
+
+                <div className="app-surface-card rounded-[26px] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</p>
+                    <p className="mt-3 text-xl font-black tracking-tight text-slate-950">{formatCurrency(data.totalVolume)}</p>
+                </div>
+
+                <div className="app-surface-card rounded-[26px] p-4">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Estimasi Zakat</p>
+                    <p className="mt-3 text-xl font-black tracking-tight text-slate-950">{formatCurrency(data.zakatAmount)}</p>
+                </div>
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <div className="app-surface-card rounded-[30px] p-5 sm:p-6">
+                    <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
+                        <h2 className="text-sm font-bold text-slate-900">Komposisi Transaksi</h2>
+                        <p className="text-sm leading-relaxed text-slate-500">
+                            Kategori yang paling dominan pada periode ini akan muncul di sini.
+                        </p>
+                    </div>
+
                     {data.categoryData.length > 0 ? (
-                        <>
-                            <div className="relative h-[240px] sm:h-64">
+                        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,240px)_minmax(0,1fr)] lg:items-center">
+                            <div className="relative h-[250px] sm:h-[280px]">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
+                                    <RechartsPieChart>
                                         <Pie
                                             data={data.categoryData}
                                             cx="50%"
                                             cy="50%"
-                                            innerRadius="54%"
-                                            outerRadius="78%"
-                                            paddingAngle={5}
+                                            innerRadius="58%"
+                                            outerRadius="82%"
+                                            paddingAngle={4}
                                             dataKey="value"
                                         >
-                                            {data.categoryData.map((_: any, index: number) => (
+                                            {data.categoryData.map((_, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
                                         <ChartTooltip
-                                            contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                            contentStyle={{
+                                                background: '#fff',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '12px',
+                                                fontSize: '12px',
+                                                boxShadow: '0 12px 28px -18px rgba(15, 23, 42, 0.35)'
+                                            }}
                                             itemStyle={{ color: '#0f172a' }}
                                         />
-                                    </PieChart>
+                                    </RechartsPieChart>
                                 </ResponsiveContainer>
+
                                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-10 text-center">
-                                    <span className="mb-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</span>
-                                    <span className="max-w-[8rem] break-words text-sm font-black tracking-tight text-slate-800 sm:max-w-[9rem]">{formatCurrency(data.totalVolume)}</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Perputaran</span>
+                                    <span className="mt-2 max-w-[9rem] break-words text-lg font-black tracking-tight text-slate-900">
+                                        {formatCurrency(data.totalVolume)}
+                                    </span>
                                 </div>
                             </div>
 
                             <div className="space-y-3">
-                                {data.categoryData.map((item: any, index: number) => (
-                                    <div key={index} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3">
-                                        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                                            <div className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
+                                {data.categoryData.map((item, index) => (
+                                    <div
+                                        key={`${item.name}-${index}`}
+                                        className="rounded-2xl border border-slate-100 bg-slate-50/80 px-4 py-3"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
-                                                <p className="break-words text-sm font-bold text-slate-700">{item.name}</p>
-                                                <p className="text-[11px] font-semibold text-slate-400">
-                                                    {data.totalVolume > 0 ? ((item.value / data.totalVolume) * 100).toFixed(1) : 0}% dari total
+                                                <div className="flex items-center gap-3">
+                                                    <span
+                                                        className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                                                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                                                    />
+                                                    <p className="break-words text-sm font-bold text-slate-800">{item.name}</p>
+                                                </div>
+                                                <p className="mt-2 text-xs text-slate-500">
+                                                    {data.totalVolume > 0 ? ((item.value / data.totalVolume) * 100).toFixed(1) : '0.0'}% dari total volume
                                                 </p>
                                             </div>
+                                            <p className="shrink-0 text-sm font-black text-slate-900">{formatCurrency(item.value)}</p>
                                         </div>
-                                        <p className="shrink-0 text-right text-sm font-black text-slate-900">{formatCurrency(item.value)}</p>
                                     </div>
                                 ))}
                             </div>
-                        </>
+                        </div>
                     ) : (
-                        <div className="rounded-[28px] border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-                            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">%</div>
-                            <p className="mt-4 text-base font-bold text-slate-700">Belum ada komposisi transaksi</p>
+                        <div className="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center">
+                            <p className="text-base font-bold text-slate-800">Belum ada komposisi transaksi</p>
                             <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                                Saat transaksi tervalidasi mulai masuk di periode ini, ringkasan kategori akan muncul di sini.
+                                Saat transaksi tervalidasi mulai masuk, pembagian per kategori akan tampil di sini.
                             </p>
-                            <div className="mt-5 rounded-2xl bg-white px-4 py-3 shadow-sm">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran Saat Ini</p>
-                                <p className="mt-1 text-lg font-black text-slate-800">{formatCurrency(data.totalVolume)}</p>
-                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="app-surface-card rounded-[30px] p-5 sm:p-6">
+                    <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
+                        <h2 className="text-sm font-bold text-slate-900">Tren Arus Kas</h2>
+                        <div className="flex flex-wrap items-center gap-3 text-xs">
+                            <span className="inline-flex items-center gap-2 text-slate-500">
+                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                                Pemasukan
+                            </span>
+                            <span className="inline-flex items-center gap-2 text-slate-500">
+                                <span className="h-2.5 w-2.5 rounded-full bg-rose-500" />
+                                Pengeluaran
+                            </span>
+                        </div>
+                    </div>
+
+                    {data.trendData.length > 0 ? (
+                        <div className="mt-5 h-[260px] w-full sm:h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={data.trendData} barGap={8}>
+                                    <XAxis
+                                        dataKey="label"
+                                        axisLine={false}
+                                        tickLine={false}
+                                        tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }}
+                                    />
+                                    <Bar
+                                        dataKey="Pemasukan"
+                                        fill="#10b981"
+                                        radius={[8, 8, 0, 0]}
+                                        barSize={viewMode === 'MONTHLY' ? 8 : 18}
+                                    />
+                                    <Bar
+                                        dataKey="Pengeluaran"
+                                        fill="#f43f5e"
+                                        radius={[8, 8, 0, 0]}
+                                        barSize={viewMode === 'MONTHLY' ? 8 : 18}
+                                    />
+                                    <ChartTooltip
+                                        cursor={{ fill: '#f8fafc' }}
+                                        contentStyle={{
+                                            background: '#fff',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: '12px',
+                                            fontSize: '12px',
+                                            boxShadow: '0 12px 28px -18px rgba(15, 23, 42, 0.35)'
+                                        }}
+                                        labelStyle={{ color: '#475569' }}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="mt-5 rounded-[24px] border border-dashed border-slate-200 bg-slate-50/80 px-5 py-8 text-center">
+                            <p className="text-base font-bold text-slate-800">Belum ada tren untuk ditampilkan</p>
+                            <p className="mt-2 text-sm text-slate-500">
+                                Grafik akan muncul setelah ada transaksi tervalidasi pada periode yang dipilih.
+                            </p>
                         </div>
                     )}
                 </div>
             </section>
 
-            {/* Trend Chart */}
-            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] p-5 sm:p-6 shadow-sm mb-10">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-                    <span>Tren Arus Kas</span>
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-500"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Pemasukan</span>
-                    <span className="flex items-center gap-1 text-[10px] text-rose-500"><div className="w-2 h-2 rounded-full bg-rose-500"></div> Pengeluaran</span>
-                </h2>
-                {data.trendData.length > 0 ? (
-                    <div className="mt-6 h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.trendData}>
-                                <XAxis
-                                    dataKey="label"
-                                    axisLine={false}
-                                    tickLine={false}
-                                    tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 'bold' }}
-                                />
-                                <Bar
-                                    dataKey="Pemasukan"
-                                    fill="#10b981"
-                                    radius={[4, 4, 0, 0]}
-                                    barSize={12}
-                                />
-                                <Bar
-                                    dataKey="Pengeluaran"
-                                    fill="#f43f5e"
-                                    radius={[4, 4, 0, 0]}
-                                    barSize={12}
-                                />
-                                <ChartTooltip
-                                    cursor={{ fill: '#f8fafc' }}
-                                    contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '8px', fontSize: '10px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                    labelStyle={{ display: 'none' }}
-                                />
-                            </BarChart>
-                        </ResponsiveContainer>
+            <section className="app-surface-card overflow-hidden rounded-[30px]">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-900">Semua Transaksi</h2>
+                        <p className="mt-1 text-sm text-slate-500">Daftar transaksi tervalidasi pada periode aktif.</p>
                     </div>
-                ) : (
-                    <div className="mt-6 rounded-[28px] border border-dashed border-slate-200 bg-slate-50 px-6 py-8 text-center">
-                        <p className="text-sm font-bold text-slate-700">Belum ada tren untuk ditampilkan</p>
-                        <p className="mt-2 text-sm text-slate-500">Grafik akan muncul setelah ada transaksi tervalidasi pada periode yang dipilih.</p>
-                    </div>
-                )}
-            </section>
-
-            {/* Transactions Table */}
-            <section className="bg-white border border-slate-100 rounded-[28px] sm:rounded-[32px] shadow-sm overflow-hidden mb-10">
-                <div className="p-5 sm:p-6 border-b border-slate-50 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400 px-2">Semua Transaksi</h2>
-                    <span className="self-start text-xs font-bold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{data.transactionsData.length} Data</span>
+                    <span className="self-start rounded-full bg-slate-100 px-3 py-1 text-[11px] font-bold text-slate-500">
+                        {data.transactionsData.length} data
+                    </span>
                 </div>
 
-                <div className="overflow-x-auto w-full max-w-full">
-                    <table className="w-full min-w-[860px] text-left text-sm whitespace-nowrap">
-                        <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
-                            <tr>
-                                <th className="px-6 py-4">Tanggal</th>
-                                <th className="px-6 py-4">Tipe</th>
-                                <th className="px-6 py-4">Pemilik</th>
-                                <th className="px-6 py-4">Kategori / Catatan</th>
-                                <th className="px-6 py-4">Rekening</th>
-                                <th className="px-6 py-4 text-right">Nominal</th>
-                                <th className="px-6 py-4 text-center">Aksi</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100/50">
-                            {data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE).map((tx: any) => (
-                                <tr key={tx.id} className="hover:bg-slate-50/50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <p className="font-bold text-slate-700">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</p>
-                                        <p className="text-[10px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { year: 'numeric' })}</p>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${tx.type === 'INCOME' ? 'bg-emerald-100 text-emerald-700' :
-                                                tx.type === 'EXPENSE' ? 'bg-rose-100 text-rose-700' :
-                                                    tx.type === 'TRANSFER' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-                                            }`}>
-                                            {tx.type === 'INCOME' ? 'Pemasukan' : tx.type === 'EXPENSE' ? 'Pengeluaran' : tx.type === 'TRANSFER' ? 'Transfer' : 'Investasi'}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="font-bold text-slate-700">{tx.owner?.name || '-'}</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <p className="font-bold text-slate-900 line-clamp-1">{tx.activity?.name || '-'}</p>
-                                        {tx.description && <p className="text-[10px] text-slate-500 truncate max-w-[200px]">{tx.description}</p>}
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col gap-1">
-                                            {tx.sourceAccount && (
-                                                <span className="text-[10px] font-bold text-slate-500 flex gap-1 items-center">
-                                                    <span className="w-4 text-center text-slate-300">D:</span>
-                                                    {tx.sourceAccount.name} <span className="opacity-50">({tx.sourceAccount.owner?.name || '-'})</span>
-                                                </span>
-                                            )}
-                                            {tx.destinationAccount && (
-                                                <span className="text-[10px] font-bold text-slate-500 flex gap-1 items-center">
-                                                    <span className="w-4 text-center text-slate-300">K:</span>
-                                                    {tx.destinationAccount.name} <span className="opacity-50">({tx.destinationAccount.owner?.name || '-'})</span>
-                                                </span>
-                                            )}
+                {data.transactionsData.length > 0 ? (
+                    <>
+                        <div className="space-y-3 p-4 lg:hidden">
+                            {visibleTransactions.map((tx) => (
+                                <article key={tx.id} className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_16px_30px_-28px_rgba(15,23,42,0.4)]">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${getTransactionTone(tx.type)}`}>
+                                                {getTransactionLabel(tx.type)}
+                                            </div>
+                                            <p className="mt-3 text-base font-bold text-slate-900">
+                                                {tx.activity?.name || tx.description || 'Transaksi'}
+                                            </p>
+                                            <p className="mt-1 text-sm text-slate-500">{getTransactionAccountInfo(tx)}</p>
                                         </div>
-                                    </td>
-                                    <td className={`px-6 py-4 text-right font-bold ${tx.type === 'INCOME' ? 'text-emerald-600' : 'text-slate-900'}`}>
-                                        {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
-                                    </td>
-                                    <td className="px-6 py-4 text-center">
-                                        <div className="flex items-center justify-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => openEditModal(tx.id, getEditableModalType(tx as TransactionItem), {
-                                                    amount: tx.amount,
-                                                    description: tx.description || tx.activity?.name,
-                                                    ownerId: tx.ownerId,
-                                                    sourceAccountId: tx.sourceAccountId,
-                                                    destinationAccountId: tx.destinationAccountId,
-                                                })}
-                                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 transition-all active:scale-95 shadow-sm"
-                                                title="Edit"
-                                                aria-label="Edit"
-                                            >
-                                                <Pencil size={15} strokeWidth={2.5} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const pin = prompt('Masukkan Password Transaksi untuk menghapus:');
-                                                    if (pin === '123456') {
-                                                        handleDelete(tx.id);
-                                                    } else if (pin !== null) {
-                                                        alert('Password Transaksi Salah!');
-                                                    }
-                                                }}
-                                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-95 shadow-sm"
-                                                title="Hapus"
-                                                aria-label="Hapus"
-                                            >
-                                                <Trash2 size={15} strokeWidth={2.5} />
-                                            </button>
+                                        <p className={`shrink-0 text-right text-base font-black ${getAmountTone(tx.type)}`}>
+                                            {getAmountPrefix(tx.type)}
+                                            {formatCurrency(tx.amount)}
+                                        </p>
+                                    </div>
+
+                                    <div className="mt-4 grid gap-3 rounded-2xl bg-slate-50/80 p-3 sm:grid-cols-2">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Tanggal</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-700">
+                                                {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                            </p>
                                         </div>
-                                    </td>
-                                </tr>
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Pemilik</p>
+                                            <p className="mt-1 text-sm font-semibold text-slate-700">{tx.owner?.name || '-'}</p>
+                                        </div>
+                                        {tx.description && (
+                                            <div className="sm:col-span-2">
+                                                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Catatan</p>
+                                                <p className="mt-1 text-sm text-slate-600">{tx.description}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-4 flex items-center justify-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => openEditModal(tx.id, getEditableModalType(tx), {
+                                                amount: tx.amount,
+                                                description: tx.description || tx.activity?.name,
+                                                ownerId: tx.ownerId,
+                                                sourceAccountId: tx.sourceAccountId,
+                                                destinationAccountId: tx.destinationAccountId,
+                                            })}
+                                            className="inline-flex h-10 items-center gap-2 rounded-xl bg-blue-50 px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                                        >
+                                            <Pencil size={15} />
+                                            Edit
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => requestDelete(tx.id)}
+                                            className="inline-flex h-10 items-center gap-2 rounded-xl bg-rose-50 px-3 text-sm font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+                                        >
+                                            <Trash2 size={15} />
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </article>
                             ))}
-                            {data.transactionsData.length === 0 && (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-10 text-center text-slate-400 text-sm italic">
-                                        Tidak ada transaksi pada periode ini
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
+                        </div>
 
-                {data.transactionsData.length > TX_PER_PAGE && (
-                    <div className="p-4 border-t border-slate-50 flex items-center justify-between bg-slate-50/50">
-                        <button
-                            disabled={txPage === 1}
-                            onClick={() => setTxPage(p => p - 1)}
-                            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl disabled:opacity-30 transition-colors"
-                        >
-                            Sebelumnya
-                        </button>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Halaman {txPage} dari {Math.ceil(data.transactionsData.length / TX_PER_PAGE)}
-                        </span>
-                        <button
-                            disabled={txPage >= Math.ceil(data.transactionsData.length / TX_PER_PAGE)}
-                            onClick={() => setTxPage(p => p + 1)}
-                            className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl disabled:opacity-30 transition-colors"
-                        >
-                            Selanjutnya
-                        </button>
+                        <div className="hidden overflow-x-auto lg:block">
+                            <table className="w-full min-w-[900px] text-left text-sm">
+                                <thead className="bg-slate-50/90 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                                    <tr>
+                                        <th className="px-6 py-4">Tanggal</th>
+                                        <th className="px-6 py-4">Tipe</th>
+                                        <th className="px-6 py-4">Pemilik</th>
+                                        <th className="px-6 py-4">Kategori / Catatan</th>
+                                        <th className="px-6 py-4">Rekening</th>
+                                        <th className="px-6 py-4 text-right">Nominal</th>
+                                        <th className="px-6 py-4 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {visibleTransactions.map((tx) => (
+                                        <tr key={tx.id} className="group transition-colors hover:bg-slate-50/70">
+                                            <td className="px-6 py-5">
+                                                <p className="font-bold text-slate-800">
+                                                    {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                                                </p>
+                                                <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                                                    {new Date(tx.date).toLocaleDateString('id-ID', { year: 'numeric' })}
+                                                </p>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] ${getTransactionTone(tx.type)}`}>
+                                                    {getTransactionLabel(tx.type)}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold uppercase text-slate-500">
+                                                        {tx.owner?.name?.slice(0, 1) || 'U'}
+                                                    </div>
+                                                    <span className="font-semibold text-slate-700">{tx.owner?.name || '-'}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <p className="max-w-[220px] truncate font-semibold text-slate-800">{tx.activity?.name || '-'}</p>
+                                                {tx.description && (
+                                                    <p className="mt-1 max-w-[220px] truncate text-[12px] text-slate-500">{tx.description}</p>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <p className="max-w-[180px] truncate text-[13px] text-slate-600">{getTransactionAccountInfo(tx)}</p>
+                                            </td>
+                                            <td className={`px-6 py-5 text-right text-sm font-black ${getAmountTone(tx.type)}`}>
+                                                {getAmountPrefix(tx.type)}
+                                                {formatCurrency(tx.amount)}
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex items-center justify-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => openEditModal(tx.id, getEditableModalType(tx), {
+                                                            amount: tx.amount,
+                                                            description: tx.description || tx.activity?.name,
+                                                            ownerId: tx.ownerId,
+                                                            sourceAccountId: tx.sourceAccountId,
+                                                            destinationAccountId: tx.destinationAccountId,
+                                                        })}
+                                                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700 transition-colors hover:bg-blue-700 hover:text-white"
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil size={15} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => requestDelete(tx.id)}
+                                                        className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-700 transition-colors hover:bg-rose-700 hover:text-white"
+                                                        title="Hapus"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {data.transactionsData.length > TX_PER_PAGE && (
+                            <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/60 px-4 py-4 sm:px-6">
+                                <button
+                                    type="button"
+                                    disabled={txPage === 1}
+                                    onClick={() => setTxPage((page) => page - 1)}
+                                    className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Sebelumnya
+                                </button>
+                                <span className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                                    Halaman {txPage} dari {totalPages}
+                                </span>
+                                <button
+                                    type="button"
+                                    disabled={txPage >= totalPages}
+                                    onClick={() => setTxPage((page) => page + 1)}
+                                    className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-sm transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                                >
+                                    Selanjutnya
+                                </button>
+                            </div>
+                        )}
+                    </>
+                ) : (
+                    <div className="px-5 py-10 text-center sm:px-6">
+                        <p className="text-base font-bold text-slate-800">Tidak ada transaksi pada periode ini</p>
+                        <p className="mt-2 text-sm text-slate-500">
+                            Coba pindah periode atau tambahkan transaksi baru agar laporan terisi.
+                        </p>
                     </div>
                 )}
             </section>

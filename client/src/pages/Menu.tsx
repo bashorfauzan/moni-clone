@@ -43,6 +43,7 @@ import {
 } from '../services/masterData';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useSecurity } from '../context/SecurityContext';
 import {
     buildBackupFilename,
     downloadBackupBlob,
@@ -124,6 +125,12 @@ const MenuPage = () => {
     const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
     const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
     const [isHelpSupportOpen, setIsHelpSupportOpen] = useState(false);
+    const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+    const [securityPinStep, setSecurityPinStep] = useState<'menu' | 'set-pin' | 'confirm-pin' | 'change-pin'>('menu');
+    const [securityPinInput, setSecurityPinInput] = useState('');
+    const [securityPinConfirm, setSecurityPinConfirm] = useState('');
+    const [securityPinError, setSecurityPinError] = useState('');
+    const { isSecurityEnabled, isBiometricEnabled, setupSecurity, removeSecurity, setupBiometric, removeBiometric, verifySecurity } = useSecurity();
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero' | 'font'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
@@ -986,6 +993,25 @@ const MenuPage = () => {
                             <div className="min-w-0">
                                 <span className="block text-sm font-semibold text-slate-800 truncate">Bantuan & Dukungan</span>
                                 <span className="block text-[11px] text-slate-500 truncate">Lihat alur setup awal dan panduan penggunaan</span>
+                            </div>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-400" />
+                    </button>
+
+                    {/* Keamanan Transaksi */}
+                    <button
+                        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
+                        onClick={() => { setSecurityPinStep('menu'); setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setIsSecurityModalOpen(true); }}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                                <Lock size={16} />
+                            </div>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Keamanan Transaksi</span>
+                                <span className="block text-[11px] text-slate-500 truncate">
+                                    {isSecurityEnabled ? `PIN Aktif${isBiometricEnabled ? ' • Biometrik On' : ''}` : 'Belum diatur'}
+                                </span>
                             </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-400" />
@@ -2409,6 +2435,189 @@ const MenuPage = () => {
                                 {resetDataLoading ? 'Menghapus...' : 'Eksekusi Hapus Data'}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Keamanan Transaksi Modal ─────────────────────────── */}
+            {isSecurityModalOpen && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/65 p-4 backdrop-blur-sm sm:items-center"
+                    onMouseDown={() => setIsSecurityModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[28px] bg-white p-5 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.55)] ring-1 ring-slate-200"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                                    <Lock size={18} />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-slate-900">Keamanan Transaksi</h3>
+                                    <p className="text-[11px] text-slate-500">
+                                        {isSecurityEnabled ? 'PIN aktif — transaksi & buka app terlindungi' : 'Belum ada PIN yang diatur'}
+                                    </p>
+                                </div>
+                            </div>
+                            <button onClick={() => setIsSecurityModalOpen(false)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        {/* ─── Step: Menu ─────────────────────── */}
+                        {securityPinStep === 'menu' && (
+                            <div className="space-y-3">
+                                {!isSecurityEnabled ? (
+                                    <button
+                                        className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-rose-50 hover:bg-rose-100 transition-colors text-left border border-rose-100"
+                                        onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('set-pin'); }}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Shield size={18} className="text-rose-600 shrink-0" />
+                                            <div>
+                                                <span className="block text-sm font-semibold text-rose-800">Aktifkan PIN</span>
+                                                <span className="block text-[11px] text-rose-600">Buat PIN 6 digit untuk melindungi transaksi</span>
+                                            </div>
+                                        </div>
+                                        <ChevronRight size={16} className="text-rose-400 shrink-0" />
+                                    </button>
+                                ) : (
+                                    <>
+                                        {/* Change PIN */}
+                                        <button
+                                            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors text-left border border-slate-200"
+                                            onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('change-pin'); }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Shield size={18} className="text-slate-600 shrink-0" />
+                                                <div>
+                                                    <span className="block text-sm font-semibold text-slate-800">Ganti PIN</span>
+                                                    <span className="block text-[11px] text-slate-500">Buat PIN baru untuk keamanan</span>
+                                                </div>
+                                            </div>
+                                            <ChevronRight size={16} className="text-slate-400 shrink-0" />
+                                        </button>
+
+                                        {/* Biometric Toggle */}
+                                        <button
+                                            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors text-left border border-slate-200"
+                                            onClick={async () => {
+                                                if (isBiometricEnabled) {
+                                                    removeBiometric();
+                                                } else {
+                                                    const ok = await setupBiometric();
+                                                    if (ok) alert('Biometrik berhasil didaftarkan!');
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Smartphone size={18} className="text-slate-600 shrink-0" />
+                                                <div>
+                                                    <span className="block text-sm font-semibold text-slate-800">
+                                                        {isBiometricEnabled ? 'Nonaktifkan Biometrik' : 'Aktifkan Biometrik'}
+                                                    </span>
+                                                    <span className="block text-[11px] text-slate-500">
+                                                        {isBiometricEnabled ? 'Biometrik sedang aktif (klik untuk nonaktifkan)' : 'Daftarkan sidik jari / Face ID perangkat ini'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className={`w-10 h-6 rounded-full transition-colors flex items-center ${isBiometricEnabled ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                                                <div className="w-5 h-5 rounded-full bg-white shadow mx-0.5" />
+                                            </div>
+                                        </button>
+
+                                        {/* Disable Security */}
+                                        <button
+                                            className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-rose-50 hover:bg-rose-100 transition-colors text-left border border-rose-100"
+                                            onClick={async () => {
+                                                const ok = await verifySecurity('Nonaktifkan Keamanan');
+                                                if (ok) {
+                                                    removeSecurity();
+                                                    setIsSecurityModalOpen(false);
+                                                    alert('Keamanan transaksi dinonaktifkan.');
+                                                }
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Trash2 size={18} className="text-rose-600 shrink-0" />
+                                                <div>
+                                                    <span className="block text-sm font-semibold text-rose-800">Nonaktifkan Keamanan</span>
+                                                    <span className="block text-[11px] text-rose-500">Hapus PIN dan semua proteksi</span>
+                                                </div>
+                                            </div>
+                                            <ChevronRight size={16} className="text-rose-400 shrink-0" />
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+
+                        {/* ─── Step: Set PIN ─────────────────────── */}
+                        {(securityPinStep === 'set-pin' || securityPinStep === 'change-pin') && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">
+                                        {securityPinStep === 'change-pin' ? 'PIN Baru (6 digit)' : 'Buat PIN (6 digit)'}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        placeholder="••••••"
+                                        className="h-12 w-full rounded-2xl border border-slate-200 px-4 text-center text-xl font-bold tracking-[0.4em] outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
+                                        value={securityPinInput}
+                                        onChange={(e) => { setSecurityPinInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
+                                    />
+                                </div>
+                                <button
+                                    disabled={securityPinInput.length !== 6}
+                                    className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+                                    onClick={() => { setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('confirm-pin'); }}
+                                >
+                                    Lanjut — Konfirmasi PIN
+                                </button>
+                                <button onClick={() => setSecurityPinStep('menu')} className="w-full text-xs text-slate-400 font-semibold py-1">Kembali</button>
+                            </div>
+                        )}
+
+                        {/* ─── Step: Confirm PIN ─────────────────────── */}
+                        {securityPinStep === 'confirm-pin' && (
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Konfirmasi PIN</label>
+                                    <input
+                                        type="password"
+                                        inputMode="numeric"
+                                        maxLength={6}
+                                        placeholder="••••••"
+                                        className={`h-12 w-full rounded-2xl border px-4 text-center text-xl font-bold tracking-[0.4em] outline-none ${securityPinError ? 'border-rose-400 ring-4 ring-rose-100' : 'border-slate-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100'}`}
+                                        value={securityPinConfirm}
+                                        onChange={(e) => { setSecurityPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
+                                    />
+                                    {securityPinError && <p className="mt-2 text-xs text-rose-600 font-semibold">{securityPinError}</p>}
+                                </div>
+                                <button
+                                    disabled={securityPinConfirm.length !== 6}
+                                    className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+                                    onClick={() => {
+                                        if (securityPinInput !== securityPinConfirm) {
+                                            setSecurityPinError('PIN tidak cocok. Coba lagi.');
+                                            setSecurityPinConfirm('');
+                                            return;
+                                        }
+                                        setupSecurity(securityPinInput);
+                                        setIsSecurityModalOpen(false);
+                                        alert('PIN berhasil diatur! Gunakan PIN ini saat membuka aplikasi dan menyimpan transaksi.');
+                                    }}
+                                >
+                                    <Save size={16} /> Simpan PIN
+                                </button>
+                                <button onClick={() => setSecurityPinStep('set-pin')} className="w-full text-xs text-slate-400 font-semibold py-1">Kembali</button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

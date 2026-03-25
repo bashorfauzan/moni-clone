@@ -10,6 +10,7 @@ import Register from './pages/Register';
 import { TransactionProvider } from './context/TransactionContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { SecurityProvider } from './context/SecurityContext';
 import Spinner from './components/Spinner';
 
 // Guard: redirect to /login if not authenticated
@@ -48,9 +49,11 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <TransactionProvider>
-          <AppRoutes />
-        </TransactionProvider>
+        <SecurityProvider>
+          <TransactionProvider>
+            <AppRoutes />
+          </TransactionProvider>
+        </SecurityProvider>
       </AuthProvider>
     </ThemeProvider>
   );

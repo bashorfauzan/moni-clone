@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Plus Jakarta Sans", Inter, "Segoe UI", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light;
   color: #0f172a;
-  background-color: var(--app-bg, #f8fafc);
+  background-color: var(--app-bg, #f3f7fb);
   --app-bg-image: none;
   --app-bg-overlay-opacity: 0.24;
   --app-bg-blur: 0px;
@@ -73,6 +73,8 @@ body::before {
 body::after {
   z-index: -1;
   background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 28%),
+    radial-gradient(circle at top right, rgba(16, 185, 129, 0.08), transparent 24%),
     linear-gradient(
       rgba(248, 250, 252, var(--app-bg-overlay-opacity)),
       rgba(248, 250, 252, var(--app-bg-overlay-opacity))

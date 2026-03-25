@@ -9,8 +9,8 @@ import {
 } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { buildAccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
-import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
-import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell, Pencil, Trash2 } from 'lucide-react';
+import { fetchTransactions, type TransactionItem } from '../services/transactions';
+import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
 import { useAuth } from '../context/AuthContext';
@@ -18,17 +18,16 @@ import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 
-type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
-
 const Home = () => {
-    const { openModal, openEditModal } = useTransaction();
+    const { openModal } = useTransaction();
     const navigate = useNavigate();
     const { user } = useAuth();
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[] }>({ owners: [], accounts: [] });
     const [summaryData, setSummaryData] = useState({
         liquidBalance: 0,
         incomeMonth: 0,
-        expenseMonth: 0
+        expenseMonth: 0,
+        investmentValue: 0
     });
     const [recentTransactions, setRecentTransactions] = useState<TransactionItem[]>([]);
     const [pendingTransactions, setPendingTransactions] = useState<TransactionItem[]>([]);
@@ -36,6 +35,7 @@ const Home = () => {
     const [loading, setLoading] = useState(true);
     const isBalanceHidden = localStorage.getItem('hideBalance') === 'true';
     const [isWealthHidden, setIsWealthHidden] = useState(() => localStorage.getItem('hideWealth') === 'true');
+    const [isMemberFundsOpen, setIsMemberFundsOpen] = useState(() => localStorage.getItem('showMemberFunds') === 'true');
     const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
     const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
     const [clearingNotifications, setClearingNotifications] = useState(false);
@@ -47,6 +47,17 @@ const Home = () => {
             const val = !prev;
             localStorage.setItem('hideWealth', String(val));
             return val;
+        });
+    };
+
+    const toggleMemberFunds = () => {
+        setIsMemberFundsOpen(prev => {
+            const next = !prev;
+            localStorage.setItem('showMemberFunds', String(next));
+            if (!next) {
+                setExpandedOwnerId(null);
+            }
+            return next;
         });
     };
 
@@ -87,7 +98,11 @@ const Home = () => {
                 .filter((tx: any) => tx.type === 'EXPENSE' && isCurrentMonth(tx.date))
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
-            setSummaryData({ liquidBalance, incomeMonth, expenseMonth });
+            const investmentValue = meta.accounts
+                .filter((acc: Account) => acc.type === 'RDN' || acc.type === 'Sekuritas')
+                .reduce((sum: number, acc: Account) => sum + Math.abs(acc.balance), 0);
+
+            setSummaryData({ liquidBalance, incomeMonth, expenseMonth, investmentValue });
             setAccountFreq(freq);
             setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
@@ -210,30 +225,19 @@ const Home = () => {
         return destination || source || tx.owner?.name || 'Rekening belum terhubung';
     };
 
-    const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
-        const isInvestmentTransfer = tx.type === 'TRANSFER'
-            && ['RDN', 'Sekuritas'].includes(tx.destinationAccount?.type || '');
-
-        if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') {
-            return 'INVESTMENT';
-        }
-
-        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER') {
-            return tx.type;
-        }
-
-        return 'INCOME';
-    };
-
     const wealthDistribution = meta.owners.map(owner => {
         // Filter untuk mengikutsertakan RDN, Rekening Bank, E-Wallet, dan Sekuritas seperti permintaan user
         const ownerAccounts = sortAccountsByUsage(meta.accounts.filter(acc => 
-            acc.ownerId === owner.id && ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type)
+            acc.ownerId === owner.id && 
+            ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type) &&
+            acc.balance !== 0
         ), accountFreq);
 
         const total = ownerAccounts.reduce((sum, acc) => sum + acc.balance, 0);
         return { ...owner, total, accountCount: ownerAccounts.length, accounts: ownerAccounts };
     }).sort((a, b) => b.total - a.total);
+
+    const totalMemberFunds = wealthDistribution.reduce((sum, owner) => sum + owner.total, 0);
 
 
 
@@ -273,16 +277,6 @@ const Home = () => {
             alert(error?.response?.data?.error || 'Gagal menghapus notifikasi');
         } finally {
             setDeletingNotificationId(null);
-        }
-    };
-
-    const handleDelete = async (id: string) => {
-        try {
-            await deleteTransaction(id);
-            await fetchData();
-            window.dispatchEvent(new Event('nova:data-changed'));
-        } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menghapus transaksi');
         }
     };
 
@@ -365,71 +359,105 @@ const Home = () => {
                 </div>
             </section>
 
+            {/* Total Kekayaan Tercatat */}
+            {!isWealthHidden && (
+                <section className="mb-6">
+                    <div className="flex items-center justify-between gap-3 rounded-[24px] bg-white px-5 py-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] border border-slate-100">
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
+                            <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
+                                {formatCurrency(summaryData.liquidBalance + summaryData.investmentValue)}
+                            </p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1 shrink-0 text-right">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kas</span>
+                            <span className="text-xs font-bold text-slate-700">{formatCurrency(summaryData.liquidBalance)}</span>
+                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mt-1">Investasi</span>
+                            <span className="text-xs font-bold text-emerald-600">{formatCurrency(summaryData.investmentValue)}</span>
+                        </div>
+                    </div>
+                </section>
+            )}
+
             {/* Kekayaan per Individu */}
             {meta.owners.length > 0 && wealthDistribution.length > 0 && !isWealthHidden && (
                 <section className="mb-8 relative z-10">
-                    <div className="flex items-center justify-between gap-3 mb-4 px-1">
-                        <h3 className="font-bold text-slate-900 text-sm">Dana Anggota</h3>
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{meta.owners.length} Terdaftar</span>
-                    </div>
-                    <div className="flex flex-col gap-3">
-                        {wealthDistribution.map((w) => (
-                            <div
-                                key={w.id}
-                                className="bg-white border border-slate-100 rounded-[24px] p-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]"
-                            >
-                                <div 
-                                    className="flex items-center justify-between gap-3 cursor-pointer group"
-                                    onClick={() => setExpandedOwnerId(prev => prev === w.id ? null : w.id)}
-                                >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700 font-bold shrink-0 group-hover:bg-slate-100 transition-colors">
-                                            {w.name.substring(0, 1)}
-                                        </div>
-                                        <div className="min-w-0">
-                                            <h4 className="font-bold text-slate-800 text-sm truncate">{w.name}</h4>
-                                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">{w.accountCount} Rekening • {displayCurrency(w.total)}</p>
-                                        </div>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 text-slate-400 shrink-0">
-                                        {expandedOwnerId === w.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </div>
-                                </div>
+                    <button
+                        type="button"
+                        onClick={toggleMemberFunds}
+                        className="mb-4 flex w-full items-center justify-between gap-3 rounded-[24px] bg-white px-4 py-4 text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] border border-slate-100"
+                    >
+                        <div className="min-w-0">
+                            <h3 className="font-bold text-slate-900 text-sm">Dana Anggota</h3>
+                            <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                {meta.owners.length} terdaftar • {displayCurrency(totalMemberFunds)}
+                            </p>
+                        </div>
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
+                            {isMemberFundsOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                        </div>
+                    </button>
 
-                                {expandedOwnerId === w.id && (
-                                    <div className="mt-4 pt-4 border-t border-slate-50 space-y-2.5">
-                                        {w.accounts.map(acc => (
-                                            <div key={acc.id} className="flex justify-between items-center gap-2 group/acc">
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-xs text-slate-600 font-bold truncate">{acc.name}</p>
-                                                    <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">{acc.type}</p>
-                                                </div>
-                                                <div className="flex items-center gap-3 shrink-0">
-                                                    <span className="text-xs text-slate-900 font-bold">{displayCurrency(acc.balance)}</span>
-                                                    {canLaunchAccountApp(acc) && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                void handleLaunchAccount(acc);
-                                                            }}
-                                                            className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors"
-                                                            title="Buka Aplikasi"
-                                                        >
-                                                            <ExternalLink size={12} />
-                                                        </button>
-                                                    )}
-                                                </div>
+                    {isMemberFundsOpen && (
+                        <div className="flex flex-col gap-3">
+                            {wealthDistribution.map((w) => (
+                                <div
+                                    key={w.id}
+                                    className="bg-white border border-slate-100 rounded-[24px] p-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]"
+                                >
+                                    <div
+                                        className="flex items-center justify-between gap-3 cursor-pointer group"
+                                        onClick={() => setExpandedOwnerId(prev => prev === w.id ? null : w.id)}
+                                    >
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-10 h-10 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-700 font-bold shrink-0 group-hover:bg-slate-100 transition-colors">
+                                                {w.name.substring(0, 1)}
                                             </div>
-                                        ))}
-                                        {w.accounts.length === 0 && (
-                                            <p className="text-[11px] text-slate-400 italic text-center py-2">Belum ada dana/rekening</p>
-                                        )}
+                                            <div className="min-w-0">
+                                                <h4 className="font-bold text-slate-800 text-sm truncate">{w.name}</h4>
+                                                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider truncate">{w.accountCount} Rekening • {displayCurrency(w.total)}</p>
+                                            </div>
+                                        </div>
+                                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-slate-50 text-slate-400 shrink-0">
+                                            {expandedOwnerId === w.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
+
+                                    {expandedOwnerId === w.id && (
+                                        <div className="mt-4 pt-4 border-t border-slate-50 space-y-2.5">
+                                            {w.accounts.map(acc => (
+                                                <div key={acc.id} className="flex justify-between items-center gap-2 group/acc">
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="text-xs text-slate-600 font-bold truncate">{acc.name}</p>
+                                                        <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">{acc.type}</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 shrink-0">
+                                                        <span className="text-xs text-slate-900 font-bold">{displayCurrency(acc.balance)}</span>
+                                                        {canLaunchAccountApp(acc) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    void handleLaunchAccount(acc);
+                                                                }}
+                                                                className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                                                                title="Buka Aplikasi"
+                                                            >
+                                                                <ExternalLink size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {w.accounts.length === 0 && (
+                                                <p className="text-[11px] text-slate-400 italic text-center py-2">Belum ada dana/rekening</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -542,38 +570,7 @@ const Home = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => openEditModal(tx.id, getEditableModalType(tx), {
-                                            amount: tx.amount,
-                                            description: tx.description || tx.activity?.name,
-                                            ownerId: tx.ownerId,
-                                            sourceAccountId: tx.sourceAccountId,
-                                            destinationAccountId: tx.destinationAccountId,
-                                        })}
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 transition-all active:scale-90 shadow-sm"
-                                        title="Edit"
-                                        aria-label="Edit"
-                                    >
-                                        <Pencil size={15} strokeWidth={2.5} />
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const pin = prompt('Masukkan Password Transaksi untuk menghapus:');
-                                            if (pin === '123456') {
-                                                handleDelete(tx.id);
-                                            } else if (pin !== null) {
-                                                alert('Password Transaksi Salah!');
-                                            }
-                                        }}
-                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-90 shadow-sm"
-                                        title="Hapus"
-                                        aria-label="Hapus"
-                                    >
-                                        <Trash2 size={15} strokeWidth={2.5} />
-                                    </button>
+                                <div className="flex items-center shrink-0">
                                     <p className={`font-bold text-sm shrink-0 ml-1 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
                                     </p>
