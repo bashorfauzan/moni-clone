@@ -33,7 +33,8 @@ const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
 const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
     style: 'currency',
     currency: 'IDR',
-    minimumFractionDigits: 0
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
 }).format(value);
 
 const TransactionModal = () => {

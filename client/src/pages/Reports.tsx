@@ -52,9 +52,7 @@ const Reports = () => {
         }
     };
 
-    const handleDelete = async (id: string, description: string) => {
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus transaksi "${description}"?\n\nSaldo rekening terkait akan disesuaikan kembali.`)) return;
-        
+    const handleDelete = async (id: string) => {
         try {
             await deleteTransaction(id);
             await fetchReportData();
@@ -175,7 +173,8 @@ const Reports = () => {
         return new Intl.NumberFormat('id-ID', {
             style: 'currency',
             currency: 'IDR',
-            minimumFractionDigits: 0
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
         }).format(val);
     };
 
@@ -208,13 +207,24 @@ const Reports = () => {
             {/* Header & Filter */}
             <header className="space-y-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                    <div className="space-y-3">
+                    <div className="space-y-3 flex-1">
                         <div>
                             <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-400">Analisis Keuangan</p>
-                            <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">Laporan</h1>
+                            <div className="flex items-center gap-3">
+                                <h1 className="mt-1 text-3xl font-black tracking-tight text-slate-900">Laporan</h1>
+                                <button
+                                    onClick={exportExcel}
+                                    disabled={exporting || loading}
+                                    className="mt-1 flex items-center gap-2 rounded-xl bg-blue-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-50 border border-blue-100"
+                                    title="Export Excel"
+                                >
+                                    <Download size={14} /> 
+                                    {exporting ? 'Exporting...' : '(Excel)'}
+                                </button>
+                            </div>
                             <p className="mt-1 text-sm text-slate-500">Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif.</p>
                         </div>
-                        <div className="app-surface-card rounded-[24px] px-4 py-3 sm:px-5">
+                        <div className="app-surface-card rounded-[24px] px-4 py-3 sm:px-5 inline-block">
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Total Kekayaan Tercatat</p>
                             <p className="mt-1 text-xl font-black leading-tight text-slate-900 break-words">{formatCurrency(data.totalWealth)}</p>
                         </div>
@@ -235,7 +245,7 @@ const Reports = () => {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="grid grid-cols-1 gap-3">
                     <div className="app-surface-card rounded-[28px] px-4 py-4 sm:px-5">
                         <div className="flex items-center justify-between gap-3">
                             <button onClick={() => changeDate(-1)} className="h-10 w-10 sm:h-11 sm:w-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-slate-200 transition-colors shrink-0">
@@ -259,14 +269,6 @@ const Reports = () => {
                             </button>
                         </div>
                     </div>
-
-                    <button
-                        onClick={exportExcel}
-                        disabled={exporting || loading}
-                        className="app-surface-card h-14 w-full rounded-[28px] px-4 text-center text-[11px] font-bold uppercase leading-tight tracking-[0.14em] text-slate-600 transition-all hover:bg-white/70 disabled:opacity-50 sm:px-6 sm:text-xs sm:tracking-widest md:w-auto"
-                    >
-                        <Download size={16} /> {exporting ? 'Mengekspor...' : 'Export (Excel)'}
-                    </button>
                 </div>
             </header>
 
@@ -502,20 +504,27 @@ const Reports = () => {
                                                     sourceAccountId: tx.sourceAccountId,
                                                     destinationAccountId: tx.destinationAccountId,
                                                 })}
-                                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                                                title="Edit transaksi"
-                                                aria-label="Edit transaksi"
+                                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 transition-all active:scale-95 shadow-sm"
+                                                title="Edit"
+                                                aria-label="Edit"
                                             >
-                                                <Pencil size={14} />
+                                                <Pencil size={15} strokeWidth={2.5} />
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => handleDelete(tx.id, tx.description || tx.activity?.name || 'transaksi')}
-                                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition-colors"
-                                                title="Hapus transaksi"
-                                                aria-label="Hapus transaksi"
+                                                onClick={() => {
+                                                    const pin = prompt('Masukkan Password Transaksi untuk menghapus:');
+                                                    if (pin === '123456') {
+                                                        handleDelete(tx.id);
+                                                    } else if (pin !== null) {
+                                                        alert('Password Transaksi Salah!');
+                                                    }
+                                                }}
+                                                className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-95 shadow-sm"
+                                                title="Hapus"
+                                                aria-label="Hapus"
                                             >
-                                                <Trash2 size={14} />
+                                                <Trash2 size={15} strokeWidth={2.5} />
                                             </button>
                                         </div>
                                     </td>

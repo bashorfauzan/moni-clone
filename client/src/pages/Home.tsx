@@ -181,6 +181,7 @@ const Home = () => {
             style: 'currency',
             currency: 'IDR',
             minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
         }).format(value).replace('Rp', 'Rp ');
     };
 
@@ -275,9 +276,7 @@ const Home = () => {
         }
     };
 
-    const handleDelete = async (id: string, description: string) => {
-        if (!window.confirm(`Apakah Anda yakin ingin menghapus transaksi "${description}"?\n\nSaldo rekening terkait akan disesuaikan kembali.`)) return;
-        
+    const handleDelete = async (id: string) => {
         try {
             await deleteTransaction(id);
             await fetchData();
@@ -543,7 +542,7 @@ const Home = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-3 shrink-0">
+                                <div className="flex items-center gap-2 shrink-0">
                                     <button
                                         type="button"
                                         onClick={() => openEditModal(tx.id, getEditableModalType(tx), {
@@ -553,20 +552,27 @@ const Home = () => {
                                             sourceAccountId: tx.sourceAccountId,
                                             destinationAccountId: tx.destinationAccountId,
                                         })}
-                                        className="hidden h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                                        title="Edit transaksi"
-                                        aria-label="Edit transaksi"
+                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:border-blue-300 transition-all active:scale-90 shadow-sm"
+                                        title="Edit"
+                                        aria-label="Edit"
                                     >
-                                        <Pencil size={14} />
+                                        <Pencil size={15} strokeWidth={2.5} />
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => handleDelete(tx.id, tx.description || tx.activity?.name || 'transaksi')}
-                                        className="hidden h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 shadow-sm hover:bg-rose-100 hover:border-rose-300 transition-colors"
-                                        title="Hapus transaksi"
-                                        aria-label="Hapus transaksi"
+                                        onClick={() => {
+                                            const pin = prompt('Masukkan Password Transaksi untuk menghapus:');
+                                            if (pin === '123456') {
+                                                handleDelete(tx.id);
+                                            } else if (pin !== null) {
+                                                alert('Password Transaksi Salah!');
+                                            }
+                                        }}
+                                        className="flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:border-rose-300 transition-all active:scale-90 shadow-sm"
+                                        title="Hapus"
+                                        aria-label="Hapus"
                                     >
-                                        <Trash2 size={14} />
+                                        <Trash2 size={15} strokeWidth={2.5} />
                                     </button>
                                     <p className={`font-bold text-sm shrink-0 ml-1 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
