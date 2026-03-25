@@ -37,7 +37,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 }).format(value);
 
 const TransactionModal = () => {
-    const { isModalOpen, modalType, modalPayload, editTransactionId, closeModal } = useTransaction();
+    const { isModalOpen, modalType, modalPayload, editTransactionId, setModalType, closeModal } = useTransaction();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
     const [accountUsage, setAccountUsage] = useState<AccountUsageFrequency>({});
     const [form, setForm] = useState(initialForm);
@@ -275,6 +275,22 @@ const TransactionModal = () => {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
+                    {(modalPayload?.pendingTransactionId || modalPayload?.notificationInboxId) && (
+                        <div>
+                            <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Jenis Transaksi</label>
+                            <select
+                                className="w-full h-12 rounded-2xl border border-slate-700 bg-slate-800/60 px-4 text-sm text-slate-100 font-semibold"
+                                value={modalType}
+                                onChange={(e) => setModalType(e.target.value as TransactionType)}
+                            >
+                                <option value="EXPENSE">Pengeluaran</option>
+                                <option value="INCOME">Pemasukan</option>
+                                <option value="TRANSFER">Transfer Dana</option>
+                                <option value="INVESTMENT">Setor/Investasi</option>
+                            </select>
+                        </div>
+                    )}
+
                     {(isIncome || isExpense || isInvestment) && (
                         <div>
                             <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Kepemilikan</label>

@@ -21,6 +21,7 @@ interface TransactionContextType {
     openModal: (type?: TransactionType, payload?: TransactionModalPayload) => void;
     openEditModal: (id: string, type?: TransactionType, payload?: TransactionModalPayload) => void;
     closeModal: () => void;
+    setModalType: (type: TransactionType) => void;
 }
 
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
@@ -52,7 +53,7 @@ export const TransactionProvider = ({ children }: { children: ReactNode }) => {
     };
 
     return (
-        <TransactionContext.Provider value={{ isModalOpen, modalType, modalPayload, editTransactionId, openModal, openEditModal, closeModal }}>
+        <TransactionContext.Provider value={{ isModalOpen, modalType, modalPayload, editTransactionId, openModal, openEditModal, closeModal, setModalType }}>
             {children}
         </TransactionContext.Provider>
     );
