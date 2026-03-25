@@ -553,7 +553,7 @@ const Home = () => {
                                             sourceAccountId: tx.sourceAccountId,
                                             destinationAccountId: tx.destinationAccountId,
                                         })}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                        className="hidden h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 shadow-sm hover:bg-blue-100 hover:border-blue-300 transition-colors"
                                         title="Edit transaksi"
                                         aria-label="Edit transaksi"
                                     >
@@ -562,7 +562,7 @@ const Home = () => {
                                     <button
                                         type="button"
                                         onClick={() => handleDelete(tx.id, tx.description || tx.activity?.name || 'transaksi')}
-                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 shadow-sm hover:bg-rose-100 hover:border-rose-300 transition-colors"
+                                        className="hidden h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 shadow-sm hover:bg-rose-100 hover:border-rose-300 transition-colors"
                                         title="Hapus transaksi"
                                         aria-label="Hapus transaksi"
                                     >
