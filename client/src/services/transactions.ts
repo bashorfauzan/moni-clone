@@ -93,3 +93,7 @@ export const fetchTransactions = async (options: FetchTransactionsOptions = {}):
     const response = await api.get(`/transactions${suffix}`);
     return (response.data || []).map(normalizeTransaction);
 };
+
+export const deleteTransaction = async (id: string): Promise<void> => {
+    await api.delete(`/transactions/${id}`);
+};

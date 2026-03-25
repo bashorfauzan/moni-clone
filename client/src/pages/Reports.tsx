@@ -3,9 +3,9 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchTransactions, type TransactionItem } from '../services/transactions';
+import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import Spinner from '../components/Spinner';
@@ -49,6 +49,18 @@ const Reports = () => {
             alert(error?.response?.data?.error || 'Gagal export data');
         } finally {
             setExporting(false);
+        }
+    };
+
+    const handleDelete = async (id: string, description: string) => {
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus transaksi "${description}"?\n\nSaldo rekening terkait akan disesuaikan kembali.`)) return;
+        
+        try {
+            await deleteTransaction(id);
+            await fetchReportData();
+            window.dispatchEvent(new Event('nova:data-changed'));
+        } catch (error: any) {
+            alert(error?.response?.data?.error || 'Gagal menghapus transaksi');
         }
     };
 
@@ -480,21 +492,32 @@ const Reports = () => {
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <button
-                                            type="button"
-                                            onClick={() => openEditModal(tx.id, getEditableModalType(tx as TransactionItem), {
-                                                amount: tx.amount,
-                                                description: tx.description || tx.activity?.name,
-                                                ownerId: tx.ownerId,
-                                                sourceAccountId: tx.sourceAccountId,
-                                                destinationAccountId: tx.destinationAccountId,
-                                            })}
-                                            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
-                                            title="Edit transaksi"
-                                            aria-label="Edit transaksi"
-                                        >
-                                            <Pencil size={14} />
-                                        </button>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => openEditModal(tx.id, getEditableModalType(tx as TransactionItem), {
+                                                    amount: tx.amount,
+                                                    description: tx.description || tx.activity?.name,
+                                                    ownerId: tx.ownerId,
+                                                    sourceAccountId: tx.sourceAccountId,
+                                                    destinationAccountId: tx.destinationAccountId,
+                                                })}
+                                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors"
+                                                title="Edit transaksi"
+                                                aria-label="Edit transaksi"
+                                            >
+                                                <Pencil size={14} />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleDelete(tx.id, tx.description || tx.activity?.name || 'transaksi')}
+                                                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:border-rose-300 transition-colors"
+                                                title="Hapus transaksi"
+                                                aria-label="Hapus transaksi"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

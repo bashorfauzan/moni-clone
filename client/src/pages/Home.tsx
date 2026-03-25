@@ -9,8 +9,8 @@ import {
 } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { buildAccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
-import { fetchTransactions, type TransactionItem } from '../services/transactions';
-import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell, Pencil } from 'lucide-react';
+import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
+import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell, Pencil, Trash2 } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
 import { useAuth } from '../context/AuthContext';
@@ -272,6 +272,18 @@ const Home = () => {
             alert(error?.response?.data?.error || 'Gagal menghapus notifikasi');
         } finally {
             setDeletingNotificationId(null);
+        }
+    };
+
+    const handleDelete = async (id: string, description: string) => {
+        if (!window.confirm(`Apakah Anda yakin ingin menghapus transaksi "${description}"?\n\nSaldo rekening terkait akan disesuaikan kembali.`)) return;
+        
+        try {
+            await deleteTransaction(id);
+            await fetchData();
+            window.dispatchEvent(new Event('nova:data-changed'));
+        } catch (error: any) {
+            alert(error?.response?.data?.error || 'Gagal menghapus transaksi');
         }
     };
 
@@ -547,7 +559,16 @@ const Home = () => {
                                     >
                                         <Pencil size={14} />
                                     </button>
-                                    <p className={`font-bold text-sm shrink-0 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDelete(tx.id, tx.description || tx.activity?.name || 'transaksi')}
+                                        className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 shadow-sm hover:bg-rose-100 hover:border-rose-300 transition-colors"
+                                        title="Hapus transaksi"
+                                        aria-label="Hapus transaksi"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                    <p className={`font-bold text-sm shrink-0 ml-1 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
                                         {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
                                     </p>
                                 </div>
