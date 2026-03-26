@@ -8,6 +8,7 @@ import { useTransaction } from '../context/TransactionContext';
 import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
+import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
@@ -15,6 +16,7 @@ type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 
 const Reports = () => {
     const { openEditModal } = useTransaction();
+    const { verifySecurity } = useSecurity();
     const [viewMode, setViewMode] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
     const [currentDate, setCurrentDate] = useState(new Date());
     const [txPage, setTxPage] = useState(1);
@@ -53,6 +55,9 @@ const Reports = () => {
     };
 
     const handleDelete = async (id: string) => {
+        const authorized = await verifySecurity('Hapus Transaksi');
+        if (!authorized) return;
+
         try {
             await deleteTransaction(id);
             await fetchReportData();
@@ -388,7 +393,7 @@ const Reports = () => {
                                                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                             ><Pencil size={13} /></button>
                                             <button
-                                                onClick={() => { const p = prompt('Masukkan Password Transaksi:'); if (p === '123456') void handleDelete(tx.id); else if (p !== null) alert('Password Salah!'); }}
+                                                onClick={() => void handleDelete(tx.id)}
                                                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                                             ><Trash2 size={13} /></button>
                                         </div>
@@ -436,7 +441,7 @@ const Reports = () => {
                                                             title="Edit"
                                                         ><Pencil size={13} /></button>
                                                         <button
-                                                            onClick={() => { const p = prompt('Masukkan Password Transaksi:'); if (p === '123456') void handleDelete(tx.id); else if (p !== null) alert('Password Salah!'); }}
+                                                            onClick={() => void handleDelete(tx.id)}
                                                             className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
                                                             title="Hapus"
                                                         ><Trash2 size={13} /></button>

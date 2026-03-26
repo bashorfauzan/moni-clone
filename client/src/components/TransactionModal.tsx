@@ -5,7 +5,6 @@ import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { fetchTransactions } from '../services/transactions';
-import { useSecurity } from '../context/SecurityContext';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 type PickerType = 'source' | 'destination' | null;
@@ -40,7 +39,6 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 
 const TransactionModal = () => {
     const { isModalOpen, modalType, modalPayload, editTransactionId, setModalType, closeModal } = useTransaction();
-    const { verifySecurity } = useSecurity();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
     const [accountUsage, setAccountUsage] = useState<AccountUsageFrequency>({});
     const [form, setForm] = useState(initialForm);
@@ -204,13 +202,6 @@ const TransactionModal = () => {
         }
 
         setSubmitting(true);
-
-        // Security gate — verify PIN or biometric before saving
-        const authorized = await verifySecurity('Simpan Transaksi');
-        if (!authorized) {
-            setSubmitting(false);
-            return;
-        }
 
         try {
             if (editTransactionId) {
