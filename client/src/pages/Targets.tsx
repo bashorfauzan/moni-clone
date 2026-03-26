@@ -155,98 +155,111 @@ const Targets = () => {
     const isSafe = bankIncomeMonth >= totalTargetAmount;
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-5 pb-32 pt-6 space-y-6">
+        <div className="mx-auto w-full max-w-4xl space-y-5 px-4 pb-32 pt-4 md:px-6 md:pt-6">
 
             {/* ─── Header ─── */}
-            <header className="flex items-center justify-between mb-2">
+            <header className="flex items-start justify-between gap-4 px-1">
                 <div>
                     <h1 className="text-3xl font-black tracking-tight text-slate-900">Target Tagihan</h1>
-                    <p className="mt-1 text-sm text-slate-500">Pantau kewajiban bulanan dan tahunan.</p>
+                    <p className="mt-1 text-sm text-slate-500">Pantau kewajiban bulanan dan tahunan Anda dalam satu tempat.</p>
                 </div>
                 <button
                     type="button"
                     onClick={openAddTargetModal}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white transition-colors hover:bg-blue-700 shadow-md shadow-blue-200"
+                    className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white transition-colors hover:bg-slate-700"
                     aria-label="Tambah target"
                 >
-                    <Plus size={20} />
+                    <Plus size={18} />
                 </button>
             </header>
 
             {/* ─── Stats Cards ─── */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                    { label: 'TOTAL TARGET AKTIF', value: formatCurrency(totalTargetAmount), color: 'text-slate-900', labelClass: 'w-full uppercase' },
-                    { label: 'PEMASUKAN BULAN\nINI', value: formatCurrency(bankIncomeMonth), color: 'text-slate-900', labelClass: 'whitespace-pre-wrap leading-tight uppercase' },
-                    { label: 'SURPLUS', value: formatCurrency(isSafe ? surplusIncome : activeRemaining), color: 'text-slate-900', labelClass: 'uppercase' },
-                    { label: 'STATUS', value: isSafe ? 'Aman' : 'Perlu Dikejar', color: isSafe ? 'text-emerald-600' : 'text-amber-600', labelClass: 'uppercase', noFormat: true },
-                ].map((stat, i) => (
-                    <div key={i} className="rounded-3xl bg-white border border-slate-100 shadow-sm px-5 py-4 flex flex-col justify-center min-h-[5rem]">
-                        <p className={`text-[10px] font-extrabold tracking-[0.18em] text-slate-400 ${stat.labelClass}`}>{stat.label}</p>
-                        <p className={`mt-2 text-[15px] font-black tracking-tight break-all ${stat.color}`}>
-                            {stat.noFormat ? stat.value : stat.value}
-                        </p>
+                    { label: 'Total Target Aktif', value: formatCurrency(totalTargetAmount), color: 'text-slate-900' },
+                    { label: 'Pemasukan Bulan Ini', value: formatCurrency(bankIncomeMonth), color: 'text-slate-900' },
+                    { label: isSafe ? 'Surplus' : 'Kebutuhan', value: formatCurrency(isSafe ? surplusIncome : activeRemaining), color: 'text-slate-900' },
+                    { label: 'Status', value: isSafe ? 'Aman' : 'Perlu Dikejar', color: isSafe ? 'text-emerald-600' : 'text-amber-600' },
+                ].map(stat => (
+                    <div key={stat.label} className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{stat.label}</p>
+                        <p className={`mt-1.5 text-sm font-black tracking-tight break-all ${stat.color}`}>{stat.value}</p>
                     </div>
                 ))}
             </div>
 
-            {/* ─── Targets List Container ─── */}
-            <div className="rounded-[2rem] bg-white border border-slate-100 p-6 shadow-sm flex flex-col">
+            {/* ─── Target List ─── */}
+            <section className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Daftar Target</h2>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{targets.length} item</span>
+                </div>
+
                 {targets.length === 0 && (
-                    <div className="text-center py-6">
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-10 text-center shadow-sm">
                         <p className="text-sm font-bold text-slate-700">Belum ada target</p>
-                        <p className="mt-1 text-sm text-slate-500">Tambahkan tagihan bulanan atau tahunan.</p>
+                        <p className="mt-1 text-sm text-slate-500">Tambahkan tagihan bulanan atau tahunan agar mudah dipantau.</p>
                     </div>
                 )}
 
-                {targets.map((target, index) => {
-                    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
-                    const monthsLeft = target.isActive
-                        ? Math.max(0, diffInCalendarMonthsInclusive(now.toISOString(), target.dueDate) || 0)
-                        : 0;
-                    
-                    const isLast = index === targets.length - 1;
+                <div className="space-y-3">
+                    {targets.map((target) => {
+                        const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+                        const monthsLeft = target.isActive
+                            ? Math.max(0, diffInCalendarMonthsInclusive(new Date().toISOString(), target.dueDate) || 0)
+                            : 0;
 
-                    return (
-                        <div key={target.id} className={`flex flex-col relative py-6 ${!isLast ? 'border-b border-slate-100/60' : ''} ${index === 0 ? 'pt-0' : ''} ${isLast ? 'pb-0' : ''}`}>
-                            <div className="pr-16">
-                                <h3 className="text-[17px] font-bold text-slate-900">{target.title}</h3>
-                                <p className="mt-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500">
-                                    {totalMonths} BULAN
-                                    <span className="mx-1.5">•</span>
-                                    {monthsLeft} SETORAN LAGI
-                                    <span className="mx-1.5">•</span>
-                                    <span className={target.isActive ? 'text-blue-500' : 'text-emerald-500'}>{target.isActive ? 'AKTIF' : 'SELESAI'}</span>
-                                </p>
+                        return (
+                            <div key={target.id} className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <h3 className="text-lg font-bold text-slate-900">{target.title}</h3>
+                                            <span className={`rounded-full px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.16em] ${target.isActive ? 'bg-blue-50 text-blue-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                                                {target.isActive ? 'Aktif' : 'Selesai'}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                                            {totalMonths} bulan
+                                            <span className="mx-1.5">•</span>
+                                            {target.isActive ? `${monthsLeft} setoran lagi` : 'selesai'}
+                                        </p>
+                                    </div>
+                                    <div className="flex shrink-0 items-center gap-1.5">
+                                        <button
+                                            type="button"
+                                            onClick={() => openEditTargetModal(target)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                            title="Edit"
+                                        ><Pencil size={14} /></button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleDeleteTarget(target.id)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
+                                            title="Hapus"
+                                        ><Trash2 size={14} /></button>
+                                    </div>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                                        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Nominal Tagihan</p>
+                                        <p className="mt-1 text-sm font-black text-slate-900">{formatCurrency(target.totalAmount)}</p>
+                                    </div>
+                                    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                                        <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">Sisa Waktu</p>
+                                        <p className="mt-1 text-sm font-black text-slate-900">
+                                            {target.isActive ? `${monthsLeft} bulan lagi` : 'Selesai'}
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
+                        );
+                    })}
+                </div>
+            </section>
 
-                            <div className="absolute top-6 right-0 flex items-center gap-3">
-                                <button
-                                    onClick={() => openEditTargetModal(target)}
-                                    className="text-blue-400 hover:text-blue-600 transition-colors"
-                                    title="Edit"
-                                >
-                                    <Pencil size={16} />
-                                </button>
-                                <button
-                                    onClick={() => handleDeleteTarget(target.id)}
-                                    className="text-rose-400 hover:text-rose-600 transition-colors"
-                                    title="Hapus"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-
-                            <div className="mt-8 space-y-1.5 text-sm">
-                                <p className="text-slate-500">Nominal Tagihan: <span className="font-bold text-slate-900">{formatCurrency(target.totalAmount)}</span></p>
-                                <p className="text-slate-500">{monthsLeft} bulan lagi</p>
-                            </div>
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* ─── Add / Edit Modal (unchanged) ─── */}
+            {/* ─── Add / Edit Modal ─── */}
             {isTargetModalOpen && (
                 <div
                     className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
