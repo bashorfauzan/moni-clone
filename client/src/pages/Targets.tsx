@@ -163,58 +163,37 @@ const Targets = () => {
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
             </header>
 
-            <div className={`rounded-3xl p-4 mb-6 relative overflow-hidden border transition-all duration-500 ${isSafe ? 'app-hero-card' : 'bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.18),_transparent_32%),linear-gradient(135deg,#ff174f_0%,#e63b2e_58%,#cf3f13_100%)] border-rose-300/70'}`}>
-                <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16 bg-white/10"></div>
-                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14 bg-black/10"></div>
-                <div className="relative z-10">
-                    <div className="flex items-center justify-between mb-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Budget Alert Bulan Ini</p>
-                        <div className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.18em] ${isSafe ? 'bg-white/18 text-white' : 'bg-black/15 text-white'}`}>
-                            {isSafe ? 'Aman' : 'Warning'}
-                        </div>
+            <div className="rounded-[32px] border border-slate-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Budget Alert Bulan Ini</p>
+                        <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-950">Ringkasan Likuiditas</h2>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Pendapatan Masuk</p>
-                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(bankIncomeMonth)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">
-                                {isSafe ? 'Kelebihan Dana' : 'Masih Kurang'}
-                            </p>
-                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">
-                                {formatCurrency(isSafe ? surplusIncome : activeRemaining)}
-                            </p>
-                        </div>
+                    <div className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${isSafe ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                        {isSafe ? 'Aman' : 'Kurang'}
                     </div>
+                </div>
 
-                    <div className="mt-2 grid grid-cols-3 gap-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Total Target</p>
-                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(totalTargetAmount)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Sisa</p>
-                            <p className="mt-1 text-xs font-bold text-emerald-300 break-all leading-snug">{formatCurrency(activeRemaining)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Status</p>
-                            <p className="mt-1 text-xs font-bold text-white">{isSafe ? 'Aman' : 'Kurang'}</p>
-                        </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Pendapatan</p>
+                        <p className="mt-2 text-[17px] font-bold tracking-tight text-emerald-600 sm:text-[18px]">{formatCurrency(bankIncomeMonth)}</p>
                     </div>
-
-                    <div className="mt-3 space-y-1.5">
-                        <div className="flex justify-between text-[9px] font-bold text-white uppercase tracking-[0.14em]">
-                            <span>Progress</span>
-                            <span>{Math.round(progressBase)}%</span>
-                        </div>
-                        <div className="h-2 w-full bg-black/20 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-white transition-all duration-1000 ease-out"
-                                style={{ width: `${progressBase}%` }}
-                            />
-                        </div>
+                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Target Aktif</p>
+                        <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">{formatCurrency(totalTargetAmount)}</p>
+                    </div>
+                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                            {isSafe ? 'Kelebihan Dana' : 'Sisa Kebutuhan'}
+                        </p>
+                        <p className={`mt-2 text-[17px] font-bold tracking-tight sm:text-[18px] ${isSafe ? 'text-sky-600' : 'text-rose-600'}`}>
+                            {formatCurrency(isSafe ? surplusIncome : activeRemaining)}
+                        </p>
+                    </div>
+                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Progress</p>
+                        <p className="mt-2 text-[17px] font-bold tracking-tight text-amber-600 sm:text-[18px]">{Math.round(progressBase)}%</p>
                     </div>
                 </div>
             </div>
