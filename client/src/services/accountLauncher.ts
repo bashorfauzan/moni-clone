@@ -114,11 +114,46 @@ export const ACCOUNT_APP_PRESETS = [
         storeUrl: 'https://play.google.com/store/apps/details?id=id.flip'
     },
     {
+        key: 'brights',
+        label: 'BRIGHTS BRI Danareksa',
+        packageName: 'id.co.bridanareksasekuritas.olt.android',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=id.co.bridanareksasekuritas.olt.android'
+    },
+    {
+        key: 'rhb',
+        label: 'RHB TradeSmart ID',
+        packageName: 'com.rhbsyariah.tradesmart',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.rhbsyariah.tradesmart'
+    },
+    {
+        key: 'siminvest',
+        label: 'SimInvest',
+        packageName: 'com.simas.siminvest',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.simas.siminvest'
+    },
+    {
+        key: 'poems',
+        label: 'POEMS ID',
+        packageName: 'com.phillip.prima',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.phillip.prima'
+    },
+    {
+        key: 'ciptadana',
+        label: 'Ciptadana',
+        packageName: 'com.ciptadana.citramobile',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.ciptadana.citramobile'
+    },
+    {
         key: 'ajaib',
         label: 'Ajaib',
-        packageName: 'ajaib.alpha',
+        packageName: 'ajaib.co.id',
         deepLink: '',
-        storeUrl: 'https://play.google.com/store/apps/details?id=ajaib.alpha'
+        storeUrl: 'https://play.google.com/store/apps/details?id=ajaib.co.id'
     },
     {
         key: 'stockbit',
