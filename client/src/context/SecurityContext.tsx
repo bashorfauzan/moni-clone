@@ -15,6 +15,8 @@ function hashString(str: string): string {
 interface SecurityContextType {
     isSecurityEnabled: boolean;
     isBiometricEnabled: boolean;
+    isBiometricSupported: boolean;
+    biometricSupportMessage: string;
     setupSecurity: (pin: string) => void;
     removeSecurity: () => void;
     setupBiometric: () => Promise<boolean>;
@@ -34,6 +36,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const [pinHash, setPinHash] = useState<string | null>(() => localStorage.getItem('app-pin-hash'));
     const [biometricEnabled, setBiometricEnabled] = useState<boolean>(() => localStorage.getItem('app-biometric') === 'true');
     const [bioCredentialId, setBioCredentialId] = useState<string | null>(() => localStorage.getItem('app-bio-cred-id'));
+    const [isBiometricSupported, setIsBiometricSupported] = useState(false);
+    const [biometricSupportMessage, setBiometricSupportMessage] = useState('Perangkat ini belum siap untuk biometrik.');
     
     // Lock screen states
     const [isLocked, setIsLocked] = useState(false);
@@ -72,6 +76,63 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
         };
     }, [isSecurityEnabled]);
 
+    useEffect(() => {
+        let cancelled = false;
+
+        const detectBiometricSupport = async () => {
+            if (typeof window === 'undefined') return;
+
+            if (!window.isSecureContext) {
+                if (!cancelled) {
+                    setIsBiometricSupported(false);
+                    setBiometricSupportMessage('Biometrik hanya berjalan di HTTPS atau localhost.');
+                }
+                return;
+            }
+
+            if (!('credentials' in navigator) || !window.PublicKeyCredential) {
+                if (!cancelled) {
+                    setIsBiometricSupported(false);
+                    setBiometricSupportMessage('Browser ini belum mendukung WebAuthn.');
+                }
+                return;
+            }
+
+            const platformCheck = window.PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable;
+            if (typeof platformCheck === 'function') {
+                try {
+                    const available = await platformCheck.call(window.PublicKeyCredential);
+                    if (!cancelled) {
+                        setIsBiometricSupported(available);
+                        setBiometricSupportMessage(
+                            available
+                                ? 'Sidik jari atau Face ID siap dipakai di perangkat ini.'
+                                : 'Sidik jari atau Face ID belum tersedia di browser/perangkat ini.'
+                        );
+                    }
+                    return;
+                } catch {
+                    if (!cancelled) {
+                        setIsBiometricSupported(false);
+                        setBiometricSupportMessage('Pemeriksaan biometrik gagal dijalankan di browser ini.');
+                    }
+                    return;
+                }
+            }
+
+            if (!cancelled) {
+                setIsBiometricSupported(true);
+                setBiometricSupportMessage('Browser mendukung WebAuthn dasar.');
+            }
+        };
+
+        void detectBiometricSupport();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const setupSecurity = (pin: string) => {
         const hash = hashString(pin);
         localStorage.setItem('app-pin-hash', hash);
@@ -88,8 +149,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const setupBiometric = async (): Promise<boolean> => {
-        if (!window.PublicKeyCredential) {
-            alert('Perangkat/Browser ini tidak mendukung biometrik (WebAuthn).');
+        if (!isBiometricSupported || !window.PublicKeyCredential) {
+            alert(biometricSupportMessage || 'Perangkat/Browser ini tidak mendukung biometrik (WebAuthn).');
             return false;
         }
 
@@ -261,6 +322,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
         <SecurityContext.Provider value={{
             isSecurityEnabled,
             isBiometricEnabled: biometricEnabled,
+            isBiometricSupported,
+            biometricSupportMessage,
             setupSecurity,
             removeSecurity,
             setupBiometric,
