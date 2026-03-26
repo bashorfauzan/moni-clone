@@ -1,8 +1,8 @@
 import express from 'express';
 import { PrismaClient, TransactionType } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 const notificationInboxClient = (prisma as PrismaClient & { notificationInbox: any }).notificationInbox;
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';

@@ -1,9 +1,8 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 import XLSX from 'xlsx';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const ensurePrimaryOwner = async () => {
     const existing = await prisma.owner.findFirst({ orderBy: { createdAt: 'asc' } });

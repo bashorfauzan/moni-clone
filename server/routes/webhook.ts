@@ -1,8 +1,8 @@
 import express from 'express';
-import { PrismaClient, TransactionType } from '@prisma/client';
+import { TransactionType } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 // Removed hacky notificationInboxClient definition
 
 type ParseStatus = 'PENDING' | 'PARSED' | 'IGNORED' | 'FAILED';

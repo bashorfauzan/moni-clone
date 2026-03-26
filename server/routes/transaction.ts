@@ -1,8 +1,8 @@
 import express from 'express';
-import { Prisma, PrismaClient, TransactionType } from '@prisma/client';
+import { Prisma, TransactionType } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const MANUAL_INVESTMENT_TYPE = 'INVESTMENT';
 

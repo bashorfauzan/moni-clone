@@ -1,8 +1,8 @@
 import express from 'express';
-import { PrismaClient, TargetPeriod } from '@prisma/client';
+import { TargetPeriod } from '@prisma/client';
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 const parseMonthCount = (value: unknown) => {
     const parsed = Number(value);
