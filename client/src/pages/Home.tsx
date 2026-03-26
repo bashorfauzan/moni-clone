@@ -238,35 +238,29 @@ const Home = () => {
         return destination || source || tx.owner?.name || 'Rekening belum terhubung';
     };
 
-    const investmentAccounts = meta.accounts.filter(
-        (account) => account.type === 'RDN' || account.type === 'Sekuritas'
-    );
-    const liquidAccounts = meta.accounts.filter(
-        (account) => account.type === 'Bank' || account.type === 'E-Wallet'
+    const trackedAccounts = meta.accounts.filter((account) =>
+        ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(account.type)
     );
 
     const wealthDistribution = meta.owners.map(owner => {
-        const directAccounts = liquidAccounts.filter(
-            (account) => account.ownerId === owner.id && account.balance !== 0
-        );
-        const ownedInvestmentAccounts = investmentAccounts
+        const ownedAccounts = trackedAccounts
             .map((account) => {
                 let amount = 0;
 
                 validatedTransactions.forEach((tx) => {
                     if (tx.ownerId !== owner.id) return;
 
+                    if ((tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') && tx.destinationAccountId === account.id) {
+                        amount += tx.amount;
+                    }
+
+                    if ((tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') && tx.sourceAccountId === account.id) {
+                        amount -= tx.amount;
+                    }
+
                     if (tx.type === 'TRANSFER') {
                         if (tx.destinationAccountId === account.id) amount += tx.amount;
                         if (tx.sourceAccountId === account.id) amount -= tx.amount;
-                    }
-
-                    if (
-                        tx.type === 'INCOME'
-                        && tx.destinationAccountId === account.id
-                        && (tx.activity?.name === 'Pendapatan Sukuk' || tx.activity?.name === 'Pertumbuhan Saham')
-                    ) {
-                        amount += tx.amount;
                     }
                 });
 
@@ -277,7 +271,7 @@ const Home = () => {
             })
             .filter((account) => account.balance !== 0);
         const ownerAccounts = sortAccountsByUsage(
-            [...directAccounts, ...ownedInvestmentAccounts],
+            ownedAccounts,
             accountFreq
         );
 

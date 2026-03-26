@@ -127,22 +127,6 @@ const TransactionModal = () => {
 
     const accountById = (id: string) => meta.accounts.find((acc) => acc.id === id);
     const selectedSourceAccount = accountById(form.sourceAccountId);
-    const selectedDestinationAccount = accountById(form.destinationAccountId);
-
-    useEffect(() => {
-        if (!form.ownerId) return;
-
-        const sourceStillValid = !form.sourceAccountId || accountById(form.sourceAccountId)?.ownerId === form.ownerId;
-        const destinationStillValid = !form.destinationAccountId || accountById(form.destinationAccountId)?.ownerId === form.ownerId;
-
-        if (sourceStillValid && destinationStillValid) return;
-
-        setForm((prev) => ({
-            ...prev,
-            sourceAccountId: sourceStillValid ? prev.sourceAccountId : '',
-            destinationAccountId: destinationStillValid ? prev.destinationAccountId : '',
-        }));
-    }, [form.ownerId, form.sourceAccountId, form.destinationAccountId, meta.accounts]);
 
     const filteredAccounts = useMemo(() => {
         const accounts = meta.accounts.filter((acc) => {
@@ -152,7 +136,6 @@ const TransactionModal = () => {
             if (!matchesQuery) return false;
             if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
             if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
-            if (form.ownerId && acc.ownerId !== form.ownerId) return false;
             if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
             if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
             if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet';
@@ -207,17 +190,7 @@ const TransactionModal = () => {
         }
 
         if (showDestination && !form.destinationAccountId) {
-            alert('Pilih rekening tujuan sesuai kepemilikan terlebih dulu.');
-            return;
-        }
-
-        if (showSource && selectedSourceAccount && selectedSourceAccount.ownerId !== form.ownerId) {
-            alert('Rekening sumber harus sesuai dengan kepemilikan yang dipilih.');
-            return;
-        }
-
-        if (showDestination && selectedDestinationAccount && selectedDestinationAccount.ownerId !== form.ownerId) {
-            alert('Rekening tujuan harus sesuai dengan kepemilikan yang dipilih.');
+            alert('Pilih rekening tujuan terlebih dulu.');
             return;
         }
 

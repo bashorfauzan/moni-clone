@@ -94,22 +94,6 @@ const Investment = () => {
         loadData();
     }, []);
 
-    useEffect(() => {
-        if (!transferForm.ownerId) return;
-
-        const currentBankStillMatchesOwner = bankAccounts.some(
-            (account) => account.id === transferForm.bankId && account.ownerId === transferForm.ownerId
-        );
-
-        if (currentBankStillMatchesOwner) return;
-
-        const firstMatchingBank = bankAccounts.find((account) => account.ownerId === transferForm.ownerId);
-        setTransferForm((prev) => ({
-            ...prev,
-            bankId: firstMatchingBank?.id || ''
-        }));
-    }, [bankAccounts, transferForm.bankId, transferForm.ownerId]);
-
     // Derived Metrics
     let totalValue = 0;
     let totalModal = 0;
@@ -118,9 +102,6 @@ const Investment = () => {
     const filteredRdns = selectedOwnerId === 'ALL'
         ? rdnAccounts
         : rdnAccounts.filter(r => r.ownerId === selectedOwnerId);
-    const availableBankAccounts = transferForm.ownerId
-        ? bankAccounts.filter((account) => account.ownerId === transferForm.ownerId)
-        : bankAccounts;
 
     const portfolioData = filteredRdns.map(rdn => {
         // Calculate Modal for this RDN
@@ -364,12 +345,11 @@ const Investment = () => {
                                     onClick={() => {
                                         const preferredOwnerId = selectedOwnerId !== 'ALL'
                                             ? selectedOwnerId
-                                            : rdn.ownerId || owners[0]?.id || '';
-                                        const firstMatchingBank = bankAccounts.find((account) => account.ownerId === preferredOwnerId);
+                                            : owners[0]?.id || '';
                                         setSelectedRdn(rdn);
                                         setTransferForm((prev) => ({
                                             ...prev,
-                                            bankId: firstMatchingBank?.id || '',
+                                            bankId: bankAccounts[0]?.id || '',
                                             ownerId: preferredOwnerId,
                                             amount: ''
                                         }));
@@ -597,16 +577,16 @@ const Investment = () => {
                                     value={transferForm.bankId}
                                     onChange={e => setTransferForm({ ...transferForm, bankId: e.target.value })}
                                     required
-                                    disabled={availableBankAccounts.length === 0}
+                                    disabled={bankAccounts.length === 0}
                                 >
                                     <option value="" disabled>Pilih Rekening Bank...</option>
-                                    {availableBankAccounts.map(b => (
+                                    {bankAccounts.map(b => (
                                         <option key={b.id} value={b.id}>{b.name} ({formatCurrency(b.balance)})</option>
                                     ))}
                                 </select>
-                                {availableBankAccounts.length === 0 && (
+                                {bankAccounts.length === 0 && (
                                     <p className="mt-1 text-[11px] text-amber-600">
-                                        Belum ada rekening bank atau e-wallet untuk kepemilikan ini.
+                                        Belum ada rekening bank atau e-wallet yang tersedia.
                                     </p>
                                 )}
                             </div>
