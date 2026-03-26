@@ -99,9 +99,7 @@ const Investment = () => {
     let totalModal = 0;
     const validatedTransactions = transactions.filter((tx: any) => tx.isValidated);
 
-    const filteredRdns = selectedOwnerId === 'ALL'
-        ? rdnAccounts
-        : rdnAccounts.filter(r => r.ownerId === selectedOwnerId);
+    const filteredRdns = rdnAccounts;
 
     const portfolioData = filteredRdns.map(rdn => {
         // Calculate Modal for this RDN

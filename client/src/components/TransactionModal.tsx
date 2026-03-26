@@ -12,7 +12,7 @@ type PickerType = 'source' | 'destination' | null;
 
 interface ModalMeta {
     owners: Array<{ id: string; name: string }>;
-    accounts: Array<{ id: string; name: string; type: string; balance: number; ownerId: string }>;
+    accounts: Array<{ id: string; name: string; type: string; balance: number; ownerId?: string }>;
 }
 
 const initialForm = {
@@ -185,7 +185,7 @@ const TransactionModal = () => {
         }
 
         if (showSource && !form.sourceAccountId) {
-            alert('Pilih rekening sumber sesuai kepemilikan terlebih dulu.');
+            alert('Pilih rekening sumber terlebih dulu.');
             return;
         }
 

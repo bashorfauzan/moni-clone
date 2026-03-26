@@ -11,7 +11,7 @@ export type Account = {
     appDeepLink?: string | null;
     appStoreUrl?: string | null;
     balance: number;
-    ownerId: string;
+    ownerId?: string;
 };
 export type Activity = { id: string; name: string };
 
@@ -25,7 +25,7 @@ type AccountPayload = {
     name: string;
     type: string;
     balance: number;
-    ownerId: string;
+    ownerId?: string;
     accountNumber?: string | null;
     appPackageName?: string | null;
     appDeepLink?: string | null;
