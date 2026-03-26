@@ -246,7 +246,9 @@ const Home = () => {
     );
 
     const wealthDistribution = meta.owners.map(owner => {
-        const directAccounts = liquidAccounts.filter((account) => account.ownerId === owner.id);
+        const directAccounts = liquidAccounts.filter(
+            (account) => account.ownerId === owner.id && account.balance !== 0
+        );
         const ownedInvestmentAccounts = investmentAccounts
             .map((account) => {
                 let amount = 0;
