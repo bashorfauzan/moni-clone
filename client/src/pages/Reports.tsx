@@ -273,14 +273,14 @@ const Reports = () => {
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
-                    { label: 'Pemasukan', value: data.totalIncome, color: 'text-emerald-600' },
-                    { label: 'Pengeluaran', value: data.totalExpense, color: 'text-rose-600' },
-                    { label: 'Perputaran', value: data.totalVolume, color: 'text-slate-900' },
-                    { label: 'Est. Zakat', value: data.zakatAmount, color: 'text-amber-600' },
+                    { label: 'PEMASUKAN', value: data.totalIncome, color: 'text-emerald-600' },
+                    { label: 'PENGELUARAN', value: data.totalExpense, color: 'text-rose-600' },
+                    { label: 'PERPUTARAN', value: data.totalVolume, color: 'text-slate-900' },
+                    { label: 'EST. ZAKAT', value: data.zakatAmount, color: 'text-amber-600' },
                 ].map(stat => (
-                    <div key={stat.label} className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{stat.label}</p>
-                        <p className={`mt-1.5 text-sm font-black tracking-tight break-all ${stat.color}`}>{formatCurrency(stat.value)}</p>
+                    <div key={stat.label} className="rounded-3xl bg-white border border-slate-100 shadow-sm px-5 py-4 flex flex-col justify-center">
+                        <p className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-400">{stat.label}</p>
+                        <p className={`mt-2 text-[15px] font-black tracking-tight break-all ${stat.color}`}>{formatCurrency(stat.value)}</p>
                     </div>
                 ))}
             </div>

@@ -3,7 +3,7 @@ import api from '../services/api';
 import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { fetchTargets, type TargetItem } from '../services/targets';
-
+import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
 
 const formatThousands = (raw: string) => {
@@ -27,6 +27,7 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
 const Targets = () => {
     const [data, setData] = useState<any>({ accounts: [], owners: [] });
     const [targets, setTargets] = useState<TargetItem[]>([]);
+    const [transactions, setTransactions] = useState<TransactionItem[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [loading, setLoading] = useState(true);
     const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
@@ -36,12 +37,14 @@ const Targets = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [metaRes, targetRes] = await Promise.all([
+                const [metaRes, targetRes, transactionRes] = await Promise.all([
                     fetchMasterMeta(),
-                    fetchTargets()
+                    fetchTargets(),
+                    fetchTransactions({ validated: true })
                 ]);
                 setData({ accounts: metaRes.accounts, owners: metaRes.owners });
                 setTargets(targetRes.targets || []);
+                setTransactions(transactionRes);
             } catch (error) {
                 console.error('Error fetching liquidity data:', error);
             } finally {
@@ -136,28 +139,55 @@ const Targets = () => {
     const activeTargets = targets.filter(t => t.isActive);
     const totalTargetAmount = activeTargets.reduce((sum, t) => sum + t.totalAmount, 0);
     const now = new Date();
-
-
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const bankIncomeMonth = transactions
+        .filter(tx => {
+            const txDate = new Date(tx.date);
+            return tx.type === 'INCOME'
+                && txDate >= startOfMonth
+                && txDate < endOfMonth
+                && (tx.destinationAccount?.type === 'Bank' || tx.destinationAccount?.type === 'E-Wallet');
+        })
+        .reduce((sum, tx) => sum + tx.amount, 0);
+    const activeRemaining = Math.max(0, totalTargetAmount - bankIncomeMonth);
+    const surplusIncome = Math.max(0, bankIncomeMonth - totalTargetAmount);
+    const isSafe = bankIncomeMonth >= totalTargetAmount;
 
     return (
-        <div className="mx-auto w-full max-w-4xl px-5 pb-32 pt-6">
+        <div className="mx-auto w-full max-w-4xl px-5 pb-32 pt-6 space-y-6">
 
-            {/* ─── Top Header Card ─── */}
-            <div className="flex items-center justify-between rounded-3xl bg-white p-5 border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] mb-6">
+            {/* ─── Header ─── */}
+            <header className="flex items-center justify-between mb-2">
                 <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500">TARGET TAGIHAN</p>
-                    <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                        TOTAL TARGET AKTIF: {formatCurrency(totalTargetAmount).toUpperCase()}
-                    </p>
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900">Target Tagihan</h1>
+                    <p className="mt-1 text-sm text-slate-500">Pantau kewajiban bulanan dan tahunan.</p>
                 </div>
                 <button
                     type="button"
                     onClick={openAddTargetModal}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white transition-colors hover:bg-blue-700 shadow-md shadow-blue-200"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white transition-colors hover:bg-blue-700 shadow-md shadow-blue-200"
                     aria-label="Tambah target"
                 >
                     <Plus size={20} />
                 </button>
+            </header>
+
+            {/* ─── Stats Cards ─── */}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {[
+                    { label: 'TOTAL TARGET AKTIF', value: formatCurrency(totalTargetAmount), color: 'text-slate-900', labelClass: 'w-full uppercase' },
+                    { label: 'PEMASUKAN BULAN\nINI', value: formatCurrency(bankIncomeMonth), color: 'text-slate-900', labelClass: 'whitespace-pre-wrap leading-tight uppercase' },
+                    { label: 'SURPLUS', value: formatCurrency(isSafe ? surplusIncome : activeRemaining), color: 'text-slate-900', labelClass: 'uppercase' },
+                    { label: 'STATUS', value: isSafe ? 'Aman' : 'Perlu Dikejar', color: isSafe ? 'text-emerald-600' : 'text-amber-600', labelClass: 'uppercase', noFormat: true },
+                ].map((stat, i) => (
+                    <div key={i} className="rounded-3xl bg-white border border-slate-100 shadow-sm px-5 py-4 flex flex-col justify-center min-h-[5rem]">
+                        <p className={`text-[10px] font-extrabold tracking-[0.18em] text-slate-400 ${stat.labelClass}`}>{stat.label}</p>
+                        <p className={`mt-2 text-[15px] font-black tracking-tight break-all ${stat.color}`}>
+                            {stat.noFormat ? stat.value : stat.value}
+                        </p>
+                    </div>
+                ))}
             </div>
 
             {/* ─── Targets List Container ─── */}
