@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import type { ReactNode } from 'react';
 import { ShieldAlert, X } from 'lucide-react';
 
 // Basic string hashing function (Not cryptographically secure but sufficient for local PWA PIN MVP)
