@@ -236,14 +236,13 @@ const Targets = () => {
                     </div>
                 </div>
 
-                <div className="bg-white border border-slate-100 rounded-[32px] shadow-sm overflow-hidden flex flex-col">
                 {targets.length === 0 && (
-                    <div className="text-sm text-slate-500 p-8 text-center bg-slate-50/50">
+                    <div className="rounded-[30px] border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
                         Belum ada target. Tambahkan daftar tagihan bulanan atau tahunan seperti arisan, sekolah, dan kewajiban rutin lainnya.
                     </div>
                 )}
 
-                <div className="divide-y divide-slate-100/60">
+                <div className="space-y-4">
                 {targets.map((target) => {
                     const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
                     const monthsLeft = target.isActive
@@ -251,28 +250,42 @@ const Targets = () => {
                         : 0;
 
                     return (
-                        <div key={target.id} className="p-5 sm:p-6 space-y-4 hover:bg-slate-50/40 transition-colors">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-start">
+                        <div
+                            key={target.id}
+                            className="rounded-[30px] border border-slate-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
+                        >
+                            <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <h4 className="font-bold text-slate-900 text-base sm:text-lg">{target.title}</h4>
-                                    <p className="text-[10px] uppercase text-slate-500 font-bold tracking-widest mt-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="text-[18px] font-bold tracking-tight text-slate-950 sm:text-[20px]">
+                                            {target.title}
+                                        </h4>
+                                        <span
+                                            className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] ${
+                                                target.isActive
+                                                    ? 'bg-blue-50 text-blue-600'
+                                                    : 'bg-emerald-50 text-emerald-600'
+                                            }`}
+                                        >
+                                            {target.isActive ? 'Aktif' : 'Selesai'}
+                                        </span>
+                                    </div>
+                                    <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.26em] text-slate-400">
                                         {totalMonths} Bulan
-                                        {target.isActive && ` • ${Math.max(0, monthsLeft)} SETORAN LAGI`}
-                                        {' • '}
-                                        <span className={target.isActive ? 'text-blue-500' : 'text-emerald-500'}>{target.isActive ? 'Aktif' : 'Selesai'}</span>
+                                        {target.isActive && ` • ${monthsLeft} Setoran Lagi`}
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-1 opacity-60 hover:opacity-100 transition-opacity self-end sm:self-auto">
+                                <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => openEditTargetModal(target)}
-                                        className="w-9 h-9 rounded-full flex items-center justify-center text-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-600"
                                         title="Edit"
                                     >
                                         <Pencil size={16} />
                                     </button>
                                     <button
                                         onClick={() => handleDeleteTarget(target.id)}
-                                        className="w-9 h-9 rounded-full flex items-center justify-center text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
                                         title="Hapus"
                                     >
                                         <Trash2 size={16} />
@@ -280,14 +293,27 @@ const Targets = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-2 text-sm text-slate-500">
-                                <p>Nominal Tagihan: <span className="font-bold text-slate-900">{formatCurrency(target.totalAmount)}</span></p>
-                                <p>{Math.max(0, monthsLeft)} bulan lagi</p>
+                            <div className="mt-5 grid grid-cols-2 gap-3">
+                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Nominal Tagihan
+                                    </p>
+                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
+                                        {formatCurrency(target.totalAmount)}
+                                    </p>
+                                </div>
+                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Sisa Waktu
+                                    </p>
+                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
+                                        {monthsLeft} bulan lagi
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     );
                 })}
-                </div>
                 </div>
             </section>
 
