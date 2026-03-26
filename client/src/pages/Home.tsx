@@ -29,6 +29,7 @@ const Home = () => {
         expenseMonth: 0,
         investmentValue: 0
     });
+    const [validatedTransactions, setValidatedTransactions] = useState<TransactionItem[]>([]);
     const [recentTransactions, setRecentTransactions] = useState<TransactionItem[]>([]);
     const [pendingTransactions, setPendingTransactions] = useState<TransactionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -115,6 +116,7 @@ const Home = () => {
 
             setSummaryData({ liquidBalance, incomeMonth, expenseMonth, investmentValue });
             setAccountFreq(freq);
+            setValidatedTransactions(allValidatedTransactions);
             setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
             setNotifications(nextNotifications);
@@ -236,12 +238,46 @@ const Home = () => {
         return destination || source || tx.owner?.name || 'Rekening belum terhubung';
     };
 
+    const investmentAccounts = meta.accounts.filter(
+        (account) => account.type === 'RDN' || account.type === 'Sekuritas'
+    );
+    const liquidAccounts = meta.accounts.filter(
+        (account) => account.type === 'Bank' || account.type === 'E-Wallet'
+    );
+
     const wealthDistribution = meta.owners.map(owner => {
-        // Filter untuk mengikutsertakan RDN, Rekening Bank, E-Wallet, dan Sekuritas seperti permintaan user
-        const ownerAccounts = sortAccountsByUsage(meta.accounts.filter(acc => 
-            acc.ownerId === owner.id && 
-            ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type)
-        ), accountFreq);
+        const directAccounts = liquidAccounts.filter((account) => account.ownerId === owner.id);
+        const ownedInvestmentAccounts = investmentAccounts
+            .map((account) => {
+                let amount = 0;
+
+                validatedTransactions.forEach((tx) => {
+                    if (tx.ownerId !== owner.id) return;
+
+                    if (tx.type === 'TRANSFER') {
+                        if (tx.destinationAccountId === account.id) amount += tx.amount;
+                        if (tx.sourceAccountId === account.id) amount -= tx.amount;
+                    }
+
+                    if (
+                        tx.type === 'INCOME'
+                        && tx.destinationAccountId === account.id
+                        && (tx.activity?.name === 'Pendapatan Sukuk' || tx.activity?.name === 'Pertumbuhan Saham')
+                    ) {
+                        amount += tx.amount;
+                    }
+                });
+
+                return {
+                    ...account,
+                    balance: amount
+                };
+            })
+            .filter((account) => account.balance !== 0);
+        const ownerAccounts = sortAccountsByUsage(
+            [...directAccounts, ...ownedInvestmentAccounts],
+            accountFreq
+        );
 
         const total = ownerAccounts.reduce((sum, acc) => sum + acc.balance, 0);
         return { ...owner, total, accountCount: ownerAccounts.length, accounts: ownerAccounts };
