@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
 
 // Preset colors for the UI
 export const THEME_PRESETS = [
@@ -40,7 +40,7 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider = ({ children }: { children: ReactNode }) => {
     const [bgColor, setBgColorState] = useState(() => {
         const saved = localStorage.getItem('app-bg-color');
         return saved || '#ffffff';

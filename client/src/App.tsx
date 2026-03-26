@@ -12,9 +12,10 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SecurityProvider } from './context/SecurityContext';
 import Spinner from './components/Spinner';
+import { type ReactNode } from 'react';
 
 // Guard: redirect to /login if not authenticated
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { session, loading } = useAuth();
   if (loading) return <Spinner message="Menyiapkan Sistem..." />;
   if (!session) return <Navigate to="/login" replace />;
