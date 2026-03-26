@@ -65,17 +65,28 @@ const Home = () => {
 
     const fetchData = async () => {
         try {
-            const [nextRecentTransactions, allValidatedTransactions, nextPendingTransactions, meta, nextNotifications] = await Promise.all([
+            const [
+                recentResult,
+                validatedResult,
+                pendingResult,
+                metaResult,
+                notificationsResult
+            ] = await Promise.allSettled([
                 fetchTransactions({ validated: true, limit: 20 }),
                 fetchTransactions({ validated: true }),
                 fetchTransactions({ validated: false, limit: 20 }),
                 fetchMasterMeta(),
                 fetchNotificationInbox(8)
             ]);
+            const nextRecentTransactions = recentResult.status === 'fulfilled' ? recentResult.value : [];
+            const allValidatedTransactions = validatedResult.status === 'fulfilled' ? validatedResult.value : [];
+            const nextPendingTransactions = pendingResult.status === 'fulfilled' ? pendingResult.value : [];
+            const nextMeta = metaResult.status === 'fulfilled' ? metaResult.value : { owners: [], accounts: [], activities: [] };
+            const nextNotifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
             const isInvestmentAccount = (accountType?: string) => accountType === 'RDN' || accountType === 'Sekuritas';
             const isInvestmentIncome = (tx: TransactionItem) => tx.type === 'INCOME' && isInvestmentAccount(tx.destinationAccount?.type);
 
-            const liquidBalance = meta.accounts
+            const liquidBalance = nextMeta.accounts
                 .filter((acc: Account) => acc.type === 'Bank' || acc.type === 'E-Wallet')
                 .reduce((sum: number, acc: Account) => sum + acc.balance, 0);
 
@@ -98,7 +109,7 @@ const Home = () => {
                 .filter((tx: any) => tx.type === 'EXPENSE' && isCurrentMonth(tx.date))
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
-            const investmentValue = meta.accounts
+            const investmentValue = nextMeta.accounts
                 .filter((acc: Account) => acc.type === 'RDN' || acc.type === 'Sekuritas')
                 .reduce((sum: number, acc: Account) => sum + Math.abs(acc.balance), 0);
 
@@ -107,7 +118,7 @@ const Home = () => {
             setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
             setNotifications(nextNotifications);
-            setMeta({ owners: meta.owners, accounts: meta.accounts });
+            setMeta({ owners: nextMeta.owners, accounts: nextMeta.accounts });
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -229,8 +240,7 @@ const Home = () => {
         // Filter untuk mengikutsertakan RDN, Rekening Bank, E-Wallet, dan Sekuritas seperti permintaan user
         const ownerAccounts = sortAccountsByUsage(meta.accounts.filter(acc => 
             acc.ownerId === owner.id && 
-            ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type) &&
-            acc.balance !== 0
+            ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(acc.type)
         ), accountFreq);
 
         const total = ownerAccounts.reduce((sum, acc) => sum + acc.balance, 0);
