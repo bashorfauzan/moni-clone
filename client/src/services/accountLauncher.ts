@@ -44,6 +44,41 @@ export const ACCOUNT_APP_PRESETS = [
         storeUrl: 'https://play.google.com/store/apps/details?id=com.bca'
     },
     {
+        key: 'seabank',
+        label: 'SeaBank',
+        packageName: 'com.seabank.seabank',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.seabank.seabank'
+    },
+    {
+        key: 'jago',
+        label: 'Bank Jago',
+        packageName: 'com.jago.digitalBanking',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.jago.digitalBanking'
+    },
+    {
+        key: 'blu',
+        label: 'blu by BCA Digital',
+        packageName: 'id.blubybcadigital.digitalbank',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=id.blubybcadigital.digitalbank'
+    },
+    {
+        key: 'bsi',
+        label: 'BSI Mobile',
+        packageName: 'com.bsm.activity2',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.bsm.activity2'
+    },
+    {
+        key: 'jenius',
+        label: 'Jenius',
+        packageName: 'com.btpn.dc',
+        deepLink: '',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.btpn.dc'
+    },
+    {
         key: 'dana',
         label: 'DANA',
         packageName: 'id.dana',
@@ -63,6 +98,20 @@ export const ACCOUNT_APP_PRESETS = [
         packageName: 'com.gojek.app',
         deepLink: 'gojek://home',
         storeUrl: 'https://play.google.com/store/apps/details?id=com.gojek.app'
+    },
+    {
+        key: 'shopeepay',
+        label: 'ShopeePay',
+        packageName: 'com.shopee.id',
+        deepLink: 'shopeeid://',
+        storeUrl: 'https://play.google.com/store/apps/details?id=com.shopee.id'
+    },
+    {
+        key: 'flip',
+        label: 'Flip',
+        packageName: 'id.flip',
+        deepLink: 'flip://',
+        storeUrl: 'https://play.google.com/store/apps/details?id=id.flip'
     },
     {
         key: 'ajaib',
