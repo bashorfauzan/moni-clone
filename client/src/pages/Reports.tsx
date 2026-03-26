@@ -271,16 +271,21 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-4">
                 {[
                     { label: 'Pemasukan', value: data.totalIncome, color: 'text-emerald-600' },
                     { label: 'Pengeluaran', value: data.totalExpense, color: 'text-rose-600' },
                     { label: 'Perputaran', value: data.totalVolume, color: 'text-slate-900' },
                     { label: 'Est. Zakat', value: data.zakatAmount, color: 'text-amber-600' },
                 ].map(stat => (
-                    <div key={stat.label} className="rounded-2xl bg-white border border-slate-100 shadow-sm px-4 py-3">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">{stat.label}</p>
-                        <p className={`mt-1.5 text-sm font-black tracking-tight break-all ${stat.color}`}>{formatCurrency(stat.value)}</p>
+                    <div
+                        key={stat.label}
+                        className="rounded-[28px] bg-white border border-slate-200 shadow-[0_6px_18px_-10px_rgba(15,23,42,0.16)] px-5 py-5 min-h-[108px] flex flex-col justify-center"
+                    >
+                        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
+                        <p className={`mt-3 text-[23px] leading-none font-black tracking-tight break-all ${stat.color}`}>
+                            {formatCurrency(stat.value).replace('Rp', 'Rp ')}
+                        </p>
                     </div>
                 ))}
             </div>
