@@ -130,7 +130,17 @@ const MenuPage = () => {
     const [securityPinInput, setSecurityPinInput] = useState('');
     const [securityPinConfirm, setSecurityPinConfirm] = useState('');
     const [securityPinError, setSecurityPinError] = useState('');
-    const { isSecurityEnabled, isBiometricEnabled, setupSecurity, removeSecurity, setupBiometric, removeBiometric, verifySecurity } = useSecurity();
+    const {
+        isSecurityEnabled,
+        isBiometricEnabled,
+        isBiometricSupported,
+        biometricSupportMessage,
+        setupSecurity,
+        removeSecurity,
+        setupBiometric,
+        removeBiometric,
+        verifySecurity
+    } = useSecurity();
     const [activeThemePanel, setActiveThemePanel] = useState<'app' | 'hero' | 'font'>('app');
     const [backupSettings, setBackupSettings] = useState<BackupSettings>(() => loadBackupSettings());
     const [backupRunning, setBackupRunning] = useState(false);
@@ -1596,12 +1606,12 @@ const MenuPage = () => {
                                         </div>
                                     </div>
                                     <p className="text-sm text-slate-600 mt-3 leading-relaxed">
-                                        Tambahkan rekening yang benar-benar dipakai sehari-hari. Isi nama rekening, tipe, nomor rekening bila perlu, saldo awal, dan pilih pemiliknya. Jika tersedia, isi juga data pembuka aplikasi bank/e-wallet agar tombol <span className="font-semibold text-slate-800">Buka</span> bisa dipakai.
+                                        Tambahkan rekening yang benar-benar dipakai sehari-hari. Isi nama rekening, tipe, nomor rekening bila perlu, dan saldo awal. Jika tersedia, isi juga data pembuka aplikasi bank/e-wallet agar tombol <span className="font-semibold text-slate-800">Buka</span> bisa dipakai.
                                     </p>
                                     <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                                         <div className="rounded-2xl bg-amber-50 p-3">
                                             <p className="font-bold text-amber-700">Apa yang diisi</p>
-                                            <p className="text-amber-700/80 mt-1">Nama rekening, tipe, saldo awal, pemilik, dan opsional deep link aplikasi.</p>
+                                            <p className="text-amber-700/80 mt-1">Nama rekening, tipe, saldo awal, dan opsional deep link aplikasi.</p>
                                         </div>
                                         <div className="rounded-2xl bg-slate-50 p-3">
                                             <p className="font-bold text-slate-700">Hasilnya</p>
@@ -1864,19 +1874,6 @@ const MenuPage = () => {
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Kepemilikan</label>
-                                        <select
-                                            value={accountForm.ownerId}
-                                            onChange={(e) => setAccountForm((p) => ({ ...p, ownerId: e.target.value }))}
-                                            className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all bg-white"
-                                        >
-                                            <option value="" disabled>Pilih Owner</option>
-                                            {meta.owners.map((owner) => (
-                                                <option key={owner.id} value={owner.id}>{owner.name}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
                                         <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Tipe</label>
                                         <select
                                             value={accountForm.type}
@@ -1885,6 +1882,12 @@ const MenuPage = () => {
                                         >
                                             {ACCOUNT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Kepemilikan Rekening</label>
+                                        <div className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm bg-slate-50 text-slate-500 flex items-center">
+                                            Rekening bersama
+                                        </div>
                                     </div>
                                 </div>
                                 <div>
@@ -2512,6 +2515,7 @@ const MenuPage = () => {
                                                     if (ok) alert('Biometrik berhasil didaftarkan!');
                                                 }
                                             }}
+                                            disabled={!isBiometricEnabled && !isBiometricSupported}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <Smartphone size={18} className="text-slate-600 shrink-0" />
@@ -2520,11 +2524,15 @@ const MenuPage = () => {
                                                         {isBiometricEnabled ? 'Nonaktifkan Biometrik' : 'Aktifkan Biometrik'}
                                                     </span>
                                                     <span className="block text-[11px] text-slate-500">
-                                                        {isBiometricEnabled ? 'Biometrik sedang aktif (klik untuk nonaktifkan)' : 'Daftarkan sidik jari / Face ID perangkat ini'}
+                                                        {isBiometricEnabled
+                                                            ? 'Biometrik sedang aktif (klik untuk nonaktifkan)'
+                                                            : (isBiometricSupported
+                                                                ? 'Daftarkan sidik jari / Face ID perangkat ini'
+                                                                : biometricSupportMessage)}
                                                     </span>
                                                 </div>
                                             </div>
-                                            <div className={`w-10 h-6 rounded-full transition-colors flex items-center ${isBiometricEnabled ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'}`}>
+                                            <div className={`w-10 h-6 rounded-full transition-colors flex items-center ${isBiometricEnabled ? 'bg-emerald-500 justify-end' : 'bg-slate-300 justify-start'} ${!isBiometricEnabled && !isBiometricSupported ? 'opacity-60' : ''}`}>
                                                 <div className="w-5 h-5 rounded-full bg-white shadow mx-0.5" />
                                             </div>
                                         </button>
