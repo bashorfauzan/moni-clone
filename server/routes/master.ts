@@ -356,13 +356,14 @@ router.post('/accounts', async (req, res) => {
 });
 
 router.put('/accounts/:id', async (req, res) => {
-    const { name, type, balance, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
+    const { name, type, balance, ownerId, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
 
     try {
         const data: {
             name?: string;
             type?: string;
             balance?: number;
+            ownerId?: string;
             accountNumber?: string | null;
             appPackageName?: string | null;
             appDeepLink?: string | null;
@@ -371,6 +372,7 @@ router.put('/accounts/:id', async (req, res) => {
         if (name !== undefined) data.name = String(name);
         if (type !== undefined) data.type = String(type);
         if (balance !== undefined && Number.isFinite(Number(balance))) data.balance = Number(balance);
+        if (ownerId !== undefined) data.ownerId = String(ownerId);
         if (accountNumber !== undefined) data.accountNumber = accountNumber ? String(accountNumber) : null;
         if (appPackageName !== undefined) data.appPackageName = appPackageName ? String(appPackageName) : null;
         if (appDeepLink !== undefined) data.appDeepLink = appDeepLink ? String(appDeepLink) : null;
