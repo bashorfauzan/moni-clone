@@ -203,68 +203,74 @@ const Reports = () => {
     if (loading) return <Spinner message="Menganalisis Laporan..." />;
 
     return (
-        <div className="mx-auto w-full max-w-4xl space-y-5 px-4 pb-32 pt-4 md:px-6 md:pt-6">
+        <div className="mx-auto w-full max-w-4xl space-y-6 px-5 pb-32 pt-6">
 
             {/* ─── Header ─── */}
-            <header className="space-y-1 px-1">
-                <div className="flex items-center gap-3">
-                    <h1 className="text-3xl font-black tracking-tight text-slate-900">Laporan</h1>
-                    <button
-                        onClick={exportExcel}
-                        disabled={exporting}
-                        className="flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 transition-colors hover:bg-blue-100 disabled:opacity-50"
-                    >
-                        <Download size={12} />
-                        {exporting ? 'Exporting...' : '(Excel)'}
-                    </button>
+            <header className="space-y-4">
+                <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-slate-400 mb-2">ANALISIS KEUANGAN</p>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-4xl font-black tracking-tighter text-slate-900">Laporan</h1>
+                        <button
+                            onClick={exportExcel}
+                            disabled={exporting}
+                            className="flex items-center gap-1.5 rounded-full border border-slate-100 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-blue-600 shadow-sm transition-colors hover:bg-blue-50 disabled:opacity-50"
+                        >
+                            <Download size={14} />
+                            {exporting ? 'Expt...' : '(EXCEL)'}
+                        </button>
+                    </div>
+                    <p className="mt-3 text-[15px] leading-relaxed text-slate-500 max-w-sm">
+                        Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif.
+                    </p>
                 </div>
-                <p className="text-sm text-slate-500">Pantau arus kas, komposisi transaksi, dan pergerakan periode aktif.</p>
+
+                {/* ─── Total Wealth ─── */}
+                <div className="rounded-[2rem] bg-white border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] px-6 py-6 w-max min-w-[280px]">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">TOTAL KEKAYAAN TERCATAT</p>
+                    <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">{formatCurrency(data.totalWealth)}</p>
+                </div>
             </header>
 
-            {/* ─── Total Wealth ─── */}
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm px-5 py-4">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
-                <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">{formatCurrency(data.totalWealth)}</p>
-            </div>
-
             {/* ─── Mode Toggle + Period Navigator ─── */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                <div className="flex self-start rounded-full bg-slate-100 p-1">
+            <div className="space-y-6">
+                <div className="inline-flex rounded-2xl bg-slate-50/80 p-1.5 border border-slate-100">
                     {(['MONTHLY', 'YEARLY'] as const).map(mode => (
                         <button
                             key={mode}
                             onClick={() => setViewMode(mode)}
-                            className={`rounded-full px-5 py-2 text-[11px] font-bold uppercase tracking-[0.14em] transition-all ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            className={`rounded-xl px-6 py-2.5 text-[11px] font-bold uppercase tracking-wider transition-all ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                         >
-                            {mode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
+                            {mode === 'MONTHLY' ? 'BULANAN' : 'TAHUNAN'}
                         </button>
                     ))}
                 </div>
 
-                <div className="flex flex-1 items-center gap-3 rounded-2xl bg-white border border-slate-100 px-4 py-3 shadow-sm">
-                    <button
-                        onClick={() => changeDate(-1)}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200"
-                    >
-                        <ChevronLeft size={18} />
-                    </button>
-                    <div className="flex flex-1 items-center justify-center gap-2">
-                        <Calendar size={15} className="text-blue-500 shrink-0" />
-                        <span className="text-sm font-bold uppercase tracking-[0.12em] text-slate-700">{periodLabel}</span>
+                <div className="rounded-[2.5rem] bg-white border border-slate-100 shadow-[0_2px_10px_-3px_rgba(6,81,237,0.05)] px-4 pt-4 pb-5 flex flex-col items-center gap-3">
+                    <div className="flex items-center w-full justify-between px-2">
+                        <button
+                            onClick={() => changeDate(-1)}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition-colors hover:bg-slate-100"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <div className="flex items-center justify-center gap-2.5 bg-slate-50/80 px-5 py-2.5 rounded-2xl">
+                            <Calendar size={16} className="text-blue-600 shrink-0" />
+                            <span className="text-[13px] font-bold uppercase tracking-[0.15em] text-slate-800">{periodLabel}</span>
+                        </div>
+                        <button
+                            onClick={() => changeDate(1)}
+                            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400 transition-colors hover:bg-slate-100"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
                     </div>
-                    <div className="text-center">
-                        <p className="text-[10px] text-slate-400">{viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif'}</p>
-                    </div>
-                    <button
-                        onClick={() => changeDate(1)}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200"
-                    >
-                        <ChevronRight size={18} />
-                    </button>
+                    <p className="text-[11px] font-medium text-slate-400">
+                        {viewMode === 'MONTHLY' ? 'Ringkasan per bulan aktif' : 'Ringkasan per tahun aktif'}
+                    </p>
                 </div>
             </div>
 
-            {/* ─── Stats Strip ─── */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 {[
                     { label: 'Pemasukan', value: data.totalIncome, color: 'text-emerald-600' },

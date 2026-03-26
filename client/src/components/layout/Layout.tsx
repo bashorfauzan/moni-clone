@@ -8,11 +8,11 @@ const Layout = () => {
     const { openModal } = useTransaction();
 
     const navItems = [
-        { path: '/', label: 'Beranda', mobileLabel: 'Home', icon: <HomeIcon size={20} /> },
+        { path: '/', label: 'Home', mobileLabel: 'Home', icon: <HomeIcon size={20} /> },
         { path: '/reports', label: 'Laporan', mobileLabel: 'Lapor', icon: <PieChart size={20} /> },
         { path: '/investment', label: 'Investasi', mobileLabel: 'Invest', icon: <TrendingUp size={20} /> },
         { path: '/targets', label: 'Target', mobileLabel: 'Target', icon: <Target size={20} /> },
-        { path: '/menu', label: 'Menu', mobileLabel: 'Menu', icon: <Menu size={20} /> },
+        { path: '/menu', label: 'Setting', mobileLabel: 'Setting', icon: <Menu size={20} /> },
     ];
 
     return (
