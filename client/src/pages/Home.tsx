@@ -79,20 +79,10 @@ const Home = () => {
                 fetchMasterMeta(),
                 fetchNotificationInbox(8)
             ]);
-            const nextRecentTransactions = recentResult.status === 'fulfilled' ? recentResult.value : [];
-            const allValidatedTransactions = validatedResult.status === 'fulfilled' ? validatedResult.value : [];
-            const nextPendingTransactions = pendingResult.status === 'fulfilled' ? pendingResult.value : [];
             const nextMeta = metaResult.status === 'fulfilled' ? metaResult.value : { owners: [], accounts: [], activities: [] };
             const nextNotifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
             const isInvestmentAccount = (accountType?: string) => accountType === 'RDN' || accountType === 'Sekuritas';
             const isInvestmentIncome = (tx: TransactionItem) => tx.type === 'INCOME' && isInvestmentAccount(tx.destinationAccount?.type);
-
-            const liquidBalance = nextMeta.accounts
-                .filter((acc: Account) => acc.type === 'Bank' || acc.type === 'E-Wallet')
-                .reduce((sum: number, acc: Account) => sum + acc.balance, 0);
-
-            // Hitung frekuensi penggunaan rekening dari semua transaksi yang berhasil dimuat
-            const freq = buildAccountUsageFrequency(allValidatedTransactions);
 
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -101,6 +91,17 @@ const Home = () => {
                 const txDate = new Date(value);
                 return txDate >= startOfMonth && txDate < endOfMonth;
             };
+
+            const nextRecentTransactions = (recentResult.status === 'fulfilled' ? recentResult.value : []).filter((tx: any) => isCurrentMonth(tx.date));
+            const allValidatedTransactions = validatedResult.status === 'fulfilled' ? validatedResult.value : [];
+            const nextPendingTransactions = pendingResult.status === 'fulfilled' ? pendingResult.value : [];
+
+            const liquidBalance = nextMeta.accounts
+                .filter((acc: Account) => acc.type === 'Bank' || acc.type === 'E-Wallet')
+                .reduce((sum: number, acc: Account) => sum + acc.balance, 0);
+
+            // Hitung frekuensi penggunaan rekening dari semua transaksi yang berhasil dimuat
+            const freq = buildAccountUsageFrequency(allValidatedTransactions);
 
             const incomeMonth = allValidatedTransactions
                 .filter((tx: any) => tx.type === 'INCOME' && !isInvestmentIncome(tx) && isCurrentMonth(tx.date))
