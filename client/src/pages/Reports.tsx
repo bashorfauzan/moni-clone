@@ -42,7 +42,9 @@ const Reports = () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `nova-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
+            a.download = `Catatan Keuangan Pribadi ${dateStr}.xlsx`;
             document.body.appendChild(a);
             a.click();
             a.remove();
