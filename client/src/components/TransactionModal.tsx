@@ -192,12 +192,16 @@ const TransactionModal = () => {
             return;
         }
 
+        const isSameSourceAccount = isEditing && form.sourceAccountId === modalPayload?.sourceAccountId;
+        const originalAmount = isSameSourceAccount ? (Number(modalPayload?.amount) || 0) : 0;
+        const additionalAmountRequired = Number(form.amount) - originalAmount;
+
         if (
             showSource
             && selectedSourceAccount
-            && Number(form.amount) > selectedSourceAccount.balance
+            && additionalAmountRequired > selectedSourceAccount.balance
         ) {
-            alert(`Saldo rekening sumber tidak cukup. Sisa saldo: ${formatCurrency(selectedSourceAccount.balance)}`);
+            alert(`Saldo rekening sumber tidak cukup. Maksimal penambahan saldo keluar: ${formatCurrency(selectedSourceAccount.balance)}`);
             return;
         }
 

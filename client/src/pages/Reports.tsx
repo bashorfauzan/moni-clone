@@ -75,9 +75,13 @@ const Reports = () => {
                 fetchMasterMeta()
             ]);
 
+            const liquidBalance = (meta.accounts || [])
+                .filter((acc: any) => acc.type === 'Bank' || acc.type === 'E-Wallet')
+                .reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
+
             const totalRdnAssets = (meta.accounts || [])
                 .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
-                .reduce((sum: number, account: any) => sum + Number(account.balance || 0), 0);
+                .reduce((sum: number, account: any) => sum + Math.abs(Number(account.balance || 0)), 0);
 
             const filtered = transactions.filter((tx: any) => {
                 const txDate = new Date(tx.date);
@@ -95,13 +99,7 @@ const Reports = () => {
                 .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
-            const lifetimeIncome = transactions
-                .filter((tx: any) => tx.type === 'INCOME')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const lifetimeExpense = transactions
-                .filter((tx: any) => tx.type === 'EXPENSE')
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const liquidBalance = lifetimeIncome - lifetimeExpense;
+            
             const totalWealth = liquidBalance + totalRdnAssets;
             const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
@@ -276,7 +274,7 @@ const Reports = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 {[
                     { label: 'Pemasukan', value: data.totalIncome, color: 'text-emerald-600' },
                     { label: 'Pengeluaran', value: data.totalExpense, color: 'text-rose-600' },
@@ -285,10 +283,10 @@ const Reports = () => {
                 ].map(stat => (
                     <div
                         key={stat.label}
-                        className="rounded-[28px] bg-white border border-slate-200 shadow-[0_6px_18px_-10px_rgba(15,23,42,0.16)] px-5 py-5 min-h-[108px] flex flex-col justify-center"
+                        className="rounded-[24px] bg-white border border-slate-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] px-4 py-4 sm:px-5 flex flex-col justify-center min-w-0"
                     >
-                        <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400">{stat.label}</p>
-                        <p className={`mt-3 text-[23px] leading-none font-black tracking-tight break-all ${stat.color}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400 truncate">{stat.label}</p>
+                        <p className={`mt-1 text-xl sm:text-2xl font-black tracking-tight truncate ${stat.color}`}>
                             {formatCurrency(stat.value).replace('Rp', 'Rp ')}
                         </p>
                     </div>

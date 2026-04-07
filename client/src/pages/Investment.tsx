@@ -241,14 +241,7 @@ const Investment = () => {
                     <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-wider">Rekapitulasi Modal & Return Multi-Sekuritas</p>
                 </div>
                 <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-between">
-                    <button
-                        type="button"
-                        onClick={() => setIsIncomeModalOpen(true)}
-                        className="h-11 rounded-2xl bg-slate-900 text-white px-4 sm:px-5 text-[11px] sm:text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest disabled:opacity-50 w-full lg:w-auto"
-                        disabled={investmentIncomeAccounts.length === 0}
-                    >
-                        Catat Pemasukan Investasi
-                    </button>
+
                     <div className="w-full lg:w-[240px]">
                         <select
                             className="w-full bg-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 border-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"

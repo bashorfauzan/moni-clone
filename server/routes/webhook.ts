@@ -175,8 +175,14 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     }
 
     if (!amount) {
-        parseStatus = 'IGNORED';
-        parseNotes = 'Nominal tidak ditemukan';
+        if (type) {
+            // Notifikasi ini jelas adalah transaksi (punya tipe), tapi nominal disembunyikan oleh aplikasi asalnya
+            parseStatus = 'FAILED';
+            parseNotes = 'Nominal tidak ada di teks (Silakan buat manual)';
+        } else {
+            parseStatus = 'IGNORED';
+            parseNotes = 'Nominal tidak ditemukan';
+        }
     } else if (!type) {
         parseStatus = 'PENDING';
         parseNotes = 'Jenis transaksi perlu ditinjau manual';
@@ -503,7 +509,7 @@ router.post('/notification', async (req, res) => {
             });
         }
 
-        // Buat transaksi pending — isValidated: false agar muncul di Home dengan tombol ✓/✗
+        // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
         const transaction = await prisma.transaction.create({
             data: {
                 amount: parsed.amount,
@@ -512,7 +518,7 @@ router.post('/notification', async (req, res) => {
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
                 ownerId: owner.id,
                 activityId: activity.id,
-                isValidated: false,
+                isValidated: true,
                 notificationInboxId: notification.id,
                 ...(sourceAccountId ? { sourceAccountId } : {}),
                 ...(destinationAccountId ? { destinationAccountId } : {})

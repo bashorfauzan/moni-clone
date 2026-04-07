@@ -51,14 +51,15 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     useEffect(() => {
         // App open lock check
         if (isSecurityEnabled) {
-            const lastActive = sessionStorage.getItem('last-active');
-            const now = Date.now();
-            const ACTIVE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+            // const lastActive = sessionStorage.getItem('last-active');
+            // const now = Date.now();
+            // const ACTIVE_TIMEOUT = 5 * 60 * 1000; // 5 minutes
             
-            if (!lastActive || (now - parseInt(lastActive, 10)) > ACTIVE_TIMEOUT) {
-                // Should lock the app on startup / after timeout
-                verifySecurity('Buka Kunci Aplikasi').catch(() => {});
-            }
+            // App lock on startup is disabled as per user request (only used for delete confirmation)
+            // if (!lastActive || (now - parseInt(lastActive, 10)) > ACTIVE_TIMEOUT) {
+            //     // Should lock the app on startup / after timeout
+            //     verifySecurity('Buka Kunci Aplikasi').catch(() => {});
+            // }
         }
 
         const updateActivity = () => {
