@@ -686,7 +686,55 @@ router.get('/meta', async (_req, res) => {
         res.status(500).json({ error: 'Gagal mengambil data meta' });
     }
 });
+// Endpoint untuk Menghapus Banyak Transaksi Sekaligus
+router.post('/bulk-delete', async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: 'Tidak ada transaksi yang dipilih' });
+    }
 
+    try {
+        await prisma.$transaction(async (trx) => {
+            const txsToDelete = await trx.transaction.findMany({
+                where: { id: { in: ids } }
+            });
+
+            for (const tx of txsToDelete) {
+                if (tx.isValidated) {
+                    if (tx.type === TransactionType.INCOME && tx.destinationAccountId) {
+                        await trx.account.update({
+                            where: { id: tx.destinationAccountId },
+                            data: { balance: { decrement: tx.amount } }
+                        });
+                    } else if ((tx.type === TransactionType.EXPENSE || tx.type === TransactionType.INVESTMENT_OUT) && tx.sourceAccountId) {
+                        await trx.account.update({
+                            where: { id: tx.sourceAccountId },
+                            data: { balance: { increment: tx.amount } }
+                        });
+                    } else if (tx.type === TransactionType.TRANSFER && tx.sourceAccountId && tx.destinationAccountId) {
+                        await trx.account.update({
+                            where: { id: tx.sourceAccountId },
+                            data: { balance: { increment: tx.amount } }
+                        });
+                        await trx.account.update({
+                            where: { id: tx.destinationAccountId },
+                            data: { balance: { decrement: tx.amount } }
+                        });
+                    }
+                }
+            }
+
+            await trx.transaction.deleteMany({
+                where: { id: { in: ids } }
+            });
+        });
+
+        res.json({ message: `${ids.length} transaksi berhasil dihapus` });
+    } catch (error) {
+        console.error('Bulk delete transaction error:', error);
+        res.status(500).json({ error: 'Gagal menghapus transaksi' });
+    }
+});
 
 // Endpoint untuk Menghapus Transaksi
 router.delete('/:id', async (req, res) => {

@@ -3,7 +3,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
 import api from '../services/api';
@@ -33,6 +33,38 @@ const Reports = () => {
     });
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
+
+    const toggleSelectTx = (id: string) => {
+        const next = new Set(selectedTx);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedTx(next);
+    };
+
+    const toggleSelectAll = () => {
+        const visibleIds = data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE).map((tx: any) => tx.id);
+        if (selectedTx.size === visibleIds.length && visibleIds.every((id: string) => selectedTx.has(id))) {
+            setSelectedTx(new Set());
+        } else {
+            setSelectedTx(new Set(visibleIds));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedTx.size === 0) return;
+        const authorized = await verifySecurity(`Hapus ${selectedTx.size} Transaksi`);
+        if (!authorized) return;
+
+        try {
+            await api.post('/transactions/bulk-delete', { ids: Array.from(selectedTx) });
+            setSelectedTx(new Set());
+            await fetchReportData();
+            window.dispatchEvent(new Event('nova:data-changed'));
+        } catch (error: any) {
+            alert(error?.response?.data?.error || 'Gagal menghapus transaksi terpilih');
+        }
+    };
 
     const exportExcel = async () => {
         setExporting(true);
@@ -157,6 +189,7 @@ const Reports = () => {
 
     useEffect(() => {
         void fetchReportData();
+        setSelectedTx(new Set());
     }, [viewMode, currentDate]);
 
     useEffect(() => {
@@ -365,8 +398,18 @@ const Reports = () => {
             {/* ─── Transactions List ─── */}
             <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Semua Transaksi</h2>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.transactionsData.length} data</span>
+                    <div className="flex items-center gap-3">
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Semua Transaksi</h2>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.transactionsData.length} data</span>
+                    </div>
+                    {selectedTx.size > 0 && (
+                        <button
+                            onClick={handleBulkDelete}
+                            className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-600 shadow-sm transition-colors hover:bg-rose-100"
+                        >
+                            <Trash2 size={13} /> Hapus ({selectedTx.size})
+                        </button>
+                    )}
                 </div>
 
                 {data.transactionsData.length === 0 ? (
@@ -377,10 +420,19 @@ const Reports = () => {
                     <>
                         {/* Mobile card list */}
                         <div className="divide-y divide-slate-100 lg:hidden">
+                            <div className="flex items-center gap-3 px-4 py-3 bg-slate-50/50">
+                                <button onClick={toggleSelectAll} className="text-slate-400 hover:text-blue-600 transition-colors">
+                                    {selectedTx.size === visibleTx.length && visibleTx.length > 0 ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                                </button>
+                                <span className="text-[11px] font-bold text-slate-500">PILIH SEMUA</span>
+                            </div>
                             {visibleTx.map((tx: TransactionItem) => {
                                 const badge = getTypeBadge(tx.type);
                                 return (
                                     <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
+                                        <button onClick={() => toggleSelectTx(tx.id)} className="shrink-0 text-slate-300 hover:text-blue-600 transition-colors">
+                                            {selectedTx.has(tx.id) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
+                                        </button>
                                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
@@ -407,6 +459,11 @@ const Reports = () => {
                             <table className="w-full min-w-[760px] text-left text-sm">
                                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
                                     <tr>
+                                        <th className="px-5 py-3.5 w-10 text-center">
+                                            <button onClick={toggleSelectAll} className="text-slate-400 hover:text-blue-600 transition-colors flex items-center justify-center">
+                                                {selectedTx.size === visibleTx.length && visibleTx.length > 0 ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
+                                            </button>
+                                        </th>
                                         <th className="px-5 py-3.5">Tanggal</th>
                                         <th className="px-5 py-3.5">Tipe</th>
                                         <th className="px-5 py-3.5">Pemilik</th>
@@ -419,7 +476,12 @@ const Reports = () => {
                                     {visibleTx.map((tx: TransactionItem) => {
                                         const badge = getTypeBadge(tx.type);
                                         return (
-                                            <tr key={tx.id} className="transition-colors hover:bg-slate-50/60">
+                                            <tr key={tx.id} className={`transition-colors hover:bg-slate-50/60 ${selectedTx.has(tx.id) ? 'bg-blue-50/20' : ''}`}>
+                                                <td className="px-5 py-4 whitespace-nowrap text-center">
+                                                    <button onClick={() => toggleSelectTx(tx.id)} className="text-slate-300 hover:text-blue-600 transition-colors flex items-center justify-center">
+                                                        {selectedTx.has(tx.id) ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
+                                                    </button>
+                                                </td>
                                                 <td className="px-5 py-4 whitespace-nowrap">
                                                     <p className="font-bold text-slate-700">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</p>
                                                     <p className="text-[10px] text-slate-400">{new Date(tx.date).getFullYear()}</p>
