@@ -114,25 +114,53 @@ const ensureSourceAccountHasFunds = async (
     trx: Prisma.TransactionClient,
     type: TransactionType,
     amount: number,
-    sourceAccountId?: string
+    sourceAccountId?: string,
+    ownerId?: string,
+    excludeTransactionId?: string
 ) => {
     const requiresSourceBalance = type === TransactionType.EXPENSE
         || type === TransactionType.INVESTMENT_OUT
         || type === TransactionType.TRANSFER;
 
-    if (!requiresSourceBalance || !sourceAccountId) return null;
+    if (!requiresSourceBalance || !sourceAccountId || !ownerId) return null;
 
     const sourceAccount = await trx.account.findUnique({
         where: { id: sourceAccountId },
-        select: { balance: true }
+        select: { balance: true, name: true }
     });
 
     if (!sourceAccount) {
         return 'Rekening sumber tidak ditemukan';
     }
 
-    if (sourceAccount.balance < amount) {
-        return 'Saldo rekening sumber tidak cukup';
+    const incomeTransactions = await trx.transaction.aggregate({
+        where: {
+            ownerId,
+            destinationAccountId: sourceAccountId,
+            isValidated: true,
+            type: { in: ['INCOME', 'TRANSFER', 'INVESTMENT_IN'] },
+            ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
+        },
+        _sum: { amount: true }
+    });
+
+    const expenseTransactions = await trx.transaction.aggregate({
+        where: {
+            ownerId,
+            sourceAccountId,
+            isValidated: true,
+            type: { in: ['EXPENSE', 'TRANSFER', 'INVESTMENT_OUT'] },
+            ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
+        },
+        _sum: { amount: true }
+    });
+
+    const income = incomeTransactions._sum.amount || 0;
+    const expense = expenseTransactions._sum.amount || 0;
+    const ownerBalanceInAccount = income - expense;
+
+    if (ownerBalanceInAccount < amount) {
+        return `Modal/Saldo milik kepemilikan tersebut di rekening ${sourceAccount.name} tidak cukup (Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(ownerBalanceInAccount)})`;
     }
 
     return null;
@@ -262,7 +290,8 @@ router.post('/', async (req, res) => {
                 trx,
                 txType,
                 parsedAmount,
-                sourceAccountId
+                sourceAccountId,
+                ownerId
             );
 
             if (sourceFundsError) {
@@ -496,7 +525,8 @@ router.put('/:id/validate', async (req, res) => {
                     trx,
                     txType,
                     parsedAmount,
-                    sourceAccountId
+                    sourceAccountId,
+                    currentTx.ownerId
                 );
 
                 if (sourceFundsError) {
@@ -607,7 +637,7 @@ router.put('/:id', async (req, res) => {
             }
 
             // 2. Periksa saldo cukup untuk transaksi BARU
-            const sourceFundsError = await ensureSourceAccountHasFunds(trx, txType, parsedAmount, sourceAccountId);
+            const sourceFundsError = await ensureSourceAccountHasFunds(trx, txType, parsedAmount, sourceAccountId, ownerId, id);
             if (sourceFundsError) {
                 throw new Error(sourceFundsError);
             }
