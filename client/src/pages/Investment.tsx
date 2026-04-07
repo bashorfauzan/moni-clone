@@ -122,7 +122,7 @@ const Investment = () => {
         totalModal += modal;
 
         return { ...rdn, modal, returnAmount, returnPercent };
-    });
+    }).filter(rdn => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
 
     const totalReturnAmount = totalValue - totalModal;
     const totalReturnPercent = totalModal > 0 ? (totalReturnAmount / totalModal) * 100 : 0;
