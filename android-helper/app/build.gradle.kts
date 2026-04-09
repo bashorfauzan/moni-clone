@@ -8,11 +8,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "id.nova.connector" // Nama paket baru yang unik
+        applicationId = "id.nova.connector"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = 4
+        versionName = "1.0.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -20,16 +20,15 @@ android {
     buildTypes {
         debug {
             isMinifyEnabled = false
-            applicationIdSuffix = ".debug"
+            // Dihapus agar tidak membingungkan saat menjalankan aplikasi
         }
         release {
-            isMinifyEnabled = true // Menyamarkan kode agar lebih aman dari scan palsu
+            isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Menggunakan debug signing untuk kemudahan instalasi manual jika belum ada keystore
             signingConfig = signingConfigs.getByName("debug")
         }
     }
