@@ -40,3 +40,7 @@ android-helper/.gradle/
 android-helper/build/
 android-helper/app/build/
 android-helper/local.properties
+android-helper/keystore.properties
+android-helper/app/*.jks
+android-helper/app/*.keystore
+android-release-key.txt

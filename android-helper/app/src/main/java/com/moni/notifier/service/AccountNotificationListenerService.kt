@@ -27,6 +27,7 @@ class AccountNotificationListenerService : NotificationListenerService() {
         val isSupported = SUPPORTED_PACKAGES.contains(packageName) ||
             packageName.contains("bank", ignoreCase = true) ||
             packageName.contains("bca", ignoreCase = true) ||
+            packageName.contains("wondr", ignoreCase = true) ||
             packageName.contains("livin", ignoreCase = true) ||
             packageName.contains("bri", ignoreCase = true) ||
             packageName.contains("bni", ignoreCase = true) ||
@@ -145,6 +146,7 @@ class AccountNotificationListenerService : NotificationListenerService() {
         private fun resolveAppName(packageName: String): String {
             return when {
                 packageName.contains("bca", ignoreCase = true) -> "BCA"
+                packageName.contains("wondr", ignoreCase = true) -> "BNI"
                 packageName.contains("mandiri", ignoreCase = true) || packageName.contains("livin", ignoreCase = true) -> "Mandiri"
                 packageName.contains("brimo", ignoreCase = true) || packageName.contains("bri", ignoreCase = true) -> "BRI"
                 packageName.contains("bni", ignoreCase = true) -> "BNI"

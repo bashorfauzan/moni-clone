@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.moni.notifier.databinding.ActivityMainBinding
 import com.moni.notifier.service.PreferenceStore
 
@@ -68,7 +69,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.openSettingsButton.setOnClickListener {
+            maybeShowRestrictedSettingsTip()
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+
+        binding.openAppInfoButton.setOnClickListener {
+            openAppInfo()
         }
 
         binding.openWebAppButton.setOnClickListener {
@@ -92,6 +98,9 @@ class MainActivity : AppCompatActivity() {
             if (enabled) R.string.status_enabled else R.string.status_disabled
         )
         binding.lastDeliveryText.text = preferenceStore.getLastDeliveryStatus()
+        if (!enabled && shouldShowRestrictedSettingsTip()) {
+            binding.statusText.append("\n" + getString(R.string.restricted_settings_toast))
+        }
     }
 
     private fun isNotificationServiceEnabled(): Boolean {
@@ -107,5 +116,44 @@ class MainActivity : AppCompatActivity() {
         if (value.isBlank()) return false
         val parsed = Uri.parse(value)
         return parsed.scheme == "http" || parsed.scheme == "https"
+    }
+
+    private fun maybeShowRestrictedSettingsTip() {
+        if (!shouldShowRestrictedSettingsTip()) return
+
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.restricted_settings_title)
+            .setMessage(R.string.restricted_settings_message)
+            .setPositiveButton(R.string.open_app_info) { _, _ ->
+                openAppInfo()
+            }
+            .setNegativeButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun shouldShowRestrictedSettingsTip(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !isNotificationServiceEnabled() &&
+            isLikelySideLoadedInstall()
+    }
+
+    private fun isLikelySideLoadedInstall(): Boolean {
+        val installerPackage = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            packageManager.getInstallSourceInfo(packageName).installingPackageName
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.getInstallerPackageName(packageName)
+        } ?: return true
+
+        return installerPackage != "com.android.vending" &&
+            installerPackage != "com.sec.android.app.samsungapps"
+    }
+
+    private fun openAppInfo() {
+        val intent = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", packageName, null)
+        )
+        startActivity(intent)
     }
 }

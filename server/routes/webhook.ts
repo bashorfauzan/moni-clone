@@ -19,8 +19,8 @@ type ParsedNotification = {
     parseNotes: string | null;
 };
 
-const ACCOUNT_HINTS = ['bca', 'bni', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
-const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
+const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
+const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
@@ -89,6 +89,17 @@ const detectFeeCharge = (text: string) => {
         || text.includes('admin');
 };
 
+const shouldIgnoreRdnFinancialNote = (sourceApp: string, title: string, text: string) => {
+    const lowerSourceApp = normalizeText(sourceApp);
+    const lowerTitle = normalizeText(title);
+    const lowerText = normalizeText(text);
+
+    const isBcaFamily = lowerSourceApp.includes('bca') || lowerSourceApp.includes('mybca');
+    const isFinancialNote = lowerTitle.includes('catatan finansial') || lowerText.includes('catatan finansial');
+
+    return isBcaFamily && isFinancialNote && lowerText.includes('rdn');
+};
+
 const detectSourceAppHint = (sourceApp: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
     return ACCOUNT_HINTS.find((hint) => lowerSourceApp.includes(hint)) ?? null;
@@ -147,6 +158,21 @@ const resolveAccountHints = (
 const parseNotificationText = (sourceApp: string, title: string, text: string): ParsedNotification => {
     const combined = `${title} ${text}`.trim();
     const lowerText = normalizeText(combined);
+
+    if (shouldIgnoreRdnFinancialNote(sourceApp, title, text)) {
+        return {
+            amount: null,
+            type: null,
+            description: text.trim().slice(0, 160),
+            accountHint: null,
+            sourceAccountHint: null,
+            destinationAccountHint: null,
+            confidenceScore: 0,
+            parseStatus: 'IGNORED',
+            parseNotes: 'Notifikasi Catatan Finansial BCA untuk RDN diabaikan'
+        };
+    }
+
     const amount = extractAmount(combined);
     const accountHint = detectAccountHint(combined);
     let type: TransactionType | null = null;

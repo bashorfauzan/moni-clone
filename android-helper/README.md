@@ -49,15 +49,16 @@ Contoh filter:
 - `mandiri,bri,bni,transfer`
 
 6. Tap `Simpan Pengaturan`.
-7. Tap `Buka Pengaturan Notification Access`.
-8. Aktifkan `NOVA Notifikasi Keuangan`.
-9. Tap `Buka NOVA App`.
-10. Dari web app utama, tombol `Buka` pada rekening akan memakai bridge Android:
+7. Jika install APK dilakukan manual dan Android menolak akses, tap `Buka Info App`, lalu di halaman info app buka menu titik tiga dan aktifkan `Allow restricted settings`.
+8. Tap `Buka Pengaturan Notification Access`.
+9. Aktifkan `NOVA Notifikasi Keuangan`.
+10. Tap `Buka NOVA App`.
+11. Dari web app utama, tombol `Buka` pada rekening akan memakai bridge Android:
    - coba `deepLink`
    - fallback ke app terpasang via `packageName`
    - fallback ke `storeUrl`
-11. Pastikan notifikasi bank atau e-wallet muncul di perangkat.
-12. Cek `Pengiriman terakhir` di layar helper.
+12. Pastikan notifikasi bank atau e-wallet muncul di perangkat.
+13. Cek `Pengiriman terakhir` di layar helper.
 
 ## Payload yang dikirim
 
@@ -86,6 +87,7 @@ Contoh payload:
 - Beberapa notifikasi bank bisa ringkas atau terpotong tergantung versi Android dan implementasi app sumber.
 - Filter keyword dipakai untuk mengurangi spam. Jika terlalu ketat, notifikasi valid bisa ikut terlewat.
 - App ini belum melakukan retry queue, enkripsi payload, atau batching.
+- Pada Android 13+ beberapa vendor seperti Samsung dan Xiaomi bisa memblokir `Notification Access` untuk APK sideload. Itu bukan crash di app, tetapi proteksi `restricted settings`, jadi harus diizinkan manual dari halaman info app atau APK dipasang via Play Store/ADB.
 
 ## Langkah lanjut yang disarankan
 

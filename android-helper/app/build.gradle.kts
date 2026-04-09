@@ -8,22 +8,29 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.moni.notifier"
+        applicationId = "id.nova.connector" // Nama paket baru yang unik
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
-        release {
+        debug {
             isMinifyEnabled = false
+            applicationIdSuffix = ".debug"
+        }
+        release {
+            isMinifyEnabled = true // Menyamarkan kode agar lebih aman dari scan palsu
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Menggunakan debug signing untuk kemudahan instalasi manual jika belum ada keystore
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 

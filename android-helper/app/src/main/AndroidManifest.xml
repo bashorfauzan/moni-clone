@@ -4,17 +4,41 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission
-        android:name="android.permission.QUERY_ALL_PACKAGES"
-        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
+
+    <queries>
+        <package android:name="com.bca" />
+        <package android:name="com.bca.mybca" />
+        <package android:name="com.bcadigital.blu" />
+        <package android:name="id.co.bankmandiri.livin.android" />
+        <package android:name="id.co.bri.brimo" />
+        <package android:name="src.com.bni" />
+        <package android:name="id.co.bni.mobilebanking" />
+        <package android:name="com.bsi.mobile" />
+        <package android:name="id.bsi.bsimobile" />
+        <package android:name="id.co.bsi.mobile" />
+        <package android:name="com.jago.transactionApp" />
+        <package android:name="com.bke.seabank" />
+        <package android:name="com.btpn.dc.madison" />
+        <package android:name="com.gojek.app" />
+        <package android:name="ovo.id" />
+        <package android:name="id.dana" />
+        <package android:name="com.shopee.id" />
+        <package android:name="com.flip.android" />
+
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:theme="@style/Theme.NovaHelper">
 
         <activity
@@ -31,15 +55,16 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-        <service
-            android:name=".service.AccountNotificationListenerService"
-            android:label="@string/listener_service_name"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
+            <service
+                android:name=".service.AccountNotificationListenerService"
+                android:label="@string/listener_service_name"
+                android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+                android:exported="true"
+                tools:ignore="ExportedService">
+                <intent-filter>
+                    <action android:name="android.service.notification.NotificationListenerService" />
+                </intent-filter>
+            </service>
     </application>
 
 </manifest>
