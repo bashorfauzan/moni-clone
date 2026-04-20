@@ -9,7 +9,7 @@ Dokumen ini fokus pada migrasi database dari Railway Postgres ke Supabase, tanpa
   - Auth (`signUp`, `signIn`, `signOut`)
   - Realtime (`postgres_changes`)
   - Direct table access untuk beberapa data (`Owner`, `Account`, `Activity`, `Transaction`, `Target`)
-- Backend/frontend hosting bisa di Railway, Render, atau platform lain. Yang diganti di sini adalah database-nya ke Supabase.
+- Backend/frontend hosting bisa di Railway, Vercel, atau platform lain. Yang diganti di sini adalah database-nya ke Supabase.
 
 ## 1. Buat project Supabase
 
