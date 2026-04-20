@@ -2,12 +2,23 @@
   "name": "coba2-root",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "build": "npm install --prefix client && npm install --prefix server && npm run build --prefix client && npm run build --prefix server",
     "start": "npm run start:prod --prefix server",
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "@supabase/supabase-js": "^2.103.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
