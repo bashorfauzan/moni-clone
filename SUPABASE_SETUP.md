@@ -9,7 +9,7 @@ Dokumen ini fokus pada migrasi database dari Railway Postgres ke Supabase, tanpa
   - Auth (`signUp`, `signIn`, `signOut`)
   - Realtime (`postgres_changes`)
   - Direct table access untuk beberapa data (`Owner`, `Account`, `Activity`, `Transaction`, `Target`)
-- Backend hosting boleh tetap di Railway atau pindah ke platform lain. Yang diganti di sini adalah database-nya ke Supabase.
+- Backend/frontend hosting bisa di Railway, Render, atau platform lain. Yang diganti di sini adalah database-nya ke Supabase.
 
 ## 1. Buat project Supabase
 
@@ -49,7 +49,10 @@ VITE_SUPABASE_URL="https://PROJECT_REF.supabase.co"
 VITE_SUPABASE_ANON_KEY="YOUR_SUPABASE_ANON_KEY"
 VITE_SUPABASE_PUBLISHABLE_KEY="YOUR_SUPABASE_PUBLISHABLE_KEY"
 VITE_USE_SUPABASE_DATA="true"
-VITE_API_BASE_URL="/api"
+# Same-domain reverse proxy:
+# VITE_API_BASE_URL="/api"
+# Separate frontend/backend hosting:
+VITE_API_BASE_URL="https://your-backend-domain.example/api"
 ```
 
 Kalau sementara ingin frontend tetap lewat backend API saja, set:
@@ -118,16 +121,7 @@ Kalau mau migrasi manual via SQL dump, pastikan schema di Supabase sudah dibuat 
 
 ## 8. Set environment di hosting backend
 
-Kalau backend masih di Railway, cukup ganti env service backend:
-
-```env
-DATABASE_URL=...
-DIRECT_URL=...
-```
-
-Tidak perlu lagi attach Railway Postgres kalau semua sudah mengarah ke Supabase.
-
-Kalau backend masih di Railway, set minimal env berikut di service backend:
+Set minimal env berikut di service backend:
 
 ```env
 DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-REGION.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true
@@ -141,12 +135,14 @@ HOST=0.0.0.0
 Untuk frontend production, set minimal:
 
 ```env
-VITE_API_BASE_URL=/api
+VITE_API_BASE_URL=https://your-backend-domain.example/api
 VITE_SUPABASE_URL=https://PROJECT_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 VITE_USE_SUPABASE_DATA=true
 ```
+
+Kalau frontend dan backend berada di domain yang sama lewat reverse proxy, `VITE_API_BASE_URL` bisa tetap `/api`.
 
 ## 9. Verifikasi setelah setup
 
