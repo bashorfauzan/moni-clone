@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Lock, Mail, Phone } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import api from '../services/api';
 
 const Register = () => {
     const navigate = useNavigate();
@@ -27,19 +27,15 @@ const Register = () => {
             return;
         }
 
-        if (!supabase) {
-            setError('Konfigurasi Supabase tidak ditemukan.');
-            return;
-        }
-
         setLoading(true);
         try {
-            const email = isEmail ? identifier : `${identifier.replace(/[^0-9]/g, '')}@app.local`;
-            const { error } = await supabase.auth.signUp({ email, password });
-            if (error) throw error;
+            await api.post('/auth/register', {
+                identifier,
+                password
+            });
             navigate('/login?registered=1');
         } catch (err: any) {
-            setError(err.message || 'Registrasi gagal. Coba lagi.');
+            setError(err?.response?.data?.error || err.message || 'Registrasi gagal. Coba lagi.');
         } finally {
             setLoading(false);
         }

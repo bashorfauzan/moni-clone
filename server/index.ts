@@ -9,6 +9,7 @@ import masterRoutes from './routes/master.js';
 import targetRoutes from './routes/target.js';
 import webhookRoutes from './routes/webhook.js';
 import telegramRoutes from './routes/telegram.js';
+import authRoutes from './routes/auth.js';
 
 dotenv.config();
 
@@ -39,6 +40,7 @@ app.use('/api/master', masterRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/telegram', telegramRoutes);
+app.use('/api/auth', authRoutes);
 console.log('[Server] Routes mounted successfully');
 
 app.get('/', (_req, res) => {
