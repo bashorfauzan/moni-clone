@@ -41,7 +41,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
                 android:minHeight="56dp"
-                android:text="https://YOUR-BACKEND-DOMAIN/api/webhook/notification" />
+                android:text="https://moni-clone.vercel.app/api/webhook/notification" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
@@ -56,7 +56,7 @@
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
                 android:minHeight="56dp"
-                android:text="https://YOUR-FRONTEND-DOMAIN" />
+                android:text="https://moni-clone.vercel.app" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.button.MaterialButton

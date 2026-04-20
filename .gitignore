@@ -12,6 +12,7 @@ out/
 .env
 .env.local
 .env.production
+vercel.env
 
 # OS
 .DS_Store
