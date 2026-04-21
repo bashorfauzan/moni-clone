@@ -6,6 +6,7 @@
     "node": "20.x"
   },
   "scripts": {
+    "postinstall": "prisma generate --schema=./server/prisma/schema.prisma",
     "build": "npm install --prefix client && npm install --prefix server && npm run build --prefix client && npm run build --prefix server",
     "start": "npm run start:prod --prefix server",
     "dev:client": "npm run dev --prefix client",
@@ -23,6 +24,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "concurrently": "^8.2.2",
+    "prisma": "^6.19.2"
   }
 }
