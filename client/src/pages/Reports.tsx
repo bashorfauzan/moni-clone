@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchTransactions, type TransactionItem, deleteTransaction } from '../services/transactions';
+import { fetchTransactions, type TransactionItem, deleteTransaction, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
@@ -72,7 +72,7 @@ const Reports = () => {
         if (!authorized) return;
 
         try {
-            await api.post('/transactions/bulk-delete', { ids: Array.from(selectedTx) });
+            await bulkDeleteTransactions(Array.from(selectedTx));
             setSelectedTx(new Set());
             await fetchReportData();
             window.dispatchEvent(new Event('nova:data-changed'));

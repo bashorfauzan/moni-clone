@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import api from '../services/api';
 import { useTransaction } from '../context/TransactionContext';
 import {
     clearNotificationInbox,
@@ -9,7 +8,7 @@ import {
 } from '../services/notificationInbox';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { buildAccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
-import { fetchTransactions, type TransactionItem } from '../services/transactions';
+import { fetchTransactions, type TransactionItem, validateTransaction } from '../services/transactions';
 import { Eye, EyeOff, ChevronDown, ChevronUp, ExternalLink, Bell } from 'lucide-react';
 import { subscribeTableChanges } from '../services/realtime';
 import { canLaunchAccountApp, launchAccountApp } from '../services/accountLauncher';
@@ -178,7 +177,7 @@ const Home = () => {
         setLoading(true);
         try {
             // For MVP, we send back the same data, but user could ideally edit it in a modal
-            await api.put(`/transactions/${id}/validate`, {
+            await validateTransaction(id, {
                 action,
                 sourceAccountId: tx.sourceAccountId,
                 destinationAccountId: tx.destinationAccountId,

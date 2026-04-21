@@ -1,6 +1,7 @@
 import express from 'express';
 import { TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { syncAccountBalances } from '../lib/accountBalances.js';
 
 const router = express.Router();
 // Removed hacky notificationInboxClient definition
@@ -23,6 +24,8 @@ const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin'
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
+const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
+const TRANSFER_IN_KEYWORDS = ['diterima', 'menerima', 'transfer masuk', 'dana masuk', 'masuk dari', 'ditransfer dari'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
 const SECURITY_ALERT_KEYWORDS = [
@@ -118,6 +121,12 @@ const detectHintAfterAnchors = (text: string, anchors: string[]) => {
     return null;
 };
 
+const detectTransferDirection = (text: string) => {
+    if (containsAny(text, TRANSFER_OUT_KEYWORDS)) return 'OUT';
+    if (containsAny(text, TRANSFER_IN_KEYWORDS)) return 'IN';
+    return 'UNKNOWN';
+};
+
 const resolveAccountHints = (
     type: TransactionType | null,
     sourceApp: string,
@@ -127,14 +136,24 @@ const resolveAccountHints = (
     const sourceAppHint = detectSourceAppHint(sourceApp);
     const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ']);
     const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ']);
+    const transferDirection = detectTransferDirection(text);
 
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
 
     if (type === TransactionType.TRANSFER) {
-        sourceAccountHint = hintFromSourcePhrase
-            ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
-        destinationAccountHint = hintFromDestinationPhrase ?? sourceAppHint;
+        if (transferDirection === 'OUT') {
+            sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
+            destinationAccountHint = hintFromDestinationPhrase;
+        } else if (transferDirection === 'IN') {
+            sourceAccountHint = hintFromSourcePhrase;
+            destinationAccountHint = sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
+        } else {
+            sourceAccountHint = hintFromSourcePhrase
+                ?? sourceAppHint
+                ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
+            destinationAccountHint = hintFromDestinationPhrase;
+        }
     } else if (type === TransactionType.INCOME) {
         destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
     } else if (type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) {
@@ -286,8 +305,8 @@ const ensureDefaults = async (
         const sourceAppAccount = await findAccountByHint(appShort);
         account = account ?? sourceAppAccount;
 
-        if (parsed.type === TransactionType.TRANSFER && !destinationAccount) {
-            destinationAccount = sourceAppAccount;
+        if (parsed.type === TransactionType.TRANSFER && !sourceAccount) {
+            sourceAccount = sourceAppAccount;
         }
     }
 
@@ -526,13 +545,22 @@ router.post('/notification', async (req, res) => {
 
         // Perbarui saja parseStatus menjadi PENDING jika data kurang lengkap, tapi TETAP buat transaksinya.
         if (isMissingCriticalFields) {
-            await prisma.notificationInbox.update({
+            const pendingNotification = await prisma.notificationInbox.update({
                 where: { id: notification.id },
                 data: {
                     parseStatus: 'PENDING',
                     parseNotes: missingAccountReason ?? 'Master owner/activity/account belum lengkap'
                 }
             });
+
+            if (parsed.type === TransactionType.TRANSFER) {
+                return res.status(202).json({
+                    success: true,
+                    notification: pendingNotification,
+                    createdTransaction: false,
+                    reason: missingAccountReason ?? 'Transfer perlu pilih rekening tujuan manual'
+                });
+            }
         }
 
         // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
@@ -550,6 +578,8 @@ router.post('/notification', async (req, res) => {
                 ...(destinationAccountId ? { destinationAccountId } : {})
             }
         });
+
+        await syncAccountBalances(prisma);
 
         res.status(201).json({
             success: true,

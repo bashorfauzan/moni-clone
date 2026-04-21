@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
 import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
-import { fetchTransactions } from '../services/transactions';
+import { createInvestmentIncome, createTransaction, fetchTransactions } from '../services/transactions';
 import { Link } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 
@@ -168,7 +167,7 @@ const Investment = () => {
             const sourceId = transferForm.type === 'DEPOSIT' ? transferForm.bankId : selectedRdn.id;
             const destId = transferForm.type === 'DEPOSIT' ? selectedRdn.id : transferForm.bankId;
 
-            await api.post('/transactions', {
+            await createTransaction({
                 type: 'TRANSFER',
                 amount,
                 sourceAccountId: sourceId,
@@ -208,8 +207,8 @@ const Investment = () => {
 
         setSubmitting(true);
         try {
-            await api.post('/transactions/investment-income', {
-                kind: incomeForm.kind,
+            await createInvestmentIncome({
+                kind: incomeForm.kind as 'SUKUK' | 'STOCK_GROWTH',
                 amount: Number(incomeForm.amount),
                 ownerId: incomeForm.ownerId || owners[0]?.id,
                 destinationAccountId: incomeForm.accountId,

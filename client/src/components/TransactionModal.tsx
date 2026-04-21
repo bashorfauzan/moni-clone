@@ -1,10 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import api from '../services/api';
 import { X, ChevronDown, Search } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
-import { fetchTransactions } from '../services/transactions';
+import { createTransaction, fetchTransactions, updateTransaction, validateTransaction } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
@@ -218,10 +217,10 @@ const TransactionModal = () => {
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                 };
-                await api.put(`/transactions/${editTransactionId}`, payload);
+                await updateTransaction(editTransactionId, payload);
             } else if (modalPayload?.pendingTransactionId) {
                 const payload = {
-                    action: 'APPROVE',
+                    action: 'APPROVE' as const,
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
@@ -230,7 +229,7 @@ const TransactionModal = () => {
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     categoryId: undefined, // categoryId optional/will be resolved by backend
                 };
-                await api.put(`/transactions/${modalPayload.pendingTransactionId}/validate`, payload);
+                await validateTransaction(modalPayload.pendingTransactionId, payload);
             } else {
                 const payload = {
                     amount: Number(form.amount),
@@ -241,7 +240,7 @@ const TransactionModal = () => {
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     notificationInboxId: modalPayload?.notificationInboxId,
                 };
-                await api.post('/transactions', payload);
+                await createTransaction(payload);
             }
 
             closeModal();

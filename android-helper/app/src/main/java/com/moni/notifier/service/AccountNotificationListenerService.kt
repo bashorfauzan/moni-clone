@@ -70,8 +70,9 @@ class AccountNotificationListenerService : NotificationListenerService() {
             .split(",")
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
+        val looksLikeTransaction = looksLikeFinancialTransaction(appNameStr, title, messageText, packageName)
 
-        if (filters.isNotEmpty() && filters.none { keyword -> fullText.contains(keyword) }) {
+        if (filters.isNotEmpty() && filters.none { keyword -> fullText.contains(keyword) } && !looksLikeTransaction) {
             val timeStr = timeFormatter.format(Instant.ofEpochMilli(sbn.postTime))
             preferenceStore.setLastDeliveryStatus(
                 "Diabaikan $timeStr • tidak cocok filter"
@@ -187,6 +188,28 @@ class AccountNotificationListenerService : NotificationListenerService() {
                 extras.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString(),
                 notification.tickerText?.toString()
             )
+        }
+
+        private fun looksLikeFinancialTransaction(
+            appName: String,
+            title: String,
+            text: String,
+            packageName: String
+        ): Boolean {
+            val combined = listOf(appName, title, text, packageName)
+                .joinToString(" ")
+                .lowercase()
+
+            val hasAmount = Regex("""\brp\s*[\d.,]+|\b\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?\b""")
+                .containsMatchIn(combined)
+            if (!hasAmount) return false
+
+            val transactionKeywords = listOf(
+                "transfer", "kirim", "dikirim", "diterima", "masuk", "keluar",
+                "pembayaran", "bayar", "briva", "debit", "kredit", "top up", "tarik"
+            )
+
+            return transactionKeywords.any { combined.contains(it) }
         }
 
         private fun joinMessagingTexts(values: Array<android.os.Parcelable>?): String {
