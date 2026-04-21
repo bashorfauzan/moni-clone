@@ -1,6 +1,7 @@
 import express from 'express';
 import { Prisma, TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { syncAccountBalances } from '../lib/accountBalances.js';
 
 const router = express.Router();
 
@@ -337,6 +338,8 @@ router.post('/', async (req, res) => {
                 });
             }
 
+            await syncAccountBalances(trx);
+
             return createdTx;
         });
 
@@ -414,6 +417,8 @@ const createInvestmentIncomeTransaction = async ({
             undefined,
             String(destinationAccountId)
         );
+
+        await syncAccountBalances(trx);
 
         return createdTransaction;
     });
@@ -567,6 +572,8 @@ router.put('/:id/validate', async (req, res) => {
                     });
                 }
 
+                await syncAccountBalances(trx);
+
                 return updatedTx;
             });
 
@@ -662,6 +669,8 @@ router.put('/:id', async (req, res) => {
             // 5. Terapkan saldo BARU
             await applyAccountBalanceChanges(trx, txType, parsedAmount, sourceAccountId, destinationAccountId);
 
+            await syncAccountBalances(trx);
+
             return updated;
         });
 
@@ -727,6 +736,8 @@ router.post('/bulk-delete', async (req, res) => {
             await trx.transaction.deleteMany({
                 where: { id: { in: ids } }
             });
+
+            await syncAccountBalances(trx);
         });
 
         res.json({ message: `${ids.length} transaksi berhasil dihapus` });
@@ -773,6 +784,8 @@ router.delete('/:id', async (req, res) => {
 
             // Hapus dari system
             await trx.transaction.delete({ where: { id } });
+
+            await syncAccountBalances(trx);
         });
 
         res.json({ message: 'Transaksi berhasil dihapus' });

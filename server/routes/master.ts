@@ -1,5 +1,6 @@
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
+import { computeValidatedAccountBalances, syncAccountBalances } from '../lib/accountBalances.js';
 import XLSX from 'xlsx';
 
 const router = express.Router();
@@ -23,12 +24,20 @@ const asDate = (value: unknown) => {
 router.get('/meta', async (_req, res) => {
     try {
         await ensurePrimaryOwner();
-        const [owners, accounts, activities] = await Promise.all([
+        const [owners, accounts, activities, balanceMap] = await Promise.all([
             prisma.owner.findMany({ orderBy: { createdAt: 'asc' } }),
             prisma.account.findMany({ orderBy: { createdAt: 'desc' } }),
-            prisma.activity.findMany({ orderBy: { createdAt: 'desc' } })
+            prisma.activity.findMany({ orderBy: { createdAt: 'desc' } }),
+            computeValidatedAccountBalances(prisma)
         ]);
-        res.json({ owners, accounts, activities });
+        res.json({
+            owners,
+            accounts: accounts.map((account) => ({
+                ...account,
+                balance: balanceMap.get(account.id) ?? 0
+            })),
+            activities
+        });
     } catch (error) {
         res.status(500).json({ error: 'Gagal mengambil master data' });
     }
@@ -303,6 +312,8 @@ router.post('/restore-backup', async (req, res) => {
                     }))
                 });
             }
+
+            await syncAccountBalances(trx);
         });
 
         if (owners.length === 0) {
