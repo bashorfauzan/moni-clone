@@ -251,15 +251,15 @@ const Home = () => {
                 validatedTransactions.forEach((tx) => {
                     if (tx.ownerId !== owner.id) return;
 
-                    if ((tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') && tx.destinationAccountId === account.id) {
+                    if ((tx.type === 'INCOME') && tx.destinationAccountId === account.id) {
                         amount += tx.amount;
                     }
 
-                    if ((tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') && tx.sourceAccountId === account.id) {
+                    if ((tx.type === 'EXPENSE') && tx.sourceAccountId === account.id) {
                         amount -= tx.amount;
                     }
 
-                    if (tx.type === 'TRANSFER') {
+                    if (tx.type === 'TRANSFER' || tx.type === 'INVESTMENT_IN' || tx.type === 'INVESTMENT_OUT') {
                         if (tx.destinationAccountId === account.id) amount += tx.amount;
                         if (tx.sourceAccountId === account.id) amount -= tx.amount;
                     }
