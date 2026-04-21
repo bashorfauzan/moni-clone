@@ -281,6 +281,7 @@ const Home = () => {
     }).sort((a, b) => b.total - a.total);
 
     const totalMemberFunds = wealthDistribution.reduce((sum, owner) => sum + owner.total, 0);
+    const needsInitialSetup = meta.owners.length === 0 && meta.accounts.length === 0 && validatedTransactions.length === 0;
 
 
 
@@ -524,6 +525,23 @@ const Home = () => {
                     </button>
                 ))}
             </div>
+
+            {needsInitialSetup && (
+                <section className="mb-10 rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-5 shadow-[0_8px_24px_-14px_rgba(37,99,235,0.18)]">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-blue-600">Mulai Setup</p>
+                    <h3 className="mt-2 text-xl font-bold text-slate-900">Akun baru Anda sudah siap dipakai.</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Tambahkan anggota, kategori, dan rekening dulu supaya input transaksi tidak berakhir di halaman kosong.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => navigate('/menu?setup=1')}
+                        className="mt-4 inline-flex h-11 items-center justify-center rounded-2xl bg-blue-600 px-4 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-blue-700"
+                    >
+                        Buka Setup Awal
+                    </button>
+                </section>
+            )}
 
             {/* Inbox Notifikasi Otomatis Dipindahkan ke NotificationDrawer */}
 

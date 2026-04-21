@@ -3,22 +3,49 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Lock, Mail, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
+import { normalizeIdentifierToEmail, resolvePostAuthPath } from '../services/auth';
 
 const Login = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
-    const { session } = useAuth();
+    const { session, loading: authLoading } = useAuth();
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [registered, setRegistered] = useState(false);
+    const [redirecting, setRedirecting] = useState(false);
 
     useEffect(() => {
-        if (session) navigate('/', { replace: true });
-        if (searchParams.get('registered') === '1') setRegistered(true);
-    }, [session, navigate, searchParams]);
+        const fromRegister = searchParams.get('registered') === '1';
+        setRegistered(fromRegister);
+
+        const incomingIdentifier = searchParams.get('identifier');
+        if (incomingIdentifier) {
+            setIdentifier(incomingIdentifier);
+        }
+
+        if (!session || authLoading) return;
+
+        let active = true;
+        setRedirecting(true);
+
+        resolvePostAuthPath()
+            .then((nextPath) => {
+                if (!active) return;
+                navigate(nextPath, { replace: true });
+            })
+            .finally(() => {
+                if (active) {
+                    setRedirecting(false);
+                }
+            });
+
+        return () => {
+            active = false;
+        };
+    }, [authLoading, navigate, searchParams, session]);
 
     const isEmail = identifier.includes('@');
 
@@ -33,10 +60,11 @@ const Login = () => {
 
         setLoading(true);
         try {
-            const email = isEmail ? identifier : `${identifier.replace(/[^0-9]/g, '')}@app.local`;
+            const email = normalizeIdentifierToEmail(identifier);
             const { error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-            navigate('/', { replace: true });
+            const nextPath = await resolvePostAuthPath();
+            navigate(nextPath, { replace: true });
         } catch (err: any) {
             const msg = err.message || '';
             if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) {
@@ -93,9 +121,15 @@ const Login = () => {
                             <p className="mt-2 text-sm font-medium text-slate-300">Selamat datang kembali</p>
                         </div>
 
-                        {registered && (
+                        {registered && !redirecting && (
                             <div className="mb-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-center text-sm font-medium text-emerald-300">
                                 Registrasi berhasil. Silakan masuk.
+                            </div>
+                        )}
+
+                        {redirecting && (
+                            <div className="mb-4 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-center text-sm font-medium text-blue-200">
+                                Menyiapkan halaman awal akun Anda...
                             </div>
                         )}
 

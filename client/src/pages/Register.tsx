@@ -2,6 +2,8 @@ import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Eye, EyeOff, LogIn, Lock, Mail, Phone } from 'lucide-react';
 import api from '../services/api';
+import { supabase } from '../lib/supabase';
+import { normalizeIdentifierToEmail, resolvePostAuthPath } from '../services/auth';
 
 const Register = () => {
     const navigate = useNavigate();
@@ -33,7 +35,18 @@ const Register = () => {
                 identifier,
                 password
             });
-            navigate('/login?registered=1');
+
+            if (supabase) {
+                const email = normalizeIdentifierToEmail(identifier);
+                const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+                if (signInError) throw signInError;
+
+                const nextPath = await resolvePostAuthPath();
+                navigate(nextPath, { replace: true });
+                return;
+            }
+
+            navigate(`/login?registered=1&identifier=${encodeURIComponent(identifier)}`, { replace: true });
         } catch (err: any) {
             setError(err?.response?.data?.error || err.message || 'Registrasi gagal. Coba lagi.');
         } finally {

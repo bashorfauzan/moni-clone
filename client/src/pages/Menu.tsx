@@ -723,11 +723,21 @@ const MenuPage = () => {
     useEffect(() => { if (activityPage > totalActivityPages) setActivityPage(totalActivityPages); }, [activityPage, totalActivityPages]);
     useEffect(() => { saveBackupSettings(backupSettings); }, [backupSettings]);
     useEffect(() => {
-        const shouldOpenAccounts = new URLSearchParams(location.search).get('accounts') === '1';
-        if (!shouldOpenAccounts) return;
+        const params = new URLSearchParams(location.search);
+        const shouldOpenAccounts = params.get('accounts') === '1';
+        const shouldOpenSetup = params.get('setup') === '1';
 
-        setShowAccountForm(false);
-        setIsAccountManagerOpen(true);
+        if (!shouldOpenAccounts && !shouldOpenSetup) return;
+
+        if (shouldOpenSetup) {
+            setIsHelpSupportOpen(true);
+        }
+
+        if (shouldOpenAccounts) {
+            setShowAccountForm(false);
+            setIsAccountManagerOpen(true);
+        }
+
         navigate('/menu', { replace: true });
     }, [location.search, navigate]);
 
