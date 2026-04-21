@@ -5,6 +5,7 @@ import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { fetchTransactions } from '../services/transactions';
+import { getErrorMessage } from '../services/errors';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 type PickerType = 'source' | 'destination' | null;
@@ -247,7 +248,7 @@ const TransactionModal = () => {
             window.dispatchEvent(new Event('nova:data-changed'));
         } catch (error: any) {
             console.error('Error creating transaction:', error);
-            alert(error?.response?.data?.error || 'Gagal menyimpan transaksi');
+            alert(getErrorMessage(error, 'Gagal menyimpan transaksi'));
         } finally {
             setSubmitting(false);
         }
