@@ -10,7 +10,9 @@
     "start": "npm run start:prod --prefix server",
     "dev:client": "npm run dev --prefix client",
     "dev:server": "npm run dev --prefix server",
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\""
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
+    "preview:transactions-excel": "node scripts/transaction_excel_import.mjs preview",
+    "import:transactions-excel": "node scripts/transaction_excel_import.mjs import-api"
   },
   "dependencies": {
     "@prisma/client": "^6.19.2",

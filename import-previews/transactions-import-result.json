@@ -1,0 +1,950 @@
+{
+  "summary": {
+    "attempted": 149,
+    "imported": 144,
+    "failed": 5
+  },
+  "imported": [
+    {
+      "rowNumber": 2,
+      "id": "ab850936-d8df-4271-beff-9ca6c6dfa426",
+      "description": "Tabungan Kaltim",
+      "amount": 6000000
+    },
+    {
+      "rowNumber": 3,
+      "id": "45cc9a43-d84f-442e-9182-407cdb7b53e8",
+      "description": "THR Idul FItri",
+      "amount": 1300000
+    },
+    {
+      "rowNumber": 4,
+      "id": "7e7ac9c5-e670-4dd6-ae5f-188c08704691",
+      "description": "Tabungan Kaltim",
+      "amount": 4000000
+    },
+    {
+      "rowNumber": 5,
+      "id": "f5c91876-d754-4358-b315-9d4fabb47bb8",
+      "description": "Sangu",
+      "amount": 240000
+    },
+    {
+      "rowNumber": 6,
+      "id": "be4c3fe0-8efd-4c26-be8a-751eb3fb7314",
+      "description": "Tabungan Kaltim",
+      "amount": 2000000
+    },
+    {
+      "rowNumber": 7,
+      "id": "3a5bfa81-407c-40fe-85d5-60c8fbfa97a3",
+      "description": "Sangu",
+      "amount": 250000
+    },
+    {
+      "rowNumber": 8,
+      "id": "6d869755-fbec-452c-a45a-0021b2257b99",
+      "description": "Tabungan Kaltim",
+      "amount": 4500000
+    },
+    {
+      "rowNumber": 9,
+      "id": "8b71622c-4dcb-4ba2-af36-a902c116f0b5",
+      "description": "THR",
+      "amount": 430000
+    },
+    {
+      "rowNumber": 10,
+      "id": "8dbeb41f-3bbf-4589-9848-6223ef2d59df",
+      "description": "Tabungan Kaltim",
+      "amount": 4500000
+    },
+    {
+      "rowNumber": 11,
+      "id": "27e36e0c-50d2-4ab0-8e0d-8801cca5accf",
+      "description": "THR",
+      "amount": 430000
+    },
+    {
+      "rowNumber": 12,
+      "id": "7f55918a-6291-4b79-b99d-f315cc8b76ae",
+      "description": "THR Informatika",
+      "amount": 700000
+    },
+    {
+      "rowNumber": 13,
+      "id": "c5930e49-934b-49c7-9e54-5450f3650332",
+      "description": "THR Fakultas",
+      "amount": 500000
+    },
+    {
+      "rowNumber": 14,
+      "id": "4ebe6aca-a936-4fa3-bdb3-c980296979c5",
+      "description": "Hardiknas",
+      "amount": 600000
+    },
+    {
+      "rowNumber": 15,
+      "id": "380f7fbc-7964-422b-83ff-d27dd14a606c",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 16,
+      "id": "9bebf7e7-47c8-435c-9cd1-6e559732584c",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 17,
+      "id": "5ce53466-8cb2-44cb-8401-e3df56235992",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 18,
+      "id": "aaad7331-2989-495d-a9da-965da2c6526d",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 19,
+      "id": "d3634989-6f6f-4236-a721-a05ba7b783cb",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 20,
+      "id": "86d07da3-9313-497e-ba24-ff35435a78d8",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 21,
+      "id": "f42b0647-8158-4a01-86f1-01568d0c1a2b",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 22,
+      "id": "86938b26-9195-49d7-ba65-50e1b9363a21",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 23,
+      "id": "d51262b0-8fee-4847-9c59-1a3f244e8d5e",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 24,
+      "id": "987d7e90-e78e-44a2-ae98-fba85072c616",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 25,
+      "id": "72ceda86-b6ce-4b3a-913a-f38f3f952149",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 26,
+      "id": "81f62ba6-f5dd-4d9a-835d-406d8902bfa8",
+      "description": "Gaji UMM",
+      "amount": 2017025
+    },
+    {
+      "rowNumber": 27,
+      "id": "a9032952-45cd-4f10-9db7-a49915835409",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 28,
+      "id": "1bc86741-a2ee-4ea4-90c2-4158883f38a6",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 29,
+      "id": "6ab1a553-3744-4ecf-bcaa-224560bc26b6",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 30,
+      "id": "bd48ca80-6b49-4253-8b30-29c59727c1aa",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 31,
+      "id": "bb126cfd-a227-4fae-8414-ae7f09397fce",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 32,
+      "id": "2c4d6a00-2d21-4d92-8c36-ec196a06172e",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 33,
+      "id": "ab483361-b99c-4b61-a4f7-4a48a378511a",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 34,
+      "id": "bc2490ee-b9e0-42ca-b9d7-62bb375a8623",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 35,
+      "id": "11a76254-b205-4680-99ab-feda4d96adaf",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 36,
+      "id": "4e094d11-5885-4292-88b8-77509956e42a",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 37,
+      "id": "dd0fcf4b-7a9b-486c-ab0c-056bece8836a",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 38,
+      "id": "678934e6-6541-45d3-81c4-9642f8c55ba9",
+      "description": "Gaji UMM",
+      "amount": 2017025
+    },
+    {
+      "rowNumber": 39,
+      "id": "b3d5cd22-a91f-421c-ba44-35a3fac39008",
+      "description": "THR Prodi",
+      "amount": 275000
+    },
+    {
+      "rowNumber": 40,
+      "id": "02b98120-cc14-469e-a5c7-9ad2fc3f2455",
+      "description": "Hardiknas",
+      "amount": 600000
+    },
+    {
+      "rowNumber": 41,
+      "id": "6ee8aea1-b828-4a5e-9872-e0dfbfa47eb6",
+      "description": "THR Univ",
+      "amount": 1500000
+    },
+    {
+      "rowNumber": 42,
+      "id": "95a4339b-5709-4f06-83f2-376f7f4a5d74",
+      "description": "THR Fakultas",
+      "amount": 700000
+    },
+    {
+      "rowNumber": 43,
+      "id": "50ed45a1-b557-479f-9dba-4211615ed50f",
+      "description": "THR Prodi",
+      "amount": 700000
+    },
+    {
+      "rowNumber": 44,
+      "id": "7fe7fa6b-fd15-4b4e-8531-400847a466b8",
+      "description": "THR Univ",
+      "amount": 1500000
+    },
+    {
+      "rowNumber": 45,
+      "id": "f6ba3af3-b935-4563-8361-cc5217b13287",
+      "description": "THR Fakultas",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": 46,
+      "id": "0dc3e99d-1792-41f9-9c32-f73e3581d284",
+      "description": "THR Prodi",
+      "amount": 300000
+    },
+    {
+      "rowNumber": 47,
+      "id": "07c3ed1f-2af7-4fd8-8c73-f56fe58b5ba6",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 48,
+      "id": "cf4710a4-db48-4c79-91b6-ebc6fce22b4e",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 49,
+      "id": "b207f858-2cb0-4a68-b4cf-6d21721eaa8a",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 50,
+      "id": "6dbd644f-5c0e-49c7-867a-de2e7dc673ea",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 51,
+      "id": "0f87a2b5-d98d-4cd7-b76d-fadf970590cb",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 52,
+      "id": "0e705933-15f7-4602-a1c3-fe88146aaacd",
+      "description": "Gaji UMM",
+      "amount": 2113500
+    },
+    {
+      "rowNumber": 53,
+      "id": "89c9fa6f-5be1-450f-bf73-0d3e13da65e0",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 54,
+      "id": "b30c1b28-c3a5-49a6-9c6b-7579168f2eab",
+      "description": "Gaji UMM",
+      "amount": 1920500
+    },
+    {
+      "rowNumber": 55,
+      "id": "6ee40ed6-9317-4565-8809-83b5be5e9ff8",
+      "description": "Gaji UMM",
+      "amount": 2113500
+    },
+    {
+      "rowNumber": 56,
+      "id": "8d4f568a-eac0-4a8f-8302-8d9b733099dd",
+      "description": "Gaji UMM",
+      "amount": 2113500
+    },
+    {
+      "rowNumber": 57,
+      "id": "beddf0c9-a562-4c68-b86b-9ffa1c8ca613",
+      "description": "Gaji UMM",
+      "amount": 2113500
+    },
+    {
+      "rowNumber": 58,
+      "id": "ba06be6e-7de8-4af8-8404-44ca3725c9d8",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 59,
+      "id": "ce09da7f-7890-4ace-b3f3-ef6d8b511237",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 60,
+      "id": "dc9260ad-1ceb-4b62-9add-6f2c0044f67c",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 61,
+      "id": "b4c2ef6b-c43f-4692-8dfb-77fe53b0041f",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 62,
+      "id": "048f825d-2c66-40ad-9e8b-416914dd71e1",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 63,
+      "id": "1f2f8bf9-5e1b-4b4c-a242-69d95e95e6de",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 64,
+      "id": "509ede92-2751-43f7-b110-729cd7367bf6",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 65,
+      "id": "4d3a20cf-7446-4f12-a146-753ffffac147",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 66,
+      "id": "3fe74466-d59f-4938-981a-606286443a15",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 67,
+      "id": "b4db69fd-949f-4edd-9e3b-a663d2133e98",
+      "description": "Tabungan",
+      "amount": 4500000
+    },
+    {
+      "rowNumber": 68,
+      "id": "2ca88b81-0270-476e-bf0b-0c77e4a119b9",
+      "description": "Tabungan",
+      "amount": 4500000
+    },
+    {
+      "rowNumber": 69,
+      "id": "c1a2ac10-9824-40ad-9c49-0ac05aaca4cf",
+      "description": "Tabungan",
+      "amount": 4650000
+    },
+    {
+      "rowNumber": 70,
+      "id": "7ece0a1d-6ef5-410e-9190-526c700b4df3",
+      "description": "Tabungan",
+      "amount": 4650000
+    },
+    {
+      "rowNumber": 71,
+      "id": "c51243ea-46e9-43c4-b601-a72a9fbfa482",
+      "description": "Tabungan",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": 72,
+      "id": "f0c6c574-a725-4e4a-babc-c2a5549116df",
+      "description": "Tabungan",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": 73,
+      "id": "c3c475e3-9c41-413f-9e1b-e80702e5fca6",
+      "description": "THR Fakultas",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": 74,
+      "id": "5bbb5302-bea9-454b-bea7-2643d75db4ae",
+      "description": "THR Prodi",
+      "amount": 700000
+    },
+    {
+      "rowNumber": 75,
+      "id": "480c8aa3-855d-4d77-bcd5-d57663903476",
+      "description": "THR Fakultas",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": 76,
+      "id": "fcafb16e-9540-46c7-aa6d-5d33c5815f3b",
+      "description": "THR Univ",
+      "amount": 1500000
+    },
+    {
+      "rowNumber": 77,
+      "id": "173fe552-5c2b-4a5b-997b-203e4e120f27",
+      "description": "THR Univ",
+      "amount": 1500000
+    },
+    {
+      "rowNumber": 78,
+      "id": "e72f31f5-8554-4ff4-a5f4-3b2cd986ea17",
+      "description": "km genap ke-1",
+      "amount": 2281500
+    },
+    {
+      "rowNumber": 79,
+      "id": "c42c155d-ca23-4934-a2fc-a9b3cb3b613d",
+      "description": "HR koreksi UAS",
+      "amount": 853125
+    },
+    {
+      "rowNumber": 80,
+      "id": "220d7a42-b11f-4532-a3d6-ebf4da92989e",
+      "description": "Lebaran 1446",
+      "amount": 400000
+    },
+    {
+      "rowNumber": 81,
+      "id": "b5a1d98f-11ec-445b-8fc7-3bb69f7e6836",
+      "description": "Lebaran 1446",
+      "amount": 400000
+    },
+    {
+      "rowNumber": 82,
+      "id": "b9c640fc-0ec2-4c5e-a71a-2091c4a562a7",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 83,
+      "id": "ee6701ed-da74-4838-842d-103630f5ac99",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 84,
+      "id": "73f55624-cfed-411d-bd0c-d43555ad5cc7",
+      "description": "Lab",
+      "amount": 4065000
+    },
+    {
+      "rowNumber": 85,
+      "id": "a635be6e-cad4-4b17-bc27-ce81c1d8b704",
+      "description": "Penelitian tahap 2",
+      "amount": 4350000
+    },
+    {
+      "rowNumber": 86,
+      "id": "03aea01e-5408-43a8-a989-fd52331f0a93",
+      "description": "Lab",
+      "amount": 4940000
+    },
+    {
+      "rowNumber": 87,
+      "id": "81796b0e-5ee6-4b65-bb1a-d541dccd8b38",
+      "description": "lab",
+      "amount": 1120000
+    },
+    {
+      "rowNumber": 88,
+      "id": "973c59d0-ef70-489d-83b8-bbcc63f9cdba",
+      "description": "-",
+      "amount": 1120000
+    },
+    {
+      "rowNumber": 89,
+      "id": "dd378d2e-75b3-4415-a588-05ae5e023722",
+      "description": "",
+      "amount": 3740000
+    },
+    {
+      "rowNumber": 90,
+      "id": "4d0a4fc0-10d4-4f24-8dc9-0f23ef609ca1",
+      "description": "-",
+      "amount": 32184386
+    },
+    {
+      "rowNumber": 91,
+      "id": "d745b7f1-a0a7-454a-8a47-24f797c65ee2",
+      "description": "km",
+      "amount": 1000000
+    },
+    {
+      "rowNumber": "92+93",
+      "id": "f349b884-4395-4a23-a071-531c02393cd9",
+      "description": "Sukuk",
+      "amount": 17730000
+    },
+    {
+      "rowNumber": "94+95",
+      "id": "8c0ae3fe-b48c-475a-b4af-e738ebc26310",
+      "description": "Sukuk",
+      "amount": 27020000
+    },
+    {
+      "rowNumber": "96+97",
+      "id": "9c0bb960-72c0-4382-995c-0fe08a70e51d",
+      "description": "Sukuk",
+      "amount": 27625000
+    },
+    {
+      "rowNumber": "98+99",
+      "id": "8b8582e1-a03e-4cad-97e2-f40692d30e7d",
+      "description": "Sukuk",
+      "amount": 27625000
+    },
+    {
+      "rowNumber": 100,
+      "id": "a5b768b5-6f8a-4455-8ccf-3d438e3b58e3",
+      "description": "Beli kambing qurban Novan",
+      "amount": 3500000
+    },
+    {
+      "rowNumber": 101,
+      "id": "1d22e51c-5370-422b-9784-40a0cea4e153",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 102,
+      "id": "dc95c8d2-2905-4ac5-a777-37e471ffca74",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 103,
+      "id": "fa1adc8d-e08e-4008-85ef-6363edd7b6d3",
+      "description": "bayar sekolah fatih",
+      "amount": 2600000
+    },
+    {
+      "rowNumber": 104,
+      "id": "9bc73cce-2ae5-41e7-9559-f80bf0421583",
+      "description": "bayar sekolah fatih",
+      "amount": 2200000
+    },
+    {
+      "rowNumber": 105,
+      "id": "7d05251d-49c2-4f02-b709-6e90ae5bfc0f",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 106,
+      "id": "32903de4-af9b-4241-b4c5-54f5b27b4437",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 107,
+      "id": "0ce1d0e2-7d4f-48f3-a54c-e5274f743994",
+      "description": "KM",
+      "amount": 1711125
+    },
+    {
+      "rowNumber": 108,
+      "id": "50260a59-195d-4aff-a293-458a86203493",
+      "description": "Perjalan ke JKT",
+      "amount": 3600000
+    },
+    {
+      "rowNumber": "109+110",
+      "id": "90435a77-c4bb-4123-b9dd-03624259d675",
+      "description": "Pindah Rekening ke",
+      "amount": 4000000
+    },
+    {
+      "rowNumber": "111+112",
+      "id": "6fd96938-a348-4a44-973d-0f07ed57966f",
+      "description": "Pindah Rekening ke",
+      "amount": 6000000
+    },
+    {
+      "rowNumber": 113,
+      "id": "424f5d66-4234-4342-b035-fdba2dc2c4e0",
+      "description": "ke surabaya",
+      "amount": 300000
+    },
+    {
+      "rowNumber": 114,
+      "id": "a478353b-4c48-4c27-9429-e6639be2a181",
+      "description": "dokter gigi",
+      "amount": 1600000
+    },
+    {
+      "rowNumber": 115,
+      "id": "ba8d1da1-feb0-43db-b129-0cd045fff73b",
+      "description": "osce",
+      "amount": 1600000
+    },
+    {
+      "rowNumber": "116+117",
+      "id": "871d7f39-4198-4043-8e5b-bb33c76da83c",
+      "description": "Pindah Rekening ke",
+      "amount": 1600000
+    },
+    {
+      "rowNumber": 118,
+      "id": "11a4cd26-ae9f-41c0-81d7-95bca98b65c7",
+      "description": "-",
+      "amount": 2500000
+    },
+    {
+      "rowNumber": 119,
+      "id": "5c675e28-3a02-458f-af30-68766d92d6a9",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 120,
+      "id": "585b5a4f-c356-4549-9ae1-d3e197736076",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 121,
+      "id": "851f2ce8-a601-4ba0-a3db-34aaf65fbb0b",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 122,
+      "id": "c41e55ba-b103-46f8-9eb3-89c95f10308f",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 123,
+      "id": "e38f94df-52ef-4471-b674-88d844c71a06",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 124,
+      "id": "3cbff261-4aee-475d-9e29-a45f9c34aa05",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 125,
+      "id": "55017454-540d-4b36-b7d3-83e1c25b857d",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 126,
+      "id": "26f8eb4d-1291-4291-bf95-ddeaa0018e69",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 127,
+      "id": "62016091-cb1f-4647-acd5-a7fd15289ab0",
+      "description": "Tabungan Haji",
+      "amount": 33000000
+    },
+    {
+      "rowNumber": 128,
+      "id": "7c800e9a-15ee-42ca-8e2d-1e47ebef82b2",
+      "description": "Tabungan Haji",
+      "amount": 33000000
+    },
+    {
+      "rowNumber": 132,
+      "id": "b0b4a4b9-97e5-43a9-8ccd-7bd45ab624d4",
+      "description": "Dana masuk ke RDN",
+      "amount": 2263000
+    },
+    {
+      "rowNumber": 133,
+      "id": "99c411ef-5ed2-4e0a-9d63-20a6d52b95e4",
+      "description": "Dana masuk ke RDN",
+      "amount": 2528722
+    },
+    {
+      "rowNumber": 134,
+      "id": "284ae850-5f38-47b7-9b38-7998172a217e",
+      "description": "",
+      "amount": 500000
+    },
+    {
+      "rowNumber": 135,
+      "id": "59410a4a-e468-4c61-9538-0d77460ad8d7",
+      "description": "",
+      "amount": 14569853
+    },
+    {
+      "rowNumber": 136,
+      "id": "490f9c8d-810a-4ee7-91e7-2c5177debfe4",
+      "description": "",
+      "amount": 16039761
+    },
+    {
+      "rowNumber": 137,
+      "id": "32feb16f-71f6-4938-bd9b-3d6660db9ade",
+      "description": "",
+      "amount": 2500000
+    },
+    {
+      "rowNumber": 138,
+      "id": "8bee7217-e377-4d1b-b224-daa5cfb30f84",
+      "description": "HR Wali",
+      "amount": 400000
+    },
+    {
+      "rowNumber": 140,
+      "id": "4682ffad-e89a-439b-be49-3508f56da981",
+      "description": "Zakat",
+      "amount": 300000
+    },
+    {
+      "rowNumber": 142,
+      "id": "7fade6ad-dcb1-42fa-8a71-1cdfeb72e2f6",
+      "description": "Gaji 13",
+      "amount": 1742400
+    },
+    {
+      "rowNumber": 143,
+      "id": "64fb91f8-6b0b-4cfe-9a68-105bf7bd81a8",
+      "description": "Gaji 13",
+      "amount": 1742400
+    },
+    {
+      "rowNumber": 145,
+      "id": "659011c5-00af-45d1-8f86-26080d16904e",
+      "description": "Dana masuk ke RDN",
+      "amount": 1250000
+    },
+    {
+      "rowNumber": 146,
+      "id": "63f7375f-95e5-401a-9b66-1be833be42ba",
+      "description": "Dana dikirim ke RDN",
+      "amount": 1742000
+    },
+    {
+      "rowNumber": 148,
+      "id": "f534e43b-c223-4c8d-8f8f-f38ce588a8a0",
+      "description": "Buka Tabungan",
+      "amount": 1325000
+    },
+    {
+      "rowNumber": 149,
+      "id": "0b478d88-2aa4-432d-8d06-1ab02d454d44",
+      "description": "Buka Tabungan",
+      "amount": 1325000
+    },
+    {
+      "rowNumber": 150,
+      "id": "af1e75d6-34c0-4f7e-87f7-7cb9dd014433",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 151,
+      "id": "14925749-d169-4801-b99b-c0224be8105c",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 152,
+      "id": "756d000b-a1b4-449b-9b46-fab67195b685",
+      "description": "Dana dikirim ke RDN",
+      "amount": 2779000
+    },
+    {
+      "rowNumber": 153,
+      "id": "a9631354-c4c6-4a42-9007-e519067a1a44",
+      "description": "Dana masuk ke RDN",
+      "amount": 2779000
+    },
+    {
+      "rowNumber": 155,
+      "id": "987e1d2d-4d4a-4f3d-8416-52dada7369b1",
+      "description": "",
+      "amount": 17672500
+    },
+    {
+      "rowNumber": 158,
+      "id": "aaddb211-6821-4526-966b-203e15dff8be",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 159,
+      "id": "c92c56d8-bf3a-4383-8a52-8f5c17f9d824",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 160,
+      "id": "0c06eb6a-b29d-47af-a04c-8d083f2d7396",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 161,
+      "id": "48f0883b-f37d-464a-b841-bf2480e2cac1",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    },
+    {
+      "rowNumber": 162,
+      "id": "57213061-866f-4390-8309-275efa8b98b7",
+      "description": "Gaji UMM",
+      "amount": 2613550
+    }
+  ],
+  "failed": [
+    {
+      "rowNumber": 144,
+      "error": "400 Bad Request: Modal/Saldo milik kepemilikan tersebut di rekening BNI Bashor tidak cukup (Hanya ada Rp 3.142.400)",
+      "normalized": {
+        "date": "2025-09-08",
+        "type": "TRANSFER",
+        "ownerName": "Bashor Fauzan",
+        "activityName": "Investasi",
+        "sourceAccountName": "BNI Bashor",
+        "destinationAccountName": "RHB K Bashor",
+        "amount": 3500000,
+        "description": "Dana dikirim ke RDN",
+        "isValidated": true
+      }
+    },
+    {
+      "rowNumber": 147,
+      "error": "400 Bad Request: Modal/Saldo milik kepemilikan tersebut di rekening BCA S Novan tidak cukup (Hanya ada Rp 0)",
+      "normalized": {
+        "date": "2025-09-08",
+        "type": "TRANSFER",
+        "ownerName": "Bashor Fauzan",
+        "activityName": "Investasi",
+        "sourceAccountName": "BCA S Novan",
+        "destinationAccountName": "BNI Bashor",
+        "amount": 700000,
+        "description": "Dana masuk ke RDN",
+        "isValidated": true
+      }
+    },
+    {
+      "rowNumber": 154,
+      "error": "400 Bad Request: Modal/Saldo milik kepemilikan tersebut di rekening BNI Bashor tidak cukup (Hanya ada Rp 3.051.950)",
+      "normalized": {
+        "date": "2025-09-21",
+        "type": "EXPENSE",
+        "ownerName": "Bashor Fauzan",
+        "activityName": "Pribadi",
+        "sourceAccountName": "BNI Bashor",
+        "destinationAccountName": "",
+        "amount": 17672500,
+        "description": "",
+        "isValidated": true
+      }
+    },
+    {
+      "rowNumber": 156,
+      "error": "400 Bad Request: Modal/Saldo milik kepemilikan tersebut di rekening BNI Novan tidak cukup (Hanya ada Rp 0)",
+      "normalized": {
+        "date": "2025-09-24",
+        "type": "TRANSFER",
+        "ownerName": "Bashor Fauzan",
+        "activityName": "Investasi",
+        "sourceAccountName": "BNI Novan",
+        "destinationAccountName": "RHB K Bashor",
+        "amount": 2572778,
+        "description": "Dana dikirim ke RDN",
+        "isValidated": true
+      }
+    },
+    {
+      "rowNumber": 157,
+      "error": "400 Bad Request: Modal/Saldo milik kepemilikan tersebut di rekening BNI Novan tidak cukup (Hanya ada Rp 0)",
+      "normalized": {
+        "date": "2025-09-24",
+        "type": "TRANSFER",
+        "ownerName": "Bashor Fauzan",
+        "activityName": "Investasi",
+        "sourceAccountName": "BNI Novan",
+        "destinationAccountName": "RHB K Bashor",
+        "amount": 1000000,
+        "description": "Dana dikirim ke RDN",
+        "isValidated": true
+      }
+    }
+  ]
+}

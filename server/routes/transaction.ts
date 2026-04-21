@@ -67,7 +67,7 @@ const applyAccountBalanceChanges = async (
         return;
     }
 
-    if (type === TransactionType.TRANSFER && sourceAccountId && destinationAccountId) {
+    if ((type === TransactionType.TRANSFER || type === TransactionType.INVESTMENT_IN) && sourceAccountId && destinationAccountId) {
         await trx.account.update({
             where: { id: sourceAccountId },
             data: { balance: { decrement: amount } }
@@ -338,14 +338,14 @@ router.post('/', async (req, res) => {
                 });
             }
 
-            await syncAccountBalances(trx);
-
             return createdTx;
         });
 
+        await syncAccountBalances(prisma);
+
         res.status(201).json(transaction);
-        } catch (error) {
-            console.error(error);
+    } catch (error) {
+        console.error(error);
         const message = error instanceof Error ? error.message : 'Gagal membuat transaksi';
         res.status(400).json({ error: message });
     }
@@ -539,7 +539,6 @@ router.put('/:id/validate', async (req, res) => {
                 }
 
                 const resolvedActivityId = await resolveActivityId(trx, txType, categoryId || currentTx.activityId);
-                // Update transaction menjadi tervalidasi dan dengan data final
                 const updatedTx = await trx.transaction.update({
                     where: { id },
                     data: {
@@ -564,7 +563,6 @@ router.put('/:id/validate', async (req, res) => {
                     await reduceActiveTargets(trx, updatedTx.ownerId, parsedAmount);
                 }
 
-                // Update parseStatus notifikasi menjadi PARSED setelah transaksi disetujui
                 if (updatedTx.notificationInboxId) {
                     await trx.notificationInbox.update({
                         where: { id: updatedTx.notificationInboxId },
@@ -572,10 +570,10 @@ router.put('/:id/validate', async (req, res) => {
                     });
                 }
 
-                await syncAccountBalances(trx);
-
                 return updatedTx;
             });
+
+            await syncAccountBalances(prisma);
 
             return res.json(validatedTx);
         }
@@ -584,7 +582,7 @@ router.put('/:id/validate', async (req, res) => {
     } catch (error) {
         console.error(error);
         const message = error instanceof Error ? error.message : 'Gagal memvalidasi transaksi';
-        res.status(500).json({ error: message });
+        res.status(400).json({ error: message });
     }
 });
 
@@ -615,13 +613,12 @@ router.put('/:id', async (req, res) => {
         }
 
         const updatedTx = await prisma.$transaction(async (trx) => {
-            // Ambil data transaksi lama
             const oldTx = await trx.transaction.findUnique({ where: { id } });
             if (!oldTx) {
                 throw new Error('Transaksi tidak ditemukan');
             }
 
-            // 1. Rollback saldo akibat transaksi LAMA (kebalikan)
+            // 1. Rollback saldo transaksi LAMA
             if (oldTx.type === TransactionType.INCOME && oldTx.destinationAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.destinationAccountId },
@@ -632,7 +629,7 @@ router.put('/:id', async (req, res) => {
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
                 });
-            } else if (oldTx.type === TransactionType.TRANSFER && oldTx.sourceAccountId && oldTx.destinationAccountId) {
+            } else if ((oldTx.type === TransactionType.TRANSFER || oldTx.type === TransactionType.INVESTMENT_IN) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
@@ -643,16 +640,16 @@ router.put('/:id', async (req, res) => {
                 });
             }
 
-            // 2. Periksa saldo cukup untuk transaksi BARU
+            // 2. Cek saldo untuk transaksi BARU
             const sourceFundsError = await ensureSourceAccountHasFunds(trx, txType, parsedAmount, sourceAccountId, ownerId, id);
             if (sourceFundsError) {
                 throw new Error(sourceFundsError);
             }
 
-            // 3. Resolusi kategori/aktivitas
+            // 3. Resolusi aktivitas
             const resolvedActivityId = await resolveActivityId(trx, txType, oldTx.activityId);
 
-            // 4. Update record transaksi
+            // 4. Update record
             const updated = await trx.transaction.update({
                 where: { id },
                 data: {
@@ -669,10 +666,10 @@ router.put('/:id', async (req, res) => {
             // 5. Terapkan saldo BARU
             await applyAccountBalanceChanges(trx, txType, parsedAmount, sourceAccountId, destinationAccountId);
 
-            await syncAccountBalances(trx);
-
             return updated;
         });
+
+        await syncAccountBalances(prisma);
 
         res.json(updatedTx);
     } catch (error) {
@@ -720,7 +717,7 @@ router.post('/bulk-delete', async (req, res) => {
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
                         });
-                    } else if (tx.type === TransactionType.TRANSFER && tx.sourceAccountId && tx.destinationAccountId) {
+                    } else if ((tx.type === TransactionType.TRANSFER || tx.type === TransactionType.INVESTMENT_IN) && tx.sourceAccountId && tx.destinationAccountId) {
                         await trx.account.update({
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
@@ -736,9 +733,9 @@ router.post('/bulk-delete', async (req, res) => {
             await trx.transaction.deleteMany({
                 where: { id: { in: ids } }
             });
-
-            await syncAccountBalances(trx);
         });
+
+        await syncAccountBalances(prisma);
 
         res.json({ message: `${ids.length} transaksi berhasil dihapus` });
     } catch (error) {
@@ -770,7 +767,7 @@ router.delete('/:id', async (req, res) => {
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }
                     });
-                } else if (txToDelete.type === TransactionType.TRANSFER && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
+                } else if ((txToDelete.type === TransactionType.TRANSFER || txToDelete.type === TransactionType.INVESTMENT_IN) && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
                     await trx.account.update({
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }
@@ -782,11 +779,10 @@ router.delete('/:id', async (req, res) => {
                 }
             }
 
-            // Hapus dari system
             await trx.transaction.delete({ where: { id } });
-
-            await syncAccountBalances(trx);
         });
+
+        await syncAccountBalances(prisma);
 
         res.json({ message: 'Transaksi berhasil dihapus' });
     } catch (error) {
