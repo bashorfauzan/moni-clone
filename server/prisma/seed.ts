@@ -149,7 +149,13 @@ async function main() {
             { id: 'trx-gaji-13-novan', ownerId: 'novan-visia', destinationAccountId: 'acc-bni-novan', amount: 1742400, description: 'Gaji 13', type: 'INCOME' as const, activityId: 'act-income' },
             { id: 'trx-buka-tab-bashor', ownerId: 'bashor-fauzan', destinationAccountId: 'acc-bni-bashor', amount: 1325000, description: 'Buka Tabungan', type: 'INCOME' as const, activityId: 'act-income' },
             { id: 'trx-buka-tab-novan', ownerId: 'novan-visia', destinationAccountId: 'acc-bni-novan', amount: 1325000, description: 'Buka Tabungan', type: 'INCOME' as const, activityId: 'act-income' },
-            { id: 'trx-extra-bashor', ownerId: 'bashor-fauzan', destinationAccountId: 'acc-bni-bashor', amount: 17672500, description: '', type: 'INCOME' as const, activityId: 'act-income' },
+            { id: `trx-extra-bashor`, ownerId: 'bashor-fauzan', destinationAccountId: 'acc-bni-bashor', amount: 17672500, description: '', type: 'INCOME' as const, activityId: 'act-income' },
+
+            // Investment Deposits to RHB K Bashor
+            { id: 'inv-bashor-rhbk', ownerId: 'bashor-fauzan', sourceAccountId: 'acc-bni-bashor', destinationAccountId: 'acc-rhb-k-bashor', amount: 42518500, description: 'Setoran Investasi RHB K Bashor', type: 'INVESTMENT_IN' as const, activityId: 'act-transfer' },
+            { id: 'inv-novan-rhbk', ownerId: 'novan-visia', sourceAccountId: 'acc-bni-novan', destinationAccountId: 'acc-rhb-k-bashor', amount: 30404000, description: 'Setoran Investasi RHB K Bashor', type: 'INVESTMENT_IN' as const, activityId: 'act-transfer' },
+            { id: 'inv-niswa-rhbk', ownerId: 'niswa', sourceAccountId: 'acc-bca-s-niswa', destinationAccountId: 'acc-rhb-k-bashor', amount: 27020000, description: 'Setoran Investasi RHB K Bashor', type: 'INVESTMENT_IN' as const, activityId: 'act-transfer' },
+            { id: 'inv-fatih-rhbk', ownerId: 'fatih', destinationAccountId: 'acc-rhb-k-bashor', amount: 17730000, description: 'Setoran Investasi RHB K Bashor', type: 'INVESTMENT_IN' as const, activityId: 'act-transfer' },
         ].flat();
 
         // Karena format datanya adalah uang masuk ke rekening (penitipan dana/tabungan), 
