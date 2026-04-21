@@ -1,5 +1,5 @@
 import api from './api';
-import { supabase, hasSupabaseEnv } from '../lib/supabase';
+import { supabase, useDirectSupabaseData } from '../lib/supabase';
 
 export type TransactionItem = {
     id: string;
@@ -47,7 +47,7 @@ const normalizeTransaction = (row: any): TransactionItem => ({
 export const fetchTransactions = async (options: FetchTransactionsOptions = {}): Promise<TransactionItem[]> => {
     const { validated, limit } = options;
 
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         let query = supabase
             .from('Transaction')
             .select(`

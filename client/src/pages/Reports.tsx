@@ -14,6 +14,20 @@ import Spinner from '../components/Spinner';
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
 
+const isInvestmentAccountType = (type?: string) => type === 'RDN' || type === 'Sekuritas';
+
+const isInvestmentTopUp = (tx: TransactionItem) =>
+    tx.type === 'TRANSFER' && isInvestmentAccountType(tx.destinationAccount?.type);
+
+const isInvestmentLiquidation = (tx: TransactionItem) =>
+    tx.type === 'TRANSFER' && isInvestmentAccountType(tx.sourceAccount?.type);
+
+const getReportTransactionKind = (tx: TransactionItem) => {
+    if (isInvestmentTopUp(tx)) return 'INVESTMENT_TOP_UP';
+    if (isInvestmentLiquidation(tx)) return 'INVESTMENT_LIQUIDATION';
+    return tx.type;
+};
+
 const Reports = () => {
     const { openEditModal } = useTransaction();
     const { verifySecurity } = useSecurity();
@@ -127,10 +141,16 @@ const Reports = () => {
             });
 
             const totalIncome = filtered
-                .filter((tx: any) => tx.type === 'INCOME')
+                .filter((tx: TransactionItem) => {
+                    const kind = getReportTransactionKind(tx);
+                    return kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_IN';
+                })
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
             const totalExpense = filtered
-                .filter((tx: any) => tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT')
+                .filter((tx: TransactionItem) => {
+                    const kind = getReportTransactionKind(tx);
+                    return kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP';
+                })
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
             
@@ -138,13 +158,14 @@ const Reports = () => {
             const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
 
             const catMap: any = {};
-            filtered.forEach((tx: any) => {
+            filtered.forEach((tx: TransactionItem) => {
                 let name = tx.activity?.name;
                 if (!name) {
-                    if (tx.type === 'INCOME') name = 'Pemasukan';
-                    else if (tx.type === 'TRANSFER') name = 'Transfer';
-                    else if (tx.type === 'INVESTMENT_IN') name = 'Setoran Investasi';
-                    else if (tx.type === 'INVESTMENT_OUT') name = 'Pencairan Investasi';
+                    const kind = getReportTransactionKind(tx);
+                    if (kind === 'INCOME') name = 'Pemasukan';
+                    else if (kind === 'TRANSFER') name = 'Transfer';
+                    else if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') name = 'Setoran Investasi';
+                    else if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') name = 'Pencairan Investasi';
                     else name = 'Lainnya';
                 }
                 catMap[name] = (catMap[name] || 0) + tx.amount;
@@ -155,15 +176,16 @@ const Reports = () => {
             })).sort((a, b) => b.value - a.value);
 
             const trendMap: any = {};
-            filtered.forEach((tx: any) => {
+            filtered.forEach((tx: TransactionItem) => {
                 const date = new Date(tx.date);
                 const label = viewMode === 'MONTHLY' ? date.getDate().toString() : (date.getMonth() + 1).toString();
                 if (!trendMap[label]) {
                     trendMap[label] = { label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`, Pemasukan: 0, Pengeluaran: 0 };
                 }
-                if (tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') {
+                const kind = getReportTransactionKind(tx);
+                if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') {
                     trendMap[label].Pemasukan += tx.amount;
-                } else if (tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') {
+                } else if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP') {
                     trendMap[label].Pengeluaran += tx.amount;
                 }
             });
@@ -210,25 +232,26 @@ const Reports = () => {
     };
 
     const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
-        const isInvestmentTransfer = tx.type === 'TRANSFER'
-            && ['RDN', 'Sekuritas'].includes(tx.destinationAccount?.type || '');
+        const isInvestmentTransfer = isInvestmentTopUp(tx);
         if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') return 'INVESTMENT';
         if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER') return tx.type;
         return 'INCOME';
     };
 
-    const getTypeBadge = (type: string) => {
-        if (type === 'INCOME') return { label: 'Masuk', cls: 'bg-emerald-50 text-emerald-700' };
-        if (type === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
-        if (type === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
-        if (type === 'INVESTMENT_IN') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
-        if (type === 'INVESTMENT_OUT') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
+    const getTypeBadge = (tx: TransactionItem) => {
+        const kind = getReportTransactionKind(tx);
+        if (kind === 'INCOME') return { label: 'Masuk', cls: 'bg-emerald-50 text-emerald-700' };
+        if (kind === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
+        if (kind === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
+        if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
+        if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
         return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
     };
 
-    const getAmountColor = (type: string) => {
-        if (type === 'INCOME' || type === 'INVESTMENT_IN') return 'text-emerald-600';
-        if (type === 'EXPENSE' || type === 'INVESTMENT_OUT') return 'text-rose-600';
+    const getAmountColor = (tx: TransactionItem) => {
+        const kind = getReportTransactionKind(tx);
+        if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
+        if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
         return 'text-slate-900';
     };
 
@@ -428,7 +451,7 @@ const Reports = () => {
                                 <span className="text-[11px] font-bold text-slate-500">PILIH SEMUA</span>
                             </div>
                             {visibleTx.map((tx: TransactionItem) => {
-                                const badge = getTypeBadge(tx.type);
+                                const badge = getTypeBadge(tx);
                                 return (
                                     <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
                                         <button onClick={() => toggleSelectTx(tx.id)} className="shrink-0 text-slate-300 hover:text-blue-600 transition-colors">
@@ -439,7 +462,7 @@ const Reports = () => {
                                             <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
                                             <p className="text-[11px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                                         </div>
-                                        <p className={`shrink-0 text-sm font-black ${getAmountColor(tx.type)}`}>{formatCurrency(tx.amount)}</p>
+                                        <p className={`shrink-0 text-sm font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</p>
                                         <div className="flex gap-1 shrink-0">
                                             <button
                                                 onClick={() => openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId })}
@@ -475,7 +498,7 @@ const Reports = () => {
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
                                     {visibleTx.map((tx: TransactionItem) => {
-                                        const badge = getTypeBadge(tx.type);
+                                        const badge = getTypeBadge(tx);
                                         return (
                                             <tr key={tx.id} className={`transition-colors hover:bg-slate-50/60 ${selectedTx.has(tx.id) ? 'bg-blue-50/20' : ''}`}>
                                                 <td className="px-5 py-4 whitespace-nowrap text-center">
@@ -495,7 +518,7 @@ const Reports = () => {
                                                     <p className="max-w-[180px] truncate font-semibold text-slate-800">{tx.activity?.name || '-'}</p>
                                                     {tx.description && <p className="max-w-[180px] truncate text-[11px] text-slate-400">{tx.description}</p>}
                                                 </td>
-                                                <td className={`px-5 py-4 text-right font-black ${getAmountColor(tx.type)}`}>{formatCurrency(tx.amount)}</td>
+                                                <td className={`px-5 py-4 text-right font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</td>
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         <button

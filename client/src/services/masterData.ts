@@ -1,5 +1,5 @@
 import api from './api';
-import { supabase, hasSupabaseEnv } from '../lib/supabase';
+import { supabase, useDirectSupabaseData } from '../lib/supabase';
 
 export type Owner = { id: string; name: string };
 export type Account = {
@@ -58,7 +58,7 @@ const normalizeActivity = (row: any): Activity => ({
 });
 
 export const fetchMasterMeta = async (): Promise<MasterMeta> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const [ownersRes, accountsRes, activitiesRes] = await Promise.all([
             supabase.from('Owner').select('id, name').order('createdAt', { ascending: true }),
             supabase.from('Account').select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, balance, ownerId').order('createdAt', { ascending: false }),
@@ -89,7 +89,7 @@ export const fetchMasterMeta = async (): Promise<MasterMeta> => {
 };
 
 export const createAccount = async (payload: AccountPayload): Promise<Account> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const timestamp = nowIso();
         const { data, error } = await supabase
             .from('Account')
@@ -111,7 +111,7 @@ export const createAccount = async (payload: AccountPayload): Promise<Account> =
 };
 
 export const updateAccount = async (id: string, payload: Partial<AccountPayload>): Promise<Account> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { data, error } = await supabase
             .from('Account')
             .update({
@@ -131,7 +131,7 @@ export const updateAccount = async (id: string, payload: Partial<AccountPayload>
 };
 
 export const deleteAccount = async (id: string): Promise<void> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { error } = await supabase.from('Account').delete().eq('id', id);
         if (!error) return;
         console.warn('Supabase account delete failed, falling back to backend API.', error);
@@ -141,7 +141,7 @@ export const deleteAccount = async (id: string): Promise<void> => {
 };
 
 export const createActivity = async (name: string): Promise<Activity> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const timestamp = nowIso();
         const { data, error } = await supabase
             .from('Activity')
@@ -163,7 +163,7 @@ export const createActivity = async (name: string): Promise<Activity> => {
 };
 
 export const updateActivity = async (id: string, name: string): Promise<Activity> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { data, error } = await supabase
             .from('Activity')
             .update({
@@ -183,7 +183,7 @@ export const updateActivity = async (id: string, name: string): Promise<Activity
 };
 
 export const deleteActivity = async (id: string): Promise<void> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { error } = await supabase.from('Activity').delete().eq('id', id);
         if (!error) return;
         console.warn('Supabase activity delete failed, falling back to backend API.', error);
@@ -193,7 +193,7 @@ export const deleteActivity = async (id: string): Promise<void> => {
 };
 
 export const createOwner = async (name: string): Promise<Owner> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const timestamp = nowIso();
         const { data, error } = await supabase
             .from('Owner')
@@ -215,7 +215,7 @@ export const createOwner = async (name: string): Promise<Owner> => {
 };
 
 export const updateOwner = async (id: string, name: string): Promise<Owner> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { data, error } = await supabase
             .from('Owner')
             .update({
@@ -235,7 +235,7 @@ export const updateOwner = async (id: string, name: string): Promise<Owner> => {
 };
 
 export const deleteOwner = async (id: string): Promise<void> => {
-    if (hasSupabaseEnv && supabase) {
+    if (useDirectSupabaseData && supabase) {
         const { error } = await supabase.from('Owner').delete().eq('id', id);
         if (!error) return;
         console.warn('Supabase owner delete failed, falling back to backend API.', error);
