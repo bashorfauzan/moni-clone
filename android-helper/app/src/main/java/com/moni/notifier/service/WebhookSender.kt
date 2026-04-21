@@ -45,15 +45,25 @@ class WebhookSender(
                     onSuccess?.invoke()
                 } else {
                     Log.e(LOG_TAG, "Webhook failed: $responseCode $responseBody")
-                    preferenceStore.setLastDeliveryStatus(
-                        "Gagal ${timeFormatter.format(Date())} • HTTP $responseCode • ${responseBody.take(80)}"
+                    val status = "Gagal ${timeFormatter.format(Date())} • HTTP $responseCode • ${responseBody.take(80)}"
+                    preferenceStore.setLastDeliveryStatus(status)
+                    NotificationHelper.showDeliveryFailureNotification(
+                        context = preferenceStore.getContext(),
+                        webAppUrl = preferenceStore.getWebAppUrl(),
+                        title = "Webhook NOVA gagal",
+                        text = status
                     )
                 }
                 connection.disconnect()
             } catch (error: Exception) {
                 Log.e(LOG_TAG, "Failed to send webhook", error)
-                preferenceStore.setLastDeliveryStatus(
-                    "Gagal ${timeFormatter.format(Date())} • ${error.message ?: "unknown error"}"
+                val status = "Gagal ${timeFormatter.format(Date())} • ${error.message ?: "unknown error"}"
+                preferenceStore.setLastDeliveryStatus(status)
+                NotificationHelper.showDeliveryFailureNotification(
+                    context = preferenceStore.getContext(),
+                    webAppUrl = preferenceStore.getWebAppUrl(),
+                    title = "Webhook NOVA gagal",
+                    text = status
                 )
             }
         }

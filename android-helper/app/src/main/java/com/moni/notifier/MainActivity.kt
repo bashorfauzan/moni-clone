@@ -39,31 +39,38 @@ class MainActivity : AppCompatActivity() {
         val enabled = isNotificationServiceEnabled()
 
         preferenceStore = PreferenceStore(this)
-        
-        if (enabled) {
-            startActivity(WebAppActivity.createIntent(this, preferenceStore.getWebAppUrl()))
-            finish()
-            return
-        }
 
         binding.baseUrlInput.setText(preferenceStore.getWebhookUrl())
         binding.webAppUrlInput.setText(preferenceStore.getWebAppUrl())
         binding.filterKeywordsInput.setText(preferenceStore.getFilterKeywords())
 
         binding.saveButton.setOnClickListener {
-            val value = binding.baseUrlInput.text?.toString()?.trim().orEmpty()
             val webAppUrl = binding.webAppUrlInput.text?.toString()?.trim().orEmpty()
+            val rawWebhookUrl = binding.baseUrlInput.text?.toString()?.trim().orEmpty()
             val filterKeywords = binding.filterKeywordsInput.text?.toString()?.trim().orEmpty()
-            if (!isValidHttpUrl(value) || !isValidHttpUrl(webAppUrl)) {
+
+            if (!isValidHttpUrl(webAppUrl)) {
                 binding.statusText.text = getString(R.string.status_invalid_url)
                 Toast.makeText(this, R.string.status_invalid_url, Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            preferenceStore.setWebhookUrl(value)
+            val webhookUrl = rawWebhookUrl.ifBlank { deriveWebhookUrlFromWebAppUrl(webAppUrl) }
+            if (!isValidHttpUrl(webhookUrl)) {
+                binding.statusText.text = getString(R.string.status_invalid_url)
+                Toast.makeText(this, R.string.status_invalid_url, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            binding.baseUrlInput.setText(webhookUrl)
+            preferenceStore.setWebhookUrl(webhookUrl)
             preferenceStore.setWebAppUrl(webAppUrl)
             preferenceStore.setFilterKeywords(filterKeywords)
-            binding.statusText.text = getString(R.string.status_saved)
+            binding.statusText.text = when {
+                !isSameOriginWebhook(webAppUrl, webhookUrl) -> getString(R.string.status_saved_origin_warning)
+                rawWebhookUrl.isBlank() -> getString(R.string.status_saved_webhook_derived)
+                else -> getString(R.string.status_saved)
+            }
             binding.lastDeliveryText.text = preferenceStore.getLastDeliveryStatus()
             Toast.makeText(this, R.string.status_saved, Toast.LENGTH_SHORT).show()
         }
@@ -116,6 +123,35 @@ class MainActivity : AppCompatActivity() {
         if (value.isBlank()) return false
         val parsed = Uri.parse(value)
         return parsed.scheme == "http" || parsed.scheme == "https"
+    }
+
+    private fun deriveWebhookUrlFromWebAppUrl(webAppUrl: String): String {
+        val parsed = Uri.parse(webAppUrl)
+        val builder = parsed.buildUpon()
+        builder.path("/api/webhook/notification")
+        builder.clearQuery()
+        builder.fragment(null)
+        return builder.build().toString()
+    }
+
+    private fun isSameOriginWebhook(webAppUrl: String, webhookUrl: String): Boolean {
+        val webApp = Uri.parse(webAppUrl)
+        val webhook = Uri.parse(webhookUrl)
+
+        val webAppPort = if (webApp.port == -1) defaultPortForScheme(webApp.scheme) else webApp.port
+        val webhookPort = if (webhook.port == -1) defaultPortForScheme(webhook.scheme) else webhook.port
+
+        return webApp.scheme.equals(webhook.scheme, ignoreCase = true)
+            && webApp.host.equals(webhook.host, ignoreCase = true)
+            && webAppPort == webhookPort
+    }
+
+    private fun defaultPortForScheme(scheme: String?): Int {
+        return when (scheme?.lowercase()) {
+            "https" -> 443
+            "http" -> 80
+            else -> -1
+        }
     }
 
     private fun maybeShowRestrictedSettingsTip() {

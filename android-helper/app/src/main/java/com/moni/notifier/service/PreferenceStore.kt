@@ -3,7 +3,8 @@ package com.moni.notifier.service
 import android.content.Context
 
 class PreferenceStore(context: Context) {
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     init {
         migrateLegacyPreferences(context)
@@ -59,6 +60,8 @@ class PreferenceStore(context: Context) {
             }
         }
     }
+
+    fun getContext(): Context = appContext
 
     private fun migrateLegacyPreferences(context: Context) {
         if (prefs.contains(KEY_WEBHOOK_URL) || prefs.contains(KEY_WEB_APP_URL) || prefs.contains(KEY_FILTER_KEYWORDS)) {
