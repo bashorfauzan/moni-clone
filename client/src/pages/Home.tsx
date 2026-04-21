@@ -650,20 +650,30 @@ const Home = () => {
                 isOpen={isNotificationDrawerOpen}
                 onClose={() => setIsNotificationDrawerOpen(false)}
                 notifications={notifications}
+                accounts={meta.accounts}
                 onClearAll={handleClearNotifications}
                 onDelete={handleDeleteNotification}
                 onRejectTransaction={async (txId) => {
                     await handleValidate(txId, 'REJECT', {});
                 }}
-                onMakeTransaction={(item) => {
+                onMakeTransaction={(item, overrideAmount) => {
                     setIsNotificationDrawerOpen(false); // Tutup drawer dulu
+
+                    // Coba cocokkan sourceApp ke rekening yang ada
+                    const srcLower = item.sourceApp.toLowerCase();
+                    const matchedAccount = meta.accounts.find(acc =>
+                        acc.name.toLowerCase().includes(srcLower) ||
+                        (acc.appPackageName ?? '').toLowerCase().includes(srcLower)
+                    );
+
                     openModal(
                         (item.parsedType as any) || 'EXPENSE',
                         {
-                            amount: item.parsedAmount || undefined,
-                            description: item.parseNotes || item.messageText,
+                            amount: overrideAmount ?? item.parsedAmount ?? undefined,
+                            description: item.messageText?.slice(0, 100) || item.parseNotes || undefined,
                             type: (item.parsedType as any) || undefined,
-                            notificationInboxId: item.id
+                            notificationInboxId: item.id,
+                            sourceAccountId: matchedAccount?.id || undefined
                         }
                     );
                 }}

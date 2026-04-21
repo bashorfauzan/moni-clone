@@ -1,14 +1,17 @@
-import { X, Bell } from 'lucide-react';
+import { X, Bell, PencilLine } from 'lucide-react';
+import { useState } from 'react';
 import type { NotificationItem } from '../services/notificationInbox';
+import type { Account } from '../services/masterData';
 
 interface NotificationDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     notifications: NotificationItem[];
+    accounts: Account[];
     onClearAll: () => Promise<void>;
     onDelete: (id: string) => Promise<void>;
     onRejectTransaction: (txId: string) => Promise<void>;
-    onMakeTransaction: (item: NotificationItem) => void;
+    onMakeTransaction: (item: NotificationItem, overrideAmount?: number) => void;
     clearingNotifications: boolean;
     deletingNotificationId: string | null;
 }
@@ -69,6 +72,7 @@ const NotificationDrawer = ({
     isOpen,
     onClose,
     notifications,
+    accounts,
     onClearAll,
     onDelete,
     onRejectTransaction,
@@ -76,6 +80,30 @@ const NotificationDrawer = ({
     clearingNotifications,
     deletingNotificationId
 }: NotificationDrawerProps) => {
+    // State untuk inline-form "Lengkapi Transaksi" (untuk notif tanpa nominal)
+    const [completingId, setCompletingId] = useState<string | null>(null);
+    const [completeAmount, setCompleteAmount] = useState('');
+
+    const handleCompleteSubmit = (item: NotificationItem) => {
+        const amount = Number(completeAmount.replace(/[^0-9]/g, ''));
+        if (!amount || amount <= 0) {
+            alert('Masukkan nominal yang valid.');
+            return;
+        }
+        setCompletingId(null);
+        setCompleteAmount('');
+        onMakeTransaction(item, amount);
+    };
+
+    // Cari account yang cocok berdasarkan sourceApp hint
+    const resolveSourceAccount = (sourceApp: string): Account | undefined => {
+        const lower = sourceApp.toLowerCase();
+        return accounts.find(acc =>
+            acc.name.toLowerCase().includes(lower) ||
+            (acc.appPackageName ?? '').toLowerCase().includes(lower) ||
+            acc.type.toLowerCase().includes(lower)
+        );
+    };
 
     if (!isOpen) return null;
 
@@ -190,6 +218,69 @@ const NotificationDrawer = ({
                                             💡 {item.parseNotes}
                                         </p>
                                     ) : null}
+
+                                    {/* === INLINE "Lengkapi Transaksi" untuk notif tanpa nominal === */}
+                                    {!item.transaction && !item.parsedAmount && item.parsedType && !isSecurityAlert && (
+                                        <div className="mt-3 border-t border-rose-100 pt-3">
+                                            {completingId === item.id ? (
+                                                <div className="flex flex-col gap-2">
+                                                    <p className="text-[11px] font-bold text-slate-600 uppercase tracking-widest">
+                                                        Masukkan Nominal Transaksi
+                                                    </p>
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1 relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-bold pointer-events-none">Rp</span>
+                                                            <input
+                                                                type="number"
+                                                                inputMode="numeric"
+                                                                className="w-full h-9 pl-9 pr-3 rounded-lg border border-rose-200 bg-white text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-400"
+                                                                placeholder="0"
+                                                                value={completeAmount}
+                                                                onChange={e => setCompleteAmount(e.target.value)}
+                                                                onKeyDown={e => e.key === 'Enter' && handleCompleteSubmit(item)}
+                                                                autoFocus
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleCompleteSubmit(item)}
+                                                            className="h-9 px-3 rounded-lg bg-rose-500 text-white text-[11px] font-bold uppercase tracking-wide hover:bg-rose-600 transition-colors shadow-sm shrink-0"
+                                                        >
+                                                            Buat
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { setCompletingId(null); setCompleteAmount(''); }}
+                                                            className="h-9 px-2 rounded-lg bg-white border border-slate-200 text-slate-400 text-[11px] font-bold hover:bg-slate-50 transition-colors shrink-0"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                    {/* Tampilkan rekening yang akan di-prefill */}
+                                                    {(() => {
+                                                        const srcAcc = resolveSourceAccount(item.sourceApp);
+                                                        return srcAcc ? (
+                                                            <p className="text-[10px] text-slate-400 font-medium">
+                                                                Dari rekening: <span className="font-bold text-slate-600">{srcAcc.name}</span>
+                                                            </p>
+                                                        ) : null;
+                                                    })()}
+                                                </div>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setCompletingId(item.id);
+                                                        setCompleteAmount('');
+                                                    }}
+                                                    className="w-full h-9 flex items-center justify-center gap-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-[11px] font-bold uppercase tracking-wide transition-colors border border-rose-200"
+                                                >
+                                                    <PencilLine size={13} />
+                                                    Lengkapi Nominal &amp; Buat Transaksi
+                                                </button>
+                                            )}
+                                        </div>
+                                    )}
 
                                     {(!item.transaction || !item.transaction.isValidated) ? (
                                         <div className="mt-3 flex justify-end gap-2 border-t border-black/5 pt-3">
