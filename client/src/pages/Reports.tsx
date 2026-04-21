@@ -10,6 +10,7 @@ import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
+import { getErrorMessage } from '../services/errors';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
@@ -76,7 +77,7 @@ const Reports = () => {
             await fetchReportData();
             window.dispatchEvent(new Event('nova:data-changed'));
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menghapus transaksi terpilih');
+            alert(getErrorMessage(error, 'Gagal menghapus transaksi terpilih'));
         }
     };
 
@@ -96,7 +97,7 @@ const Reports = () => {
             a.remove();
             window.URL.revokeObjectURL(url);
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal export data');
+            alert(getErrorMessage(error, 'Gagal export data'));
         } finally {
             setExporting(false);
         }
@@ -111,7 +112,7 @@ const Reports = () => {
             await fetchReportData();
             window.dispatchEvent(new Event('nova:data-changed'));
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menghapus transaksi');
+            alert(getErrorMessage(error, 'Gagal menghapus transaksi'));
         }
     };
 

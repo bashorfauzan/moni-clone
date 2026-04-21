@@ -71,14 +71,12 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
 export const syncAccountBalances = async (db: PrismaExecutor) => {
     const balanceMap = await computeValidatedAccountBalances(db);
 
-    await Promise.all(
-        Array.from(balanceMap.entries()).map(([accountId, balance]) =>
-            db.account.update({
-                where: { id: accountId },
-                data: { balance }
-            })
-        )
-    );
+    for (const [accountId, balance] of balanceMap.entries()) {
+        await db.account.update({
+            where: { id: accountId },
+            data: { balance }
+        });
+    }
 
     return balanceMap;
 };
