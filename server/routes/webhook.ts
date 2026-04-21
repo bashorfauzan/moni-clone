@@ -26,6 +26,9 @@ const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana kel
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
 const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
 const TRANSFER_IN_KEYWORDS = ['diterima', 'menerima', 'transfer masuk', 'dana masuk', 'masuk dari', 'ditransfer dari'];
+// Keywords yang sangat kuat mengindikasikan INCOME (prioritas tinggi vs EXPENSE ambiguous)
+const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'penerimaan', 'pemasukan', 'setor tunai'];
+const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
 const SECURITY_ALERT_KEYWORDS = [
@@ -202,21 +205,48 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
         type = TransactionType.INVESTMENT_OUT;
         confidenceScore = 0.82;
-    } else if (detectFeeCharge(lowerText) || containsAny(lowerText, EXPENSE_KEYWORDS)) {
-        type = TransactionType.EXPENSE;
-        confidenceScore = lowerText.includes('dikenakan biaya') ? 0.88 : 0.8;
     } else if (detectTransferLikeTopUp(sourceApp, lowerText)) {
+        // Top-up ke e-wallet selalu TRANSFER (cek lebih awal agar tidak salah ke INCOME)
         type = TransactionType.TRANSFER;
         confidenceScore = 0.78;
-    } else if (containsAny(lowerText, INCOME_KEYWORDS)) {
-        type = TransactionType.INCOME;
-        confidenceScore = 0.84;
-    } else if (
-        normalizeText(sourceApp).includes('flip')
-        || containsAny(lowerText, TRANSFER_KEYWORDS)
-    ) {
-        type = TransactionType.TRANSFER;
-        confidenceScore = 0.78;
+    } else {
+        // Hitung skor keyword untuk INCOME vs EXPENSE
+        const incomeStrongHit = containsAny(lowerText, STRONG_INCOME_KEYWORDS);
+        const expenseStrongHit = detectFeeCharge(lowerText) || containsAny(lowerText, STRONG_EXPENSE_KEYWORDS);
+        const incomeAnyHit = containsAny(lowerText, INCOME_KEYWORDS);
+        const expenseAnyHit = containsAny(lowerText, EXPENSE_KEYWORDS);
+
+        if (incomeStrongHit && !expenseStrongHit) {
+            // Ada indikasi INCOME kuat, tidak ada EXPENSE kuat → INCOME
+            type = TransactionType.INCOME;
+            confidenceScore = 0.84;
+        } else if (expenseStrongHit && !incomeStrongHit) {
+            // Ada indikasi EXPENSE kuat, tidak ada INCOME kuat → EXPENSE
+            type = TransactionType.EXPENSE;
+            confidenceScore = lowerText.includes('dikenakan biaya') ? 0.88 : 0.8;
+        } else if (incomeStrongHit && expenseStrongHit) {
+            // Keduanya kuat — gunakan konteks lebih spesifik
+            // Jika ada kata 'dari' (uang diterima dari seseorang) → INCOME
+            if (lowerText.includes(' dari ') && (lowerText.includes('masuk') || lowerText.includes('diterima'))) {
+                type = TransactionType.INCOME;
+                confidenceScore = 0.76;
+            } else {
+                type = TransactionType.EXPENSE;
+                confidenceScore = 0.72;
+            }
+        } else if (incomeAnyHit && !expenseAnyHit) {
+            type = TransactionType.INCOME;
+            confidenceScore = 0.78;
+        } else if (expenseAnyHit && !incomeAnyHit) {
+            type = TransactionType.EXPENSE;
+            confidenceScore = 0.78;
+        } else if (
+            normalizeText(sourceApp).includes('flip')
+            || containsAny(lowerText, TRANSFER_KEYWORDS)
+        ) {
+            type = TransactionType.TRANSFER;
+            confidenceScore = 0.75;
+        }
     }
 
     if (!amount) {
@@ -465,14 +495,15 @@ router.post('/notification', async (req, res) => {
         }
 
         // Cek duplikasi (Debounce): Apakah ada notifikasi dari aplikasi yang sama, 
-        // dengan nominal yang HAMPIR SAMA masuk dalam 5 menit terakhir?
+        // dengan nominal yang SAMA dan tipe yang SAMA masuk dalam 1 menit terakhir?
         if (parsed.amount) {
-            const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+            const oneMinAgo = new Date(Date.now() - 1 * 60 * 1000);
             const duplicate = await prisma.notificationInbox.findFirst({
                 where: {
                     sourceApp: String(appName),
                     parsedAmount: parsed.amount,
-                    receivedAt: { gte: fiveMinsAgo },
+                    parsedType: parsed.type ?? undefined,
+                    receivedAt: { gte: oneMinAgo },
                     parseStatus: { not: 'IGNORED' } // Hanya cek terhadap notif yg valid
                 }
             });
@@ -543,9 +574,9 @@ router.post('/notification', async (req, res) => {
 
         const isMissingCriticalFields = !owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason;
 
-        // Perbarui saja parseStatus menjadi PENDING jika data kurang lengkap, tapi TETAP buat transaksinya.
+        // Perbarui saja parseStatus menjadi PENDING jika data kurang lengkap
         if (isMissingCriticalFields) {
-            const pendingNotification = await prisma.notificationInbox.update({
+            await prisma.notificationInbox.update({
                 where: { id: notification.id },
                 data: {
                     parseStatus: 'PENDING',
@@ -553,14 +584,28 @@ router.post('/notification', async (req, res) => {
                 }
             });
 
-            if (parsed.type === TransactionType.TRANSFER) {
+            // Untuk TRANSFER yang rekening-nya tidak lengkap → kembalikan 202 (perlu input manual)
+            if (parsed.type === TransactionType.TRANSFER && missingAccountReason) {
+                const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
                 return res.status(202).json({
                     success: true,
                     notification: pendingNotification,
                     createdTransaction: false,
-                    reason: missingAccountReason ?? 'Transfer perlu pilih rekening tujuan manual'
+                    reason: missingAccountReason
                 });
             }
+
+            // Untuk INCOME/EXPENSE: jika tidak ada owner atau activity, return 202 (tidak bisa buat transaksi)
+            if (!owner || !activity) {
+                const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
+                return res.status(202).json({
+                    success: true,
+                    notification: pendingNotification,
+                    createdTransaction: false,
+                    reason: 'Master data (owner/activity) belum ada, silakan tambahkan terlebih dahulu'
+                });
+            }
+            // Untuk INCOME/EXPENSE tanpa hint akun → tetap lanjut buat transaksi dengan akun fallback
         }
 
         // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
@@ -570,8 +615,8 @@ router.post('/notification', async (req, res) => {
                 type: parsed.type,
                 date: notification.receivedAt,
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
-                ownerId: owner.id,
-                activityId: activity.id,
+                ownerId: owner!.id,
+                activityId: activity!.id,
                 isValidated: true,
                 notificationInboxId: notification.id,
                 ...(sourceAccountId ? { sourceAccountId } : {}),
