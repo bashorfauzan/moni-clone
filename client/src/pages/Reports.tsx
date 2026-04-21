@@ -143,8 +143,8 @@ const Reports = () => {
                 if (!name) {
                     if (tx.type === 'INCOME') name = 'Pemasukan';
                     else if (tx.type === 'TRANSFER') name = 'Transfer';
-                    else if (tx.type === 'INVESTMENT_IN') name = 'Pencairan Investasi';
-                    else if (tx.type === 'INVESTMENT_OUT') name = 'Investasi Keluar';
+                    else if (tx.type === 'INVESTMENT_IN') name = 'Setoran Investasi';
+                    else if (tx.type === 'INVESTMENT_OUT') name = 'Pencairan Investasi';
                     else name = 'Lainnya';
                 }
                 catMap[name] = (catMap[name] || 0) + tx.amount;
@@ -221,7 +221,8 @@ const Reports = () => {
         if (type === 'INCOME') return { label: 'Masuk', cls: 'bg-emerald-50 text-emerald-700' };
         if (type === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
         if (type === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
-        if (type === 'INVESTMENT_IN') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
+        if (type === 'INVESTMENT_IN') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
+        if (type === 'INVESTMENT_OUT') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
         return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
     };
 
