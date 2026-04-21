@@ -160,7 +160,7 @@ async function main() {
 
         // Karena format datanya adalah uang masuk ke rekening (penitipan dana/tabungan), 
         // kita masukkan sebagai INCOME agar menambah saldo.
-        for (const trx of transactionsData) {
+        for (const trx of transactionsData as any[]) {
             await prisma.transaction.upsert({
                 where: { id: trx.id },
                 update: {
