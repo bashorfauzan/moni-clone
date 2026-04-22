@@ -502,9 +502,9 @@ router.post('/notification', async (req, res) => {
                 where: {
                     sourceApp: String(appName),
                     parsedAmount: parsed.amount,
-                    parsedType: parsed.type ?? undefined,
                     receivedAt: { gte: oneMinAgo },
-                    parseStatus: { not: 'IGNORED' } // Hanya cek terhadap notif yg valid
+                    parseStatus: { not: 'IGNORED' }, // Hanya cek terhadap notif yg valid
+                    ...(parsed.type ? { parsedType: parsed.type } : {})
                 }
             });
 
