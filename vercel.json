@@ -4,7 +4,9 @@
   "outputDirectory": "client/dist",
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 60
+      "maxDuration": 60,
+      "memory": 512,
+      "includeFiles": "server/node_modules/.prisma/**,server/node_modules/@prisma/**,node_modules/.prisma/**,node_modules/@prisma/**"
     }
   },
   "rewrites": [
