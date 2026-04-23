@@ -423,7 +423,7 @@ export default async function handler(req: any, res: any) {
             let duplicateQuery = supabase.from('NotificationInbox')
                 .select('id, sourceApp')
                 .eq('parsedAmount', parsed.amount)
-                .gte('receivedAt', threeMinAgo)
+                .gte('createdAt', threeMinAgo)
                 .neq('parseStatus', 'IGNORED');
                 
             if (parsed.type) duplicateQuery = duplicateQuery.eq('parsedType', parsed.type);
