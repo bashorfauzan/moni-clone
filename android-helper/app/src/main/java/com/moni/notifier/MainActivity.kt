@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
             preferenceStore.setWebhookUrl(webhookUrl)
             preferenceStore.setWebAppUrl(webAppUrl)
             preferenceStore.setFilterKeywords(filterKeywords)
+            preferenceStore.setInitialSetupCompleted(true)
             preferenceStore.setOpenWebAppOnLaunch(true)
             binding.statusText.text = when {
                 !isSameOriginWebhook(webAppUrl, webhookUrl) -> getString(R.string.status_saved_origin_warning)
@@ -97,6 +98,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             preferenceStore.setWebAppUrl(webAppUrl)
+            preferenceStore.setInitialSetupCompleted(true)
             preferenceStore.setOpenWebAppOnLaunch(true)
             binding.statusText.text = getString(R.string.status_opening_web_app)
             openWebApp(webAppUrl)
@@ -201,6 +203,7 @@ class MainActivity : AppCompatActivity() {
     private fun shouldAutoOpenWebApp(savedInstanceState: Bundle?): Boolean {
         if (savedInstanceState != null) return false
         if (intent?.getBooleanExtra(EXTRA_FORCE_SETUP, false) == true) return false
+        if (!preferenceStore.isInitialSetupCompleted()) return false
         if (!preferenceStore.shouldOpenWebAppOnLaunch()) return false
 
         val webAppUrl = preferenceStore.getWebAppUrl()

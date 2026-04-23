@@ -31,15 +31,6 @@ class WebAppActivity : AppCompatActivity() {
             return
         }
 
-        binding.openBrowserButton.setOnClickListener {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webAppUrl)))
-        }
-        binding.reloadButton.setOnClickListener { binding.webView.reload() }
-        binding.openSettingsButton.setOnClickListener {
-            startActivity(MainActivity.createSetupIntent(this))
-        }
-        binding.closeButton.setOnClickListener { moveTaskToBack(true) }
-
         setupWebView()
         binding.webView.clearCache(true)
         binding.webView.clearHistory()
