@@ -1,6 +1,7 @@
 package com.moni.notifier.service
 
 import android.app.Notification
+import android.content.ComponentName
 import android.os.Bundle
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -20,6 +21,17 @@ class AccountNotificationListenerService : NotificationListenerService() {
         preferenceStore = PreferenceStore(this)
         webhookSender = WebhookSender(preferenceStore)
         NotificationHelper.createChannel(this)
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        preferenceStore.setLastDeliveryStatus("Listener aktif • siap menangkap notifikasi")
+    }
+
+    override fun onListenerDisconnected() {
+        super.onListenerDisconnected()
+        preferenceStore.setLastDeliveryStatus("Listener terputus • mencoba menyambungkan ulang")
+        requestRebind(ComponentName(this, AccountNotificationListenerService::class.java))
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
