@@ -280,30 +280,84 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     };
 };
 
-export default async function handler(req: any, res: any) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+const getSupabaseAdminConfig = () => {
+    const supabaseUrl = process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim();
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+    if (!supabaseUrl || !serviceRoleKey) {
+        throw new Error('SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib tersedia untuk webhook');
     }
 
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+    return { supabaseUrl, serviceRoleKey };
+};
 
-    if (!supabaseUrl || !supabaseKey) {
-        console.error('Supabase credentials missing for webhook');
-        return res.status(500).json({
-            error: 'Server misconfiguration',
-            details: 'SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib tersedia untuk webhook'
-        });
-    }
+const getSupabaseAdmin = () => {
+    const { supabaseUrl, serviceRoleKey } = getSupabaseAdminConfig();
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    return createClient(supabaseUrl, serviceRoleKey, {
         auth: {
             autoRefreshToken: false,
             persistSession: false
         }
     });
+};
+
+const toSerializableJson = (value: unknown) => {
+    if (value === undefined) return null;
 
     try {
+        return JSON.parse(JSON.stringify(value));
+    } catch {
+        return {
+            serializationError: 'rawPayload tidak bisa diserialisasi',
+            fallbackType: typeof value
+        };
+    }
+};
+
+const insertNotificationInbox = async (payload: Record<string, unknown>) => {
+    const { supabaseUrl, serviceRoleKey } = getSupabaseAdminConfig();
+    const response = await fetch(`${supabaseUrl}/rest/v1/NotificationInbox`, {
+        method: 'POST',
+        headers: {
+            apikey: serviceRoleKey,
+            Authorization: `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
+            Prefer: 'return=representation'
+        },
+        body: JSON.stringify(payload)
+    });
+
+    const responseText = await response.text();
+    let parsedResponse: any = null;
+
+    try {
+        parsedResponse = responseText ? JSON.parse(responseText) : null;
+    } catch {
+        parsedResponse = responseText;
+    }
+
+    if (!response.ok) {
+        const details = typeof parsedResponse === 'string'
+            ? parsedResponse
+            : parsedResponse?.message || parsedResponse?.error || JSON.stringify(parsedResponse);
+        throw new Error(`Gagal menyimpan notifikasi: ${details}`);
+    }
+
+    if (!Array.isArray(parsedResponse) || !parsedResponse[0]) {
+        throw new Error('Gagal menyimpan notifikasi: respons insert NotificationInbox kosong');
+    }
+
+    return parsedResponse[0];
+};
+
+export default async function handler(req: any, res: any) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method not allowed' });
+    }
+
+    try {
+        const supabase = getSupabaseAdmin();
         const { appName, text, title, senderName, receivedAt, rawPayload } = req.body;
 
         if (!appName || !text) {
@@ -317,6 +371,7 @@ export default async function handler(req: any, res: any) {
         );
 
         const isSecurityAlert = detectSecurityAlert(`${title || ''} ${text}`);
+        const serializedPayload = toSerializableJson(rawPayload ?? req.body);
 
         if (parsed.parseStatus === 'IGNORED' && !isSecurityAlert) {
             return res.status(200).json({
@@ -328,7 +383,7 @@ export default async function handler(req: any, res: any) {
         const nowIso = receivedAt ? new Date(receivedAt).toISOString() : new Date().toISOString();
 
         if (parsed.parseStatus === 'IGNORED' && isSecurityAlert) {
-            const { data: securityNotification } = await supabase.from('NotificationInbox').insert({
+            const securityNotification = await insertNotificationInbox({
                 id: crypto.randomUUID(),
                 sourceApp: String(appName),
                 senderName: senderName ? String(senderName) : null,
@@ -342,8 +397,8 @@ export default async function handler(req: any, res: any) {
                 parsedAccountHint: null,
                 confidenceScore: 0,
                 parseNotes: '⚠️ Peringatan Keamanan: Aktivitas login mencurigakan terdeteksi',
-                rawPayload: rawPayload ?? req.body
-            }).select().single();
+                rawPayload: serializedPayload
+            });
 
             return res.status(201).json({
                 success: true,
@@ -379,7 +434,7 @@ export default async function handler(req: any, res: any) {
             }
         }
 
-        const { data: notification, error: notifError } = await supabase.from('NotificationInbox').insert({
+        const notification = await insertNotificationInbox({
             id: crypto.randomUUID(),
             sourceApp: String(appName),
             senderName: senderName ? String(senderName) : null,
@@ -393,12 +448,8 @@ export default async function handler(req: any, res: any) {
             parsedAccountHint: parsed.accountHint,
             confidenceScore: parsed.confidenceScore,
             parseNotes: parsed.parseNotes,
-            rawPayload: rawPayload ?? req.body
-        }).select().single();
-
-        if (notifError || !notification) {
-            throw new Error(`Gagal menyimpan notifikasi: ${notifError?.message}`);
-        }
+            rawPayload: serializedPayload
+        });
 
         if (!parsed.amount || !parsed.type) {
             return res.status(202).json({
