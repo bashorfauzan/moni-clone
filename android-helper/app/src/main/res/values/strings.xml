@@ -27,6 +27,7 @@
     <string name="web_app_no_url">URL web app belum diisi.</string>
     <string name="open_external_browser">Buka di Browser</string>
     <string name="reload_page">Muat Ulang</string>
+    <string name="open_connector_settings">Pengaturan</string>
     <string name="close_web_app">Tutup</string>
     <string name="account_app_opened">Aplikasi rekening dibuka.</string>
     <string name="account_store_opened">Halaman store dibuka.</string>

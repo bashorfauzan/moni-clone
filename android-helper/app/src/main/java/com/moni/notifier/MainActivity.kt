@@ -25,6 +25,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        preferenceStore = PreferenceStore(this)
+
+        if (shouldAutoOpenWebApp(savedInstanceState)) {
+            openWebApp(preferenceStore.getWebAppUrl(), finishCurrent = true)
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -35,10 +42,6 @@ class MainActivity : AppCompatActivity() {
         ) {
             requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
-
-        val enabled = isNotificationServiceEnabled()
-
-        preferenceStore = PreferenceStore(this)
 
         binding.baseUrlInput.setText(preferenceStore.getWebhookUrl())
         binding.webAppUrlInput.setText(preferenceStore.getWebAppUrl())
@@ -66,6 +69,7 @@ class MainActivity : AppCompatActivity() {
             preferenceStore.setWebhookUrl(webhookUrl)
             preferenceStore.setWebAppUrl(webAppUrl)
             preferenceStore.setFilterKeywords(filterKeywords)
+            preferenceStore.setOpenWebAppOnLaunch(true)
             binding.statusText.text = when {
                 !isSameOriginWebhook(webAppUrl, webhookUrl) -> getString(R.string.status_saved_origin_warning)
                 rawWebhookUrl.isBlank() -> getString(R.string.status_saved_webhook_derived)
@@ -93,8 +97,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             preferenceStore.setWebAppUrl(webAppUrl)
+            preferenceStore.setOpenWebAppOnLaunch(true)
             binding.statusText.text = getString(R.string.status_opening_web_app)
-            startActivity(WebAppActivity.createIntent(this, webAppUrl))
+            openWebApp(webAppUrl)
         }
     }
 
@@ -191,5 +196,30 @@ class MainActivity : AppCompatActivity() {
             Uri.fromParts("package", packageName, null)
         )
         startActivity(intent)
+    }
+
+    private fun shouldAutoOpenWebApp(savedInstanceState: Bundle?): Boolean {
+        if (savedInstanceState != null) return false
+        if (intent?.getBooleanExtra(EXTRA_FORCE_SETUP, false) == true) return false
+        if (!preferenceStore.shouldOpenWebAppOnLaunch()) return false
+
+        val webAppUrl = preferenceStore.getWebAppUrl()
+        return isValidHttpUrl(webAppUrl)
+    }
+
+    private fun openWebApp(webAppUrl: String, finishCurrent: Boolean = false) {
+        startActivity(WebAppActivity.createIntent(this, webAppUrl))
+        if (finishCurrent) {
+            finish()
+        }
+    }
+
+    companion object {
+        private const val EXTRA_FORCE_SETUP = "force_setup"
+
+        fun createSetupIntent(context: android.content.Context): Intent {
+            return Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_FORCE_SETUP, true)
+        }
     }
 }

@@ -35,7 +35,10 @@ class WebAppActivity : AppCompatActivity() {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(webAppUrl)))
         }
         binding.reloadButton.setOnClickListener { binding.webView.reload() }
-        binding.closeButton.setOnClickListener { finish() }
+        binding.openSettingsButton.setOnClickListener {
+            startActivity(MainActivity.createSetupIntent(this))
+        }
+        binding.closeButton.setOnClickListener { moveTaskToBack(true) }
 
         setupWebView()
         binding.webView.clearCache(true)
@@ -48,7 +51,7 @@ class WebAppActivity : AppCompatActivity() {
             binding.webView.goBack()
             return
         }
-        super.onBackPressed()
+        moveTaskToBack(true)
     }
 
     @Suppress("SetJavaScriptEnabled")

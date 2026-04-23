@@ -38,6 +38,13 @@ class PreferenceStore(context: Context) {
         prefs.edit().putString(KEY_WEB_APP_URL, value).apply()
     }
 
+    fun shouldOpenWebAppOnLaunch(): Boolean =
+        prefs.getBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, false)
+
+    fun setOpenWebAppOnLaunch(value: Boolean) {
+        prefs.edit().putBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, value).apply()
+    }
+
     companion object {
         private const val PREFS_NAME = "nova_helper"
         private const val LEGACY_PREFS_NAME = "moni_notifier"
@@ -45,6 +52,7 @@ class PreferenceStore(context: Context) {
         private const val KEY_FILTER_KEYWORDS = "filter_keywords"
         private const val KEY_LAST_DELIVERY_STATUS = "last_delivery_status"
         private const val KEY_WEB_APP_URL = "web_app_url"
+        private const val KEY_OPEN_WEB_APP_ON_LAUNCH = "open_web_app_on_launch"
         private const val DEFAULT_WEBHOOK_URL = "https://moni-clone.vercel.app/api/webhook/notification"
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,wondr,bri,brimo,bsi,mandiri,livin,seabank,jago,dana,gopay,ovo,shopeepay,flip,gaji,transfer,masuk,terima,diterima,keluar,pembayaran,briva,top up,debit,kredit,tarik"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"

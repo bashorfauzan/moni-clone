@@ -42,7 +42,9 @@ class WebhookSender(
                     preferenceStore.setLastDeliveryStatus(
                         buildSuccessStatus(responseCode, responseBody, summary)
                     )
-                    onSuccess?.invoke()
+                    if (didCreateTransaction(responseBody)) {
+                        onSuccess?.invoke()
+                    }
                 } else {
                     Log.e(LOG_TAG, "Webhook failed: $responseCode $responseBody")
                     val status = "Gagal ${timeFormatter.format(Date())} • HTTP $responseCode • ${responseBody.take(80)}"
@@ -100,6 +102,14 @@ class WebhookSender(
             ).joinToString(" • ")
         } catch (_: Exception) {
             "Berhasil ${timestamp} • HTTP $responseCode • $summary"
+        }
+    }
+
+    private fun didCreateTransaction(responseBody: String): Boolean {
+        return try {
+            JSONObject(responseBody).optBoolean("createdTransaction", false)
+        } catch (_: Exception) {
+            false
         }
     }
 

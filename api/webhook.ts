@@ -82,6 +82,7 @@ const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
     const mentionsTopUp = text.includes('top up') || text.includes('topup') || text.includes('pengisian saldo') || text.includes('isi saldo');
     if (!mentionsTopUp) return false;
     return E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
+        || E_WALLET_APPS.some((app) => text.includes(app))
         || text.includes('saldo')
         || text.includes('dari ');
 };
@@ -133,7 +134,7 @@ const resolveAccountHints = (
 ) => {
     const sourceAppHint = detectSourceAppHint(sourceApp);
     const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ']);
-    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ']);
+    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
     const transferDirection = detectTransferDirection(text);
 
     let sourceAccountHint: string | null = null;
@@ -544,9 +545,18 @@ export default async function handler(req: any, res: any) {
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
             if (isTransferLikeTopUp) {
-                effectiveType = TransactionType.INCOME;
-                destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
-                sourceAccountId = null;
+                const sourceAppHint = detectSourceAppHint(String(appName));
+                const sourceAppLooksLikeEWallet = sourceAppHint ? E_WALLET_APPS.includes(sourceAppHint) : false;
+
+                if (sourceAppLooksLikeEWallet) {
+                    effectiveType = TransactionType.INCOME;
+                    destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                    sourceAccountId = null;
+                } else {
+                    effectiveType = TransactionType.EXPENSE;
+                    sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
+                    destinationAccountId = null;
+                }
             } else if (transferDirection === 'OUT') {
                 effectiveType = TransactionType.EXPENSE;
                 sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
@@ -590,6 +600,14 @@ export default async function handler(req: any, res: any) {
                 parsedType: effectiveType,
                 parseNotes: 'Transfer ambigu dicatat otomatis sebagai transaksi satu rekening'
             }).eq('id', notification.id);
+
+            if (effectiveType === TransactionType.INCOME) {
+                sourceAccountId = null;
+            }
+
+            if (effectiveType === TransactionType.EXPENSE) {
+                destinationAccountId = null;
+            }
         }
 
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({

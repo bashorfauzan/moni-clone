@@ -83,6 +83,7 @@ const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
     if (!mentionsTopUp) return false;
 
     return E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
+        || E_WALLET_APPS.some((app) => text.includes(app))
         || text.includes('saldo')
         || text.includes('dari ');
 };
@@ -138,7 +139,7 @@ const resolveAccountHints = (
 ) => {
     const sourceAppHint = detectSourceAppHint(sourceApp);
     const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ']);
-    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ']);
+    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
     const transferDirection = detectTransferDirection(text);
 
     let sourceAccountHint: string | null = null;
@@ -549,28 +550,70 @@ router.post('/notification', async (req, res) => {
         // Selalu coba buat transaksi (pending) jika ada amount + type, apapun confidence-nya
         // Transaksi akan dibuat dengan isValidated: false agar user bisa approve/reject di Home
         const { owner, activity, account, sourceAccount, destinationAccount } = await ensureDefaults(parsed, String(appName));
-        const sourceAccountId = parsed.type === TransactionType.TRANSFER
+        let effectiveType = parsed.type;
+        let sourceAccountId = parsed.type === TransactionType.TRANSFER
             ? sourceAccount?.id ?? null
             : parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT
                 ? sourceAccount?.id ?? account?.id ?? null
                 : null;
-        const destinationAccountId = parsed.type === TransactionType.TRANSFER
+        let destinationAccountId = parsed.type === TransactionType.TRANSFER
             ? destinationAccount?.id ?? null
             : parsed.type === TransactionType.INCOME
                 ? destinationAccount?.id ?? account?.id ?? null
                 : null;
+        const normalizedNotificationText = normalizeText(`${title || senderName || ''} ${text}`);
 
-        const missingAccountReason = (
-            (parsed.type === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
-            || (parsed.type === TransactionType.INCOME && !destinationAccountId)
-            || ((parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
+        let missingAccountReason = (
+            (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            || (effectiveType === TransactionType.INCOME && !destinationAccountId)
+            || ((effectiveType === TransactionType.EXPENSE || effectiveType === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
         )
             ? (
-                parsed.type === TransactionType.TRANSFER
+                effectiveType === TransactionType.TRANSFER
                     ? 'Rekening transfer belum lengkap atau masih sama'
                     : 'Rekening transaksi belum berhasil dipetakan'
             )
             : null;
+
+        if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
+            const transferDirection = detectTransferDirection(normalizedNotificationText);
+            const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
+
+            if (isTransferLikeTopUp) {
+                const sourceAppHint = detectSourceAppHint(String(appName));
+                const sourceAppLooksLikeEWallet = sourceAppHint ? E_WALLET_APPS.includes(sourceAppHint) : false;
+
+                if (sourceAppLooksLikeEWallet) {
+                    effectiveType = TransactionType.INCOME;
+                    destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                    sourceAccountId = null;
+                } else {
+                    effectiveType = TransactionType.EXPENSE;
+                    sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
+                    destinationAccountId = null;
+                }
+            } else if (transferDirection === 'OUT') {
+                effectiveType = TransactionType.EXPENSE;
+                sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
+                destinationAccountId = null;
+            } else if (transferDirection === 'IN') {
+                effectiveType = TransactionType.INCOME;
+                destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                sourceAccountId = null;
+            }
+
+            missingAccountReason = (
+                (effectiveType === TransactionType.INCOME && !destinationAccountId)
+                || (effectiveType === TransactionType.EXPENSE && !sourceAccountId)
+                || (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            )
+                ? (
+                    effectiveType === TransactionType.TRANSFER
+                        ? 'Rekening transfer belum lengkap atau masih sama'
+                        : 'Rekening transaksi belum berhasil dipetakan'
+                )
+                : null;
+        }
 
         const isMissingCriticalFields = !owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason;
 
@@ -584,8 +627,8 @@ router.post('/notification', async (req, res) => {
                 }
             });
 
-            // Untuk TRANSFER yang rekening-nya tidak lengkap → kembalikan 202 (perlu input manual)
-            if (parsed.type === TransactionType.TRANSFER && missingAccountReason) {
+            // Untuk TRANSFER yang rekening-nya benar-benar belum bisa dipecahkan → kembalikan 202
+            if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
                 const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
                 return res.status(202).json({
                     success: true,
@@ -608,11 +651,22 @@ router.post('/notification', async (req, res) => {
             // Untuk INCOME/EXPENSE tanpa hint akun → tetap lanjut buat transaksi dengan akun fallback
         }
 
+        if (effectiveType !== parsed.type) {
+            await prisma.notificationInbox.update({
+                where: { id: notification.id },
+                data: {
+                    parseStatus: 'PARSED',
+                    parsedType: effectiveType,
+                    parseNotes: 'Transfer ambigu dicatat otomatis sebagai transaksi satu rekening'
+                }
+            });
+        }
+
         // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
         const transaction = await prisma.transaction.create({
             data: {
                 amount: parsed.amount,
-                type: parsed.type,
+                type: effectiveType,
                 date: notification.receivedAt,
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
                 ownerId: owner!.id,
