@@ -416,15 +416,14 @@ export default async function handler(req: any, res: any) {
         }
 
         if (parsed.amount) {
-            const oneMinAgo = new Date(Date.now() - 1 * 60 * 1000).toISOString();
+            const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
             
-            // Note: Cannot do simple eq/gte easily via ORM for all properties simultaneously if missing,
-            // building the query dynamically:
+            // Cek duplikasi LINTAS APLIKASI: satu transaksi sering memicu
+            // notifikasi dari 2 app berbeda (misal BRImo + ShopeePay)
             let duplicateQuery = supabase.from('NotificationInbox')
-                .select('id')
-                .eq('sourceApp', String(appName))
+                .select('id, sourceApp')
                 .eq('parsedAmount', parsed.amount)
-                .gte('receivedAt', oneMinAgo)
+                .gte('receivedAt', threeMinAgo)
                 .neq('parseStatus', 'IGNORED');
                 
             if (parsed.type) duplicateQuery = duplicateQuery.eq('parsedType', parsed.type);
@@ -433,7 +432,7 @@ export default async function handler(req: any, res: any) {
 
             if (duplicates && duplicates.length > 0) {
                 return res.status(200).json({
-                    message: `Notifikasi diabaikan karena dideteksi sebagai duplikat dari transaksi Rp${parsed.amount}`,
+                    message: `Notifikasi diabaikan karena dideteksi sebagai duplikat dari transaksi Rp${parsed.amount} (dari ${duplicates[0].sourceApp})`,
                     parsed,
                     isDuplicate: true,
                     duplicateOfId: duplicates[0].id
