@@ -1,13 +1,14 @@
 import { createClient } from '@supabase/supabase-js';
 
 // Transation types hardcoded to avoid Prisma dependency
-enum TransactionType {
-    INCOME = 'INCOME',
-    EXPENSE = 'EXPENSE',
-    TRANSFER = 'TRANSFER',
-    INVESTMENT_IN = 'INVESTMENT_IN',
-    INVESTMENT_OUT = 'INVESTMENT_OUT'
-}
+const TransactionType = {
+    INCOME: 'INCOME',
+    EXPENSE: 'EXPENSE',
+    TRANSFER: 'TRANSFER',
+    INVESTMENT_IN: 'INVESTMENT_IN',
+    INVESTMENT_OUT: 'INVESTMENT_OUT'
+} as const;
+type TransactionType = keyof typeof TransactionType;
 
 type ParseStatus = 'PENDING' | 'PARSED' | 'IGNORED' | 'FAILED';
 
