@@ -24,7 +24,9 @@ class AccountNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val packageName = sbn.packageName ?: return
-        val isSupported = SUPPORTED_PACKAGES.contains(packageName) ||
+        if (packageName == applicationContext.packageName) return
+
+        val isSupportedPackage = SUPPORTED_PACKAGES.contains(packageName) ||
             packageName.contains("bank", ignoreCase = true) ||
             packageName.contains("bca", ignoreCase = true) ||
             packageName.contains("wondr", ignoreCase = true) ||
@@ -35,8 +37,8 @@ class AccountNotificationListenerService : NotificationListenerService() {
             packageName.contains("dana", ignoreCase = true) ||
             packageName.contains("ovo", ignoreCase = true) ||
             packageName.contains("gojek", ignoreCase = true) ||
-            packageName.contains("shopee", ignoreCase = true)
-        if (!isSupported) return
+            packageName.contains("shopee", ignoreCase = true) ||
+            packageName.contains("flip", ignoreCase = true)
 
         val appNameStr = resolveAppName(packageName)
         val extras = sbn.notification.extras
@@ -71,8 +73,13 @@ class AccountNotificationListenerService : NotificationListenerService() {
             .map { it.trim().lowercase() }
             .filter { it.isNotBlank() }
         val looksLikeTransaction = looksLikeFinancialTransaction(appNameStr, title, messageText, packageName)
+        val matchesFilter = filters.isNotEmpty() && filters.any { keyword -> fullText.contains(keyword) }
 
-        if (filters.isNotEmpty() && filters.none { keyword -> fullText.contains(keyword) } && !looksLikeTransaction) {
+        if (!isSupportedPackage && !looksLikeTransaction && !matchesFilter) {
+            return
+        }
+
+        if (filters.isNotEmpty() && !matchesFilter && !looksLikeTransaction && isSupportedPackage) {
             val timeStr = timeFormatter.format(Instant.ofEpochMilli(sbn.postTime))
             preferenceStore.setLastDeliveryStatus(
                 "Diabaikan $timeStr • tidak cocok filter"
@@ -206,7 +213,9 @@ class AccountNotificationListenerService : NotificationListenerService() {
 
             val transactionKeywords = listOf(
                 "transfer", "kirim", "dikirim", "diterima", "masuk", "keluar",
-                "pembayaran", "bayar", "briva", "debit", "kredit", "top up", "tarik"
+                "pembayaran", "bayar", "briva", "debit", "kredit", "top up", "tarik",
+                "berhasil", "pengisian saldo", "isi saldo", "topup", "saldo bertambah",
+                "penerimaan", "pemasukan", "transaksi", "pembelian"
             )
 
             return transactionKeywords.any { combined.contains(it) }
