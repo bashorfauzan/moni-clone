@@ -317,6 +317,12 @@ const toSerializableJson = (value: unknown) => {
 
 const insertNotificationInbox = async (payload: Record<string, unknown>) => {
     const { supabaseUrl, serviceRoleKey } = getSupabaseAdminConfig();
+    const nowIso = new Date().toISOString();
+    const payloadWithTimestamps = {
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        ...payload
+    };
     const response = await fetch(`${supabaseUrl}/rest/v1/NotificationInbox`, {
         method: 'POST',
         headers: {
@@ -325,7 +331,7 @@ const insertNotificationInbox = async (payload: Record<string, unknown>) => {
             'Content-Type': 'application/json',
             Prefer: 'return=representation'
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payloadWithTimestamps)
     });
 
     const responseText = await response.text();
