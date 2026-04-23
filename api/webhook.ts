@@ -518,24 +518,53 @@ export default async function handler(req: any, res: any) {
             if (realOwner) owner = realOwner;
         }
 
-        const sourceAccountId = parsed.type === TransactionType.TRANSFER
+        let effectiveType = parsed.type;
+        let sourceAccountId = parsed.type === TransactionType.TRANSFER
             ? sourceAccount?.id ?? null
             : parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT
                 ? sourceAccount?.id ?? account?.id ?? null
                 : null;
-        const destinationAccountId = parsed.type === TransactionType.TRANSFER
+        let destinationAccountId = parsed.type === TransactionType.TRANSFER
             ? destinationAccount?.id ?? null
             : parsed.type === TransactionType.INCOME
                 ? destinationAccount?.id ?? account?.id ?? null
                 : null;
+        const normalizedNotificationText = normalizeText(`${title || senderName || ''} ${text}`);
 
-        const missingAccountReason = (
-            (parsed.type === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
-            || (parsed.type === TransactionType.INCOME && !destinationAccountId)
-            || ((parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
+        let missingAccountReason = (
+            (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            || (effectiveType === TransactionType.INCOME && !destinationAccountId)
+            || ((effectiveType === TransactionType.EXPENSE || effectiveType === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
         )
-            ? (parsed.type === TransactionType.TRANSFER ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
+            ? (effectiveType === TransactionType.TRANSFER ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
             : null;
+
+        if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
+            const transferDirection = detectTransferDirection(normalizedNotificationText);
+            const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
+
+            if (isTransferLikeTopUp) {
+                effectiveType = TransactionType.INCOME;
+                destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                sourceAccountId = null;
+            } else if (transferDirection === 'OUT') {
+                effectiveType = TransactionType.EXPENSE;
+                sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
+                destinationAccountId = null;
+            } else if (transferDirection === 'IN') {
+                effectiveType = TransactionType.INCOME;
+                destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                sourceAccountId = null;
+            }
+
+            missingAccountReason = (
+                (effectiveType === TransactionType.INCOME && !destinationAccountId)
+                || (effectiveType === TransactionType.EXPENSE && !sourceAccountId)
+                || (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            )
+                ? (effectiveType === TransactionType.TRANSFER ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
+                : null;
+        }
 
         const isMissingCriticalFields = !owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason;
 
@@ -555,10 +584,18 @@ export default async function handler(req: any, res: any) {
             }
         }
 
+        if (effectiveType !== parsed.type) {
+            await supabase.from('NotificationInbox').update({
+                parseStatus: 'PARSED',
+                parsedType: effectiveType,
+                parseNotes: 'Transfer ambigu dicatat otomatis sebagai transaksi satu rekening'
+            }).eq('id', notification.id);
+        }
+
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({
             id: crypto.randomUUID(),
             amount: parsed.amount,
-            type: parsed.type,
+            type: effectiveType,
             date: nowIso,
             description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
             ownerId: owner!.id,
