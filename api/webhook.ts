@@ -29,7 +29,7 @@ const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin'
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
-const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
+const TRANSFER_OUT_KEYWORDS = ['telah dikirim', 'dikirim ke', 'dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
 const TRANSFER_IN_KEYWORDS = ['diterima', 'menerima', 'transfer masuk', 'dana masuk', 'masuk dari', 'ditransfer dari'];
 const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'penerimaan', 'pemasukan', 'setor tunai'];
 const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
@@ -80,6 +80,10 @@ const detectAccountHint = (text: string) => {
 const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
     const mentionsTopUp = text.includes('top up') || text.includes('topup') || text.includes('pengisian saldo') || text.includes('isi saldo');
+    // E-wallet "telah dikirim ke" = transfer keluar
+    const isEwalletTransfer = E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
+        && (text.includes('dikirim ke') || text.includes('telah dikirim'));
+    if (isEwalletTransfer) return true;
     if (!mentionsTopUp) return false;
     return E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
         || E_WALLET_APPS.some((app) => text.includes(app))
@@ -502,8 +506,43 @@ export default async function handler(req: any, res: any) {
 
         const findAccountByHint = async (hint: string | null) => {
             if (!hint) return null;
-            const { data } = await supabase.from('Account').select('*').or(`name.ilike.%${hint}%,type.ilike.%${hint}%,accountNumber.ilike.%${hint}%,appPackageName.ilike.%${hint}%`).order('createdAt', { ascending: true }).limit(1);
-            return data?.[0] || null;
+            const { data: allAccounts } = await supabase.from('Account').select('*').order('createdAt', { ascending: true });
+            if (!allAccounts || allAccounts.length === 0) return null;
+
+            const hintLower = hint.toLowerCase();
+
+            // 1. Exact name match (case-insensitive) — e.g. hint='bri' matches 'BRI Bashor' but not 'BRI Sekuritas'
+            //    Prioritas: nama akun yang DIMULAI dengan hint
+            const startsWithMatch = allAccounts.find(a =>
+                a.name?.toLowerCase().startsWith(hintLower) ||
+                a.name?.toLowerCase().split(' ').some((word: string) => word === hintLower)
+            );
+            if (startsWithMatch) return startsWithMatch;
+
+            // 2. Account number contains hint
+            const numberMatch = allAccounts.find(a =>
+                a.accountNumber?.toLowerCase().includes(hintLower)
+            );
+            if (numberMatch) return numberMatch;
+
+            // 3. Bank name / app package contains hint
+            const bankMatch = allAccounts.find(a =>
+                a.bankName?.toLowerCase().includes(hintLower) ||
+                a.appPackageName?.toLowerCase().includes(hintLower)
+            );
+            if (bankMatch) return bankMatch;
+
+            // 4. Fallback: name contains hint (substring) — tapi hindari partial match ambigu
+            //    e.g. 'dana' TIDAK boleh match 'Ciptadana'
+            const substringMatch = allAccounts.find(a => {
+                const nameLower = a.name?.toLowerCase() || '';
+                // Cek apakah hint muncul sebagai kata terpisah, bukan bagian dari kata lain
+                const regex = new RegExp(`\\b${hintLower.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\b`, 'i');
+                return regex.test(nameLower);
+            });
+            if (substringMatch) return substringMatch;
+
+            return null;
         };
 
         let sourceAccount = await findAccountByHint(parsed.sourceAccountHint);
