@@ -87,7 +87,7 @@ class AccountNotificationListenerService : NotificationListenerService() {
         val looksLikeTransaction = looksLikeFinancialTransaction(appNameStr, title, messageText, packageName)
         val matchesFilter = filters.isNotEmpty() && filters.any { keyword -> fullText.contains(keyword) }
 
-        if (!isSupportedPackage && !looksLikeTransaction && !matchesFilter) {
+        if (!isSupportedPackage && !looksLikeTransaction) {
             return
         }
 
