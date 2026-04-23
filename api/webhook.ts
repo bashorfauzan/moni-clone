@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import crypto from 'crypto';
 
 // Transation types hardcoded to avoid Prisma dependency
 const TransactionType = {
@@ -320,6 +321,7 @@ export default async function handler(req: any, res: any) {
 
         if (parsed.parseStatus === 'IGNORED' && isSecurityAlert) {
             const { data: securityNotification } = await supabase.from('NotificationInbox').insert({
+                id: crypto.randomUUID(),
                 sourceApp: String(appName),
                 senderName: senderName ? String(senderName) : null,
                 title: title ? String(title) : null,
@@ -370,6 +372,7 @@ export default async function handler(req: any, res: any) {
         }
 
         const { data: notification, error: notifError } = await supabase.from('NotificationInbox').insert({
+            id: crypto.randomUUID(),
             sourceApp: String(appName),
             senderName: senderName ? String(senderName) : null,
             title: title ? String(title) : null,
@@ -402,7 +405,7 @@ export default async function handler(req: any, res: any) {
         const { data: owners } = await supabase.from('Owner').select('*').order('createdAt', { ascending: true }).limit(1);
         let owner = owners?.[0];
         if (!owner) {
-            const { data: newOwner } = await supabase.from('Owner').insert({ name: 'Owner Utama' }).select().single();
+            const { data: newOwner } = await supabase.from('Owner').insert({ id: crypto.randomUUID(), name: 'Owner Utama' }).select().single();
             owner = newOwner;
         }
 
@@ -412,7 +415,7 @@ export default async function handler(req: any, res: any) {
             const { data: fallbackActivities } = await supabase.from('Activity').select('*').order('createdAt', { ascending: true }).limit(1);
             activity = fallbackActivities?.[0];
             if (!activity) {
-                const { data: newActivity } = await supabase.from('Activity').insert({ name: 'Lainnya' }).select().single();
+                const { data: newActivity } = await supabase.from('Activity').insert({ id: crypto.randomUUID(), name: 'Lainnya' }).select().single();
                 activity = newActivity;
             }
         }
@@ -488,6 +491,7 @@ export default async function handler(req: any, res: any) {
         }
 
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({
+            id: crypto.randomUUID(),
             amount: parsed.amount,
             type: parsed.type,
             date: nowIso,
