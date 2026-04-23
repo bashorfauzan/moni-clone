@@ -11,7 +11,11 @@
   },
   "rewrites": [
     {
-      "source": "/api/(?!webhook)(.*)",
+      "source": "/api/webhook/notification",
+      "destination": "/api/webhook"
+    },
+    {
+      "source": "/api/(.*)",
       "destination": "/api/index"
     },
     {
