@@ -286,14 +286,22 @@ export default async function handler(req: any, res: any) {
     }
 
     const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-        console.error('Supabase credentials missing');
-        return res.status(500).json({ error: 'Server misconfiguration' });
+        console.error('Supabase credentials missing for webhook');
+        return res.status(500).json({
+            error: 'Server misconfiguration',
+            details: 'SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib tersedia untuk webhook'
+        });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false
+        }
+    });
 
     try {
         const { appName, text, title, senderName, receivedAt, rawPayload } = req.body;
@@ -548,9 +556,14 @@ export default async function handler(req: any, res: any) {
 
     } catch (error: any) {
         console.error('[Webhook Error]:', error);
+        const detailMessage = String(error?.message || error);
+        const schemaHint = detailMessage.includes('new row violates row-level security policy')
+            ? 'Webhook Vercel harus memakai SUPABASE_SERVICE_ROLE_KEY karena tabel memakai RLS authenticated-only.'
+            : undefined;
         res.status(500).json({ 
             error: 'Internal Server Error', 
-            details: String(error?.message || error)
+            details: detailMessage,
+            hint: schemaHint
         });
     }
 }
