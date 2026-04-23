@@ -371,13 +371,26 @@ export default async function handler(req: any, res: any) {
             return res.status(400).json({ error: 'appName dan text wajib diisi' });
         }
 
+        // Skip Gmail — email konfirmasi bank sudah ditangani oleh notifikasi push BRImo/BCA/Flip
+        const packageName = rawPayload?.packageName || '';
+        const SKIPPED_PACKAGES = ['com.google.android.gm', 'com.microsoft.office.outlook'];
+        if (SKIPPED_PACKAGES.includes(packageName)) {
+            return res.status(200).json({
+                message: `Notifikasi dari ${packageName} diabaikan (sudah ditangani oleh app banking)`,
+                skipped: true
+            });
+        }
+
+        // Potong teks agar tidak menyebabkan timeout pada email panjang
+        const trimmedText = String(text).slice(0, 500);
+
         const parsed = parseNotificationText(
             String(appName),
             String(title || senderName || ''),
-            String(text)
+            trimmedText
         );
 
-        const isSecurityAlert = detectSecurityAlert(`${title || ''} ${text}`);
+        const isSecurityAlert = detectSecurityAlert(`${title || ''} ${trimmedText}`);
         const serializedPayload = toSerializableJson(rawPayload ?? req.body);
 
         if (parsed.parseStatus === 'IGNORED' && !isSecurityAlert) {
@@ -395,12 +408,12 @@ export default async function handler(req: any, res: any) {
                 sourceApp: String(appName),
                 senderName: senderName ? String(senderName) : null,
                 title: title ? String(title) : null,
-                messageText: String(text),
+                messageText: trimmedText,
                 receivedAt: nowIso,
                 parseStatus: 'FAILED',
                 parsedType: null,
                 parsedAmount: null,
-                parsedDescription: String(text).slice(0, 160),
+                parsedDescription: trimmedText.slice(0, 160),
                 parsedAccountHint: null,
                 confidenceScore: 0,
                 parseNotes: '⚠️ Peringatan Keamanan: Aktivitas login mencurigakan terdeteksi',
@@ -445,7 +458,7 @@ export default async function handler(req: any, res: any) {
             sourceApp: String(appName),
             senderName: senderName ? String(senderName) : null,
             title: title ? String(title) : null,
-            messageText: String(text),
+            messageText: trimmedText,
             receivedAt: nowIso,
             parseStatus: parsed.parseStatus,
             parsedType: parsed.type,
