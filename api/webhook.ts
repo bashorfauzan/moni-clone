@@ -79,14 +79,18 @@ const detectAccountHint = (text: string) => {
 
 const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
+    // JANGAN klasifikasi notifikasi biaya/fee sebagai transfer
+    if (text.includes('dikenakan biaya') || text.includes('biaya admin') || text.includes('biaya layanan')) return false;
     const mentionsTopUp = text.includes('top up') || text.includes('topup') || text.includes('pengisian saldo') || text.includes('isi saldo');
     // E-wallet "telah dikirim ke" = transfer keluar
     const isEwalletTransfer = E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
         && (text.includes('dikirim ke') || text.includes('telah dikirim'));
     if (isEwalletTransfer) return true;
+    // BRImo/Bank "Top Up DANA/OVO/ShopeePay" = transfer ke e-wallet
+    const isBankTopUpEwallet = mentionsTopUp && E_WALLET_APPS.some((app) => text.includes(app));
+    if (isBankTopUpEwallet) return true;
     if (!mentionsTopUp) return false;
     return E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
-        || E_WALLET_APPS.some((app) => text.includes(app))
         || text.includes('saldo')
         || text.includes('dari ');
 };
@@ -205,6 +209,10 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
         type = TransactionType.INVESTMENT_OUT;
         confidenceScore = 0.82;
+    } else if (detectFeeCharge(lowerText)) {
+        // Prioritas tinggi: notifikasi biaya/fee SELALU expense
+        type = TransactionType.EXPENSE;
+        confidenceScore = 0.9;
     } else if (detectTransferLikeTopUp(sourceApp, lowerText)) {
         type = TransactionType.TRANSFER;
         confidenceScore = 0.78;
@@ -435,17 +443,15 @@ export default async function handler(req: any, res: any) {
         if (parsed.amount) {
             const threeMinAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
             
-            // Cek duplikasi LINTAS APLIKASI: satu transaksi sering memicu
-            // notifikasi dari 2 app berbeda (misal BRImo + ShopeePay)
-            let duplicateQuery = supabase.from('NotificationInbox')
-                .select('id, sourceApp')
+            // Cek duplikasi LINTAS APLIKASI DAN LINTAS TIPE:
+            // Satu transaksi top-up menghasilkan notifikasi dari BRImo (EXPENSE/TRANSFER)
+            // dan DANA (INCOME/TRANSFER) dengan nominal sama. Abaikan tipe saat cek duplikat.
+            const { data: duplicates } = await supabase.from('NotificationInbox')
+                .select('id, sourceApp, parsedType')
                 .eq('parsedAmount', parsed.amount)
                 .gte('createdAt', threeMinAgo)
-                .neq('parseStatus', 'IGNORED');
-                
-            if (parsed.type) duplicateQuery = duplicateQuery.eq('parsedType', parsed.type);
-
-            const { data: duplicates } = await duplicateQuery.limit(1);
+                .neq('parseStatus', 'IGNORED')
+                .limit(1);
 
             if (duplicates && duplicates.length > 0) {
                 return res.status(200).json({
