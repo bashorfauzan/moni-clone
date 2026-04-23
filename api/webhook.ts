@@ -471,7 +471,8 @@ export default async function handler(req: any, res: any) {
         const { data: owners } = await supabase.from('Owner').select('*').order('createdAt', { ascending: true }).limit(1);
         let owner = owners?.[0];
         if (!owner) {
-            const { data: newOwner } = await supabase.from('Owner').insert({ id: crypto.randomUUID(), name: 'Owner Utama' }).select().single();
+            const ownerNow = new Date().toISOString();
+            const { data: newOwner } = await supabase.from('Owner').insert({ id: crypto.randomUUID(), name: 'Owner Utama', createdAt: ownerNow, updatedAt: ownerNow }).select().single();
             owner = newOwner;
         }
 
@@ -481,7 +482,8 @@ export default async function handler(req: any, res: any) {
             const { data: fallbackActivities } = await supabase.from('Activity').select('*').order('createdAt', { ascending: true }).limit(1);
             activity = fallbackActivities?.[0];
             if (!activity) {
-                const { data: newActivity } = await supabase.from('Activity').insert({ id: crypto.randomUUID(), name: 'Lainnya' }).select().single();
+                const actNow = new Date().toISOString();
+                const { data: newActivity } = await supabase.from('Activity').insert({ id: crypto.randomUUID(), name: 'Lainnya', createdAt: actNow, updatedAt: actNow }).select().single();
                 activity = newActivity;
             }
         }
@@ -581,7 +583,8 @@ export default async function handler(req: any, res: any) {
         if (isMissingCriticalFields) {
             await supabase.from('NotificationInbox').update({
                 parseStatus: 'PENDING',
-                parseNotes: missingAccountReason ?? 'Master owner/activity/account belum lengkap'
+                parseNotes: missingAccountReason ?? 'Master owner/activity/account belum lengkap',
+                updatedAt: new Date().toISOString()
             }).eq('id', notification.id);
 
             const { data: updatedNotif } = await supabase.from('NotificationInbox').select('*').eq('id', notification.id).single();
@@ -598,7 +601,8 @@ export default async function handler(req: any, res: any) {
             await supabase.from('NotificationInbox').update({
                 parseStatus: 'PARSED',
                 parsedType: effectiveType,
-                parseNotes: 'Transfer ambigu dicatat otomatis sebagai transaksi satu rekening'
+                parseNotes: 'Transfer ambigu dicatat otomatis sebagai transaksi satu rekening',
+                updatedAt: new Date().toISOString()
             }).eq('id', notification.id);
 
             if (effectiveType === TransactionType.INCOME) {
@@ -610,6 +614,7 @@ export default async function handler(req: any, res: any) {
             }
         }
 
+        const txNow = new Date().toISOString();
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({
             id: crypto.randomUUID(),
             amount: parsed.amount,
@@ -620,8 +625,10 @@ export default async function handler(req: any, res: any) {
             activityId: activity!.id,
             isValidated: true,
             notificationInboxId: notification.id,
-            sourceAccountId,
-            destinationAccountId
+            sourceAccountId: sourceAccountId || null,
+            destinationAccountId: destinationAccountId || null,
+            createdAt: txNow,
+            updatedAt: txNow
         }).select().single();
 
         if (txError) {
@@ -655,7 +662,7 @@ export default async function handler(req: any, res: any) {
                     }
                 }
                 
-                await supabase.from('Account').update({ balance }).eq('id', accId);
+                await supabase.from('Account').update({ balance, updatedAt: new Date().toISOString() }).eq('id', accId);
             }
         }
 
