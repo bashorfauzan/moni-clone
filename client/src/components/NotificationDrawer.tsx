@@ -32,6 +32,19 @@ const formatCompactTime = (value: string) => new Date(value).toLocaleString('id-
     minute: '2-digit'
 });
 
+const formatParsedTypeLabel = (value?: string) => {
+    if (!value) return '';
+    const labels: Record<string, string> = {
+        INCOME: 'Pemasukan',
+        EXPENSE: 'Pengeluaran',
+        TRANSFER: 'Transfer',
+        TOP_UP: 'Top Up',
+        INVESTMENT_IN: 'Investasi Masuk',
+        INVESTMENT_OUT: 'Investasi Keluar'
+    };
+    return labels[value] || value;
+};
+
 const notificationTone = (status: NotificationItem['parseStatus'], isSecurityAlert?: boolean) => {
     if (isSecurityAlert) {
         return {
@@ -189,7 +202,7 @@ const NotificationDrawer = ({
                                     <div className="flex flex-wrap gap-2 mt-3">
                                         {item.parsedType ? (
                                             <span className="text-[10px] px-2 py-1 rounded-full bg-white/80 border border-white font-bold uppercase tracking-wide text-slate-600">
-                                                {item.parsedType}
+                                                {formatParsedTypeLabel(item.parsedType)}
                                             </span>
                                         ) : null}
                                         {item.parsedAccountHint ? (

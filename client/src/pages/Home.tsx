@@ -40,6 +40,7 @@ const Home = () => {
     const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
     const [clearingNotifications, setClearingNotifications] = useState(false);
     const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
+    const [selectedTransaction, setSelectedTransaction] = useState<TransactionItem | null>(null);
     const refreshTimeoutRef = useRef<number | null>(null);
 
     const toggleHideWealth = () => {
@@ -217,13 +218,85 @@ const Home = () => {
         return isBalanceHidden ? 'Rp •••••••' : formatCurrency(value);
     };
 
+    const isTopUpTransaction = (tx: TransactionItem) => {
+        const description = `${tx.description || ''} ${tx.activity?.name || ''}`.toLowerCase();
+        const destinationType = tx.destinationAccount?.type?.toLowerCase();
+        return (tx.type === 'TOP_UP' || tx.type === 'TRANSFER') && (
+            description.includes('top up')
+            || description.includes('topup')
+            || destinationType === 'e-wallet'
+            || destinationType === 'rdn'
+            || destinationType === 'sekuritas'
+        );
+    };
+
+    const getRecentTransactionVisual = (tx: TransactionItem) => {
+        if (isTopUpTransaction(tx)) {
+            return {
+                iconWrap: 'bg-rose-50 text-rose-600',
+                icon: '↗',
+                amountClass: 'text-slate-800',
+                amountPrefix: '-',
+                badge: 'Top Up'
+            };
+        }
+
+        if (tx.type === 'INCOME') {
+            return {
+                iconWrap: 'bg-emerald-50 text-emerald-600',
+                icon: '↘',
+                amountClass: 'text-emerald-500',
+                amountPrefix: '',
+                badge: 'Masuk'
+            };
+        }
+
+        if (tx.type === 'EXPENSE') {
+            return {
+                iconWrap: 'bg-rose-50 text-rose-600',
+                icon: '↗',
+                amountClass: 'text-slate-800',
+                amountPrefix: '-',
+                badge: 'Keluar'
+            };
+        }
+
+        if (tx.type === 'TOP_UP') {
+            return {
+                iconWrap: 'bg-fuchsia-50 text-fuchsia-600',
+                icon: '⬆',
+                amountClass: 'text-fuchsia-600',
+                amountPrefix: '-',
+                badge: 'Top Up'
+            };
+        }
+
+        if (tx.type === 'TRANSFER') {
+            return {
+                iconWrap: 'bg-blue-50 text-blue-600',
+                icon: '⇄',
+                amountClass: 'text-slate-800',
+                amountPrefix: '',
+                badge: 'Transfer'
+            };
+        }
+
+        return {
+            iconWrap: 'bg-amber-50 text-amber-600',
+            icon: '⇄',
+            amountClass: 'text-slate-800',
+            amountPrefix: '',
+            badge: 'Investasi'
+        };
+    };
+
 
 
     const getRecentTransactionAccountInfo = (tx: TransactionItem) => {
         const source = tx.sourceAccount?.name;
         const destination = tx.destinationAccount?.name;
 
-        if (tx.type === 'TRANSFER' && source && destination) {
+        if ((tx.type === 'TRANSFER' || tx.type === 'TOP_UP') && source && destination) {
             return `${source} -> ${destination}`;
         }
 
@@ -258,7 +331,7 @@ const Home = () => {
                         amount -= tx.amount;
                     }
 
-                    if (tx.type === 'TRANSFER' || tx.type === 'INVESTMENT_IN' || tx.type === 'INVESTMENT_OUT') {
+                    if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP' || tx.type === 'INVESTMENT_IN' || tx.type === 'INVESTMENT_OUT') {
                         if (tx.destinationAccountId === account.id) amount += tx.amount;
                         if (tx.sourceAccountId === account.id) amount -= tx.amount;
                     }
@@ -505,17 +578,18 @@ const Home = () => {
             )}
 
             {/* Quick Actions */}
-            <div className="flex items-center justify-between gap-2 mb-10 bg-white p-3 sm:p-4 rounded-[28px] border border-slate-100 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
+            <div className="mb-10 grid grid-cols-5 gap-2 rounded-[28px] border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
                 {[
                     { label: 'Income', color: 'bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600', icon: '↘', type: 'INCOME' },
                     { label: 'Expense', color: 'bg-gradient-to-br from-rose-100 to-rose-50 text-rose-600', icon: '↗', type: 'EXPENSE' },
                     { label: 'Transfer', color: 'bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600', icon: '⇄', type: 'TRANSFER' },
+                    { label: 'Top Up', color: 'bg-gradient-to-br from-fuchsia-100 to-fuchsia-50 text-fuchsia-600', icon: '⬆', type: 'TOP_UP' },
                     { label: 'Invest', color: 'bg-gradient-to-br from-amber-100 to-amber-50 text-amber-600', icon: '📈', type: 'INVESTMENT' },
                 ].map((item, i) => (
                     <button
                         key={i}
                         onClick={() => openModal(item.type as any)}
-                        className="flex flex-col items-center gap-2 flex-1 group focus:outline-none"
+                        className="group flex min-w-0 flex-col items-center gap-2 focus:outline-none"
                     >
                         <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl ${item.color} flex items-center justify-center text-xl font-bold border border-white shadow-[0_4px_12px_-6px_rgba(0,0,0,0.1)] group-active:scale-90 transition-transform`}>
                             {item.icon}
@@ -612,31 +686,39 @@ const Home = () => {
                 </div>
                 <div className="space-y-2.5">
                     {recentTransactions.length > 0 ? (
-                        recentTransactions.map((tx) => (
-                            <div key={tx.id} className="flex items-center justify-between gap-3 p-4 bg-white border border-slate-100/60 rounded-[20px] hover:bg-slate-50/50 transition-colors shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)]">
-                                <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-lg shrink-0 ${tx.type === 'INCOME' ? 'bg-emerald-50 text-emerald-600' :
-                                        tx.type === 'EXPENSE' ? 'bg-rose-50 text-rose-600' :
-                                            tx.type === 'TRANSFER' ? 'bg-blue-50 text-blue-600' : 'bg-amber-50 text-amber-600'
-                                        }`}>
-                                        {tx.type === 'INCOME' ? '↘' : tx.type === 'EXPENSE' ? '↗' : '⇄'}
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-sm text-slate-800 truncate mb-0.5">{tx.description || tx.activity?.name}</p>
-                                        <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
-                                            <span>{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
-                                            <span>•</span>
-                                            <span className="truncate">{getRecentTransactionAccountInfo(tx)}</span>
+                        recentTransactions.map((tx) => {
+                            const visual = getRecentTransactionVisual(tx);
+                            return (
+                                <button
+                                    key={tx.id}
+                                    type="button"
+                                    onClick={() => setSelectedTransaction(tx)}
+                                    className="flex w-full items-center justify-between gap-3 rounded-[20px] border border-slate-100/60 bg-white p-4 text-left shadow-[0_2px_10px_-4px_rgba(0,0,0,0.02)] transition-colors hover:bg-slate-50/50"
+                                >
+                                    <div className="flex min-w-0 flex-1 items-center gap-3.5">
+                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${visual.iconWrap}`}>
+                                            {visual.icon}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="mb-0.5 truncate text-sm font-bold text-slate-800">{tx.description || tx.activity?.name}</p>
+                                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                                <span>{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
+                                                <span>•</span>
+                                                <span className="truncate">{getRecentTransactionAccountInfo(tx)}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center shrink-0">
-                                    <p className={`font-bold text-sm shrink-0 ml-1 ${tx.type === 'INCOME' ? 'text-emerald-500' : 'text-slate-800'}`}>
-                                        {tx.type === 'EXPENSE' ? '-' : ''}{formatCurrency(tx.amount)}
-                                    </p>
-                                </div>
-                            </div>
-                        ))
+                                    <div className="flex shrink-0 flex-col items-end">
+                                        <span className="mb-1 rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                            {visual.badge}
+                                        </span>
+                                        <p className={`ml-1 shrink-0 text-sm font-bold ${visual.amountClass}`}>
+                                            {visual.amountPrefix}{formatCurrency(tx.amount)}
+                                        </p>
+                                    </div>
+                                </button>
+                            );
+                        })
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 px-4 bg-white/50 border border-dashed border-slate-200 rounded-[24px]">
                             <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">Belum ada transaksi</p>
@@ -680,6 +762,82 @@ const Home = () => {
                 clearingNotifications={clearingNotifications}
                 deletingNotificationId={deletingNotificationId}
             />
+
+            {selectedTransaction && (
+                <div
+                    className="fixed inset-0 z-[110] flex items-end justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:items-center"
+                    onClick={() => setSelectedTransaction(null)}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[28px] bg-white p-5 shadow-2xl"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                    {getRecentTransactionVisual(selectedTransaction).badge}
+                                </p>
+                                <h3 className="mt-2 text-lg font-bold text-slate-900">
+                                    {selectedTransaction.description || selectedTransaction.activity?.name || 'Detail Transaksi'}
+                                </h3>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedTransaction(null)}
+                                className="rounded-full p-2 text-slate-400 transition-colors hover:bg-slate-100"
+                                aria-label="Tutup detail transaksi"
+                            >
+                                <ChevronDown size={18} />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 rounded-2xl bg-slate-50 p-4">
+                            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Nominal</p>
+                            <p className="mt-2 text-2xl font-black text-slate-900">
+                                {getRecentTransactionVisual(selectedTransaction).amountPrefix}{formatCurrency(selectedTransaction.amount)}
+                            </p>
+                        </div>
+
+                        <div className="mt-4 space-y-3 text-sm text-slate-600">
+                            <div className="flex items-start justify-between gap-4">
+                                <span className="font-bold text-slate-400">Waktu</span>
+                                <span className="text-right font-semibold text-slate-700">
+                                    {new Date(selectedTransaction.date).toLocaleString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </span>
+                            </div>
+                            <div className="flex items-start justify-between gap-4">
+                                <span className="font-bold text-slate-400">Pemilik</span>
+                                <span className="text-right font-semibold text-slate-700">{selectedTransaction.owner?.name || '-'}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-4">
+                                <span className="font-bold text-slate-400">Sumber</span>
+                                <span className="text-right font-semibold text-slate-700">{selectedTransaction.sourceAccount?.name || '-'}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-4">
+                                <span className="font-bold text-slate-400">Tujuan</span>
+                                <span className="text-right font-semibold text-slate-700">{selectedTransaction.destinationAccount?.name || '-'}</span>
+                            </div>
+                            <div className="flex items-start justify-between gap-4">
+                                <span className="font-bold text-slate-400">Jenis</span>
+                                <span className="text-right font-semibold text-slate-700">{selectedTransaction.type}</span>
+                            </div>
+                        </div>
+
+                        {selectedTransaction.description && (
+                            <div className="mt-4 rounded-2xl border border-slate-100 p-4">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Catatan</p>
+                                <p className="mt-2 text-sm leading-6 text-slate-700">{selectedTransaction.description}</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

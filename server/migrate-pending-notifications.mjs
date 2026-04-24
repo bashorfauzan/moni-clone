@@ -54,7 +54,7 @@ async function migratePendingNotifications() {
                 destinationAccountId = account?.id;
             } else if (notif.parsedType === 'EXPENSE' || notif.parsedType === 'INVESTMENT_OUT') {
                 sourceAccountId = account?.id;
-            } else if (notif.parsedType === 'TRANSFER') {
+            } else if (notif.parsedType === 'TRANSFER' || notif.parsedType === 'TOP_UP') {
                 sourceAccountId = account?.id;
                 // For transfer, try to find a different destination account
                 const otherAccount = await prisma.account.findFirst({
@@ -65,7 +65,7 @@ async function migratePendingNotifications() {
             }
 
             // Skip if TRANSFER but can't find 2 distinct accounts
-            if (notif.parsedType === 'TRANSFER' && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId)) {
+            if ((notif.parsedType === 'TRANSFER' || notif.parsedType === 'TOP_UP') && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId)) {
                 // Create as EXPENSE to allow user to fix it via the ✓ button
                 sourceAccountId = account?.id;
                 destinationAccountId = null;

@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2, CheckSquare, Square } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchTransactions, type TransactionItem, deleteTransaction, bulkDeleteTransactions } from '../services/transactions';
+import { fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
@@ -13,7 +13,7 @@ import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
-type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
 
 const isInvestmentAccountType = (type?: string) => type === 'RDN' || type === 'Sekuritas';
 
@@ -24,6 +24,9 @@ const isInvestmentLiquidation = (tx: TransactionItem) =>
     tx.type === 'TRANSFER' && isInvestmentAccountType(tx.sourceAccount?.type);
 
 const getReportTransactionKind = (tx: TransactionItem) => {
+    if (tx.type === 'TOP_UP') {
+        return isInvestmentTopUp(tx) ? 'INVESTMENT_TOP_UP' : 'TOP_UP';
+    }
     if (isInvestmentTopUp(tx)) return 'INVESTMENT_TOP_UP';
     if (isInvestmentLiquidation(tx)) return 'INVESTMENT_LIQUIDATION';
     return tx.type;
@@ -49,6 +52,8 @@ const Reports = () => {
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
+    const longPressTimerRef = useRef<number | null>(null);
+    const longPressTriggeredRef = useRef(false);
 
     const toggleSelectTx = (id: string) => {
         const next = new Set(selectedTx);
@@ -57,13 +62,48 @@ const Reports = () => {
         setSelectedTx(next);
     };
 
-    const toggleSelectAll = () => {
-        const visibleIds = data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE).map((tx: any) => tx.id);
-        if (selectedTx.size === visibleIds.length && visibleIds.every((id: string) => selectedTx.has(id))) {
-            setSelectedTx(new Set());
-        } else {
-            setSelectedTx(new Set(visibleIds));
+    const clearLongPressTimer = () => {
+        if (longPressTimerRef.current) {
+            window.clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
         }
+    };
+
+    const startLongPressSelection = (id: string) => {
+        clearLongPressTimer();
+        longPressTriggeredRef.current = false;
+        longPressTimerRef.current = window.setTimeout(() => {
+            longPressTriggeredRef.current = true;
+            setSelectedTx((prev) => {
+                const next = new Set(prev);
+                next.add(id);
+                return next;
+            });
+        }, 450);
+    };
+
+    const cancelLongPressSelection = () => {
+        clearLongPressTimer();
+    };
+
+    const handleTransactionPress = (tx: TransactionItem) => {
+        if (longPressTriggeredRef.current) {
+            longPressTriggeredRef.current = false;
+            return;
+        }
+
+        if (selectedTx.size > 0) {
+            toggleSelectTx(tx.id);
+            return;
+        }
+
+        openEditModal(tx.id, getEditableModalType(tx), {
+            amount: tx.amount,
+            description: tx.description || tx.activity?.name,
+            ownerId: tx.ownerId,
+            sourceAccountId: tx.sourceAccountId,
+            destinationAccountId: tx.destinationAccountId
+        });
     };
 
     const handleBulkDelete = async () => {
@@ -103,19 +143,6 @@ const Reports = () => {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        const authorized = await verifySecurity('Hapus Transaksi');
-        if (!authorized) return;
-
-        try {
-            await deleteTransaction(id);
-            await fetchReportData();
-            window.dispatchEvent(new Event('nova:data-changed'));
-        } catch (error: any) {
-            alert(getErrorMessage(error, 'Gagal menghapus transaksi'));
-        }
-    };
-
     const fetchReportData = async () => {
         setLoading(true);
         try {
@@ -150,7 +177,7 @@ const Reports = () => {
             const totalExpense = filtered
                 .filter((tx: TransactionItem) => {
                     const kind = getReportTransactionKind(tx);
-                    return kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP';
+                    return kind === 'EXPENSE' || kind === 'INVESTMENT_OUT';
                 })
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
@@ -165,6 +192,7 @@ const Reports = () => {
                     const kind = getReportTransactionKind(tx);
                     if (kind === 'INCOME') name = 'Pemasukan';
                     else if (kind === 'TRANSFER') name = 'Transfer';
+                    else if (kind === 'TOP_UP') name = 'Top Up';
                     else if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') name = 'Setoran Investasi';
                     else if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') name = 'Pencairan Investasi';
                     else name = 'Lainnya';
@@ -186,7 +214,7 @@ const Reports = () => {
                 const kind = getReportTransactionKind(tx);
                 if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') {
                     trendMap[label].Pemasukan += tx.amount;
-                } else if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP') {
+                } else if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT') {
                     trendMap[label].Pengeluaran += tx.amount;
                 }
             });
@@ -218,7 +246,10 @@ const Reports = () => {
     useEffect(() => {
         const handleDataChanged = () => void fetchReportData();
         window.addEventListener('nova:data-changed', handleDataChanged);
-        return () => window.removeEventListener('nova:data-changed', handleDataChanged);
+        return () => {
+            window.removeEventListener('nova:data-changed', handleDataChanged);
+            clearLongPressTimer();
+        };
     }, [viewMode, currentDate]);
 
     const formatCurrency = (val: number) =>
@@ -235,7 +266,7 @@ const Reports = () => {
     const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
         const isInvestmentTransfer = isInvestmentTopUp(tx);
         if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') return 'INVESTMENT';
-        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER') return tx.type;
+        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER' || tx.type === 'TOP_UP') return tx.type;
         return 'INCOME';
     };
 
@@ -244,6 +275,7 @@ const Reports = () => {
         if (kind === 'INCOME') return { label: 'Masuk', cls: 'bg-emerald-50 text-emerald-700' };
         if (kind === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
         if (kind === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
+        if (kind === 'TOP_UP') return { label: 'Top Up', cls: 'bg-fuchsia-50 text-fuchsia-700' };
         if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
         if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
         return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
@@ -253,6 +285,7 @@ const Reports = () => {
         const kind = getReportTransactionKind(tx);
         if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
         if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
+        if (kind === 'TOP_UP') return 'text-fuchsia-600';
         return 'text-slate-900';
     };
 
@@ -426,15 +459,30 @@ const Reports = () => {
                     <div className="flex items-center gap-3">
                         <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Semua Transaksi</h2>
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.transactionsData.length} data</span>
+                        {selectedTx.size > 0 && (
+                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-600">
+                                {selectedTx.size} dipilih
+                            </span>
+                        )}
                     </div>
-                    {selectedTx.size > 0 && (
-                        <button
-                            onClick={handleBulkDelete}
-                            className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-600 shadow-sm transition-colors hover:bg-rose-100"
-                        >
-                            <Trash2 size={13} /> Hapus ({selectedTx.size})
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {selectedTx.size > 0 && (
+                            <button
+                                onClick={() => setSelectedTx(new Set())}
+                                className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 shadow-sm transition-colors hover:bg-slate-200"
+                            >
+                                Batal
+                            </button>
+                        )}
+                        {selectedTx.size > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-600 shadow-sm transition-colors hover:bg-rose-100"
+                            >
+                                <Trash2 size={13} /> Hapus ({selectedTx.size})
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {data.transactionsData.length === 0 ? (
@@ -445,19 +493,32 @@ const Reports = () => {
                     <>
                         {/* Mobile card list */}
                         <div className="divide-y divide-slate-100 lg:hidden">
-                            <div className="flex items-center gap-3 px-4 py-3 bg-slate-50/50">
-                                <button onClick={toggleSelectAll} className="text-slate-400 hover:text-blue-600 transition-colors">
-                                    {selectedTx.size === visibleTx.length && visibleTx.length > 0 ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
-                                </button>
-                                <span className="text-[11px] font-bold text-slate-500">PILIH SEMUA</span>
+                            <div className="px-4 py-3 bg-slate-50/50">
+                                <p className="text-[11px] font-bold text-slate-500">
+                                    Tahan transaksi untuk mulai memilih, lalu tap transaksi lain untuk menambah pilihan.
+                                </p>
                             </div>
                             {visibleTx.map((tx: TransactionItem) => {
                                 const badge = getTypeBadge(tx);
                                 return (
-                                    <div key={tx.id} className="flex items-center gap-3 px-4 py-3.5">
-                                        <button onClick={() => toggleSelectTx(tx.id)} className="shrink-0 text-slate-300 hover:text-blue-600 transition-colors">
-                                            {selectedTx.has(tx.id) ? <CheckSquare size={18} className="text-blue-600" /> : <Square size={18} />}
-                                        </button>
+                                    <div
+                                        key={tx.id}
+                                        className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${selectedTx.has(tx.id) ? 'bg-blue-50/60' : 'hover:bg-slate-50/60'}`}
+                                        onTouchStart={() => startLongPressSelection(tx.id)}
+                                        onTouchEnd={cancelLongPressSelection}
+                                        onTouchCancel={cancelLongPressSelection}
+                                        onMouseDown={() => startLongPressSelection(tx.id)}
+                                        onMouseUp={cancelLongPressSelection}
+                                        onMouseLeave={cancelLongPressSelection}
+                                        onClick={() => handleTransactionPress(tx)}
+                                    >
+                                        {selectedTx.has(tx.id) ? (
+                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
+                                                {selectedTx.size > 1 ? Array.from(selectedTx).indexOf(tx.id) + 1 : '✓'}
+                                            </div>
+                                        ) : (
+                                            <div className="h-7 w-7 shrink-0 rounded-full border border-slate-200 bg-white" />
+                                        )}
                                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
@@ -466,13 +527,12 @@ const Reports = () => {
                                         <p className={`shrink-0 text-sm font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</p>
                                         <div className="flex gap-1 shrink-0">
                                             <button
-                                                onClick={() => openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId })}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
+                                                }}
                                                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                             ><Pencil size={13} /></button>
-                                            <button
-                                                onClick={() => void handleDelete(tx.id)}
-                                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                                            ><Trash2 size={13} /></button>
                                         </div>
                                     </div>
                                 );
@@ -484,11 +544,6 @@ const Reports = () => {
                             <table className="w-full min-w-[760px] text-left text-sm">
                                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
                                     <tr>
-                                        <th className="px-5 py-3.5 w-10 text-center">
-                                            <button onClick={toggleSelectAll} className="text-slate-400 hover:text-blue-600 transition-colors flex items-center justify-center">
-                                                {selectedTx.size === visibleTx.length && visibleTx.length > 0 ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
-                                            </button>
-                                        </th>
                                         <th className="px-5 py-3.5">Tanggal</th>
                                         <th className="px-5 py-3.5">Tipe</th>
                                         <th className="px-5 py-3.5">Pemilik</th>
@@ -501,12 +556,14 @@ const Reports = () => {
                                     {visibleTx.map((tx: TransactionItem) => {
                                         const badge = getTypeBadge(tx);
                                         return (
-                                            <tr key={tx.id} className={`transition-colors hover:bg-slate-50/60 ${selectedTx.has(tx.id) ? 'bg-blue-50/20' : ''}`}>
-                                                <td className="px-5 py-4 whitespace-nowrap text-center">
-                                                    <button onClick={() => toggleSelectTx(tx.id)} className="text-slate-300 hover:text-blue-600 transition-colors flex items-center justify-center">
-                                                        {selectedTx.has(tx.id) ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} />}
-                                                    </button>
-                                                </td>
+                                            <tr
+                                                key={tx.id}
+                                                className={`transition-colors hover:bg-slate-50/60 ${selectedTx.has(tx.id) ? 'bg-blue-50/20' : ''}`}
+                                                onMouseDown={() => startLongPressSelection(tx.id)}
+                                                onMouseUp={cancelLongPressSelection}
+                                                onMouseLeave={cancelLongPressSelection}
+                                                onClick={() => handleTransactionPress(tx)}
+                                            >
                                                 <td className="px-5 py-4 whitespace-nowrap">
                                                     <p className="font-bold text-slate-700">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</p>
                                                     <p className="text-[10px] text-slate-400">{new Date(tx.date).getFullYear()}</p>
@@ -523,15 +580,13 @@ const Reports = () => {
                                                 <td className="px-5 py-4">
                                                     <div className="flex items-center justify-center gap-1.5">
                                                         <button
-                                                            onClick={() => openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId })}
+                                                            onClick={(event) => {
+                                                                event.stopPropagation();
+                                                                openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
+                                                            }}
                                                             className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                                             title="Edit"
                                                         ><Pencil size={13} /></button>
-                                                        <button
-                                                            onClick={() => void handleDelete(tx.id)}
-                                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                                                            title="Hapus"
-                                                        ><Trash2 size={13} /></button>
                                                     </div>
                                                 </td>
                                             </tr>

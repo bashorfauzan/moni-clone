@@ -1,7 +1,7 @@
 import api from './api';
 import { supabase, useDirectSupabaseData } from '../lib/supabase';
 
-export type TransactionTypeValue = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT_IN' | 'INVESTMENT_OUT';
+export type TransactionTypeValue = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT_IN' | 'INVESTMENT_OUT';
 
 export type TransactionItem = {
     id: string;
@@ -62,6 +62,7 @@ const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionTypeValue, string> = {
     INCOME: 'Pemasukan',
     EXPENSE: 'Pengeluaran',
     TRANSFER: 'Transfer',
+    TOP_UP: 'Top Up',
     INVESTMENT_IN: 'Investasi Masuk',
     INVESTMENT_OUT: 'Investasi Keluar'
 };
@@ -166,13 +167,13 @@ const validatePayload = (payload: TransactionWritePayload) => {
         throw new Error('Rekening sumber wajib dipilih untuk pengeluaran');
     }
 
-    if (payload.type === 'TRANSFER') {
+    if (payload.type === 'TRANSFER' || payload.type === 'TOP_UP') {
         if (!payload.sourceAccountId || !payload.destinationAccountId) {
-            throw new Error('Transfer harus memiliki rekening sumber dan tujuan');
+            throw new Error(`${payload.type === 'TOP_UP' ? 'Top up' : 'Transfer'} harus memiliki rekening sumber dan tujuan`);
         }
 
         if (payload.sourceAccountId === payload.destinationAccountId) {
-            throw new Error('Rekening sumber dan tujuan transfer tidak boleh sama');
+            throw new Error(`Rekening sumber dan tujuan ${payload.type === 'TOP_UP' ? 'top up' : 'transfer'} tidak boleh sama`);
         }
     }
 };
@@ -267,7 +268,7 @@ const computeBalanceMap = async () => {
             balanceMap.set(tx.sourceAccountId, (balanceMap.get(tx.sourceAccountId) || 0) - amount);
         }
 
-        if (tx.type === 'TRANSFER') {
+        if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
             if (tx.sourceAccountId) {
                 balanceMap.set(tx.sourceAccountId, (balanceMap.get(tx.sourceAccountId) || 0) - amount);
             }
@@ -354,7 +355,8 @@ const ensureSourceFunds = async (
 
     const needsSourceCheck = payload.type === 'EXPENSE'
         || payload.type === 'INVESTMENT_OUT'
-        || payload.type === 'TRANSFER';
+        || payload.type === 'TRANSFER'
+        || payload.type === 'TOP_UP';
 
     if (!needsSourceCheck || !payload.sourceAccountId || !payload.ownerId) return;
 
@@ -364,14 +366,14 @@ const ensureSourceFunds = async (
 
         if (
             tx.destinationAccountId === payload.sourceAccountId
-            && ['INCOME', 'TRANSFER', 'INVESTMENT_IN'].includes(tx.type)
+            && ['INCOME', 'TRANSFER', 'TOP_UP', 'INVESTMENT_IN'].includes(tx.type)
         ) {
             return total + tx.amount;
         }
 
         if (
             tx.sourceAccountId === payload.sourceAccountId
-            && ['EXPENSE', 'TRANSFER', 'INVESTMENT_OUT'].includes(tx.type)
+            && ['EXPENSE', 'TRANSFER', 'TOP_UP', 'INVESTMENT_OUT'].includes(tx.type)
         ) {
             return total - tx.amount;
         }

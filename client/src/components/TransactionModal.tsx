@@ -6,7 +6,7 @@ import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByU
 import { createTransaction, fetchTransactions, updateTransaction, validateTransaction } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
 
-type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'INVESTMENT';
+type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
 type PickerType = 'source' | 'destination' | null;
 
 interface ModalMeta {
@@ -67,6 +67,12 @@ const TransactionModal = () => {
                 submit: isEditing ? 'Simpan Perubahan' : 'Simpan Transfer',
                 helper: 'Pindahkan saldo antar rekening Anda.'
             },
+            TOP_UP: {
+                title: isEditing ? 'Edit Top Up' : 'Top Up',
+                accent: 'text-fuchsia-400',
+                submit: isEditing ? 'Simpan Perubahan' : 'Simpan Top Up',
+                helper: 'Pindahkan dana ke e-wallet atau rekening investasi.'
+            },
             INVESTMENT: {
                 title: isEditing ? 'Edit Setor ke Investasi' : 'Setor ke Investasi',
                 accent: 'text-amber-400',
@@ -118,10 +124,11 @@ const TransactionModal = () => {
     const isIncome = modalType === 'INCOME';
     const isExpense = modalType === 'EXPENSE';
     const isTransfer = modalType === 'TRANSFER';
+    const isTopUp = modalType === 'TOP_UP';
     const isInvestment = modalType === 'INVESTMENT';
 
-    const showSource = isExpense || isTransfer || isInvestment;
-    const showDestination = isIncome || isTransfer || isInvestment;
+    const showSource = isExpense || isTransfer || isTopUp || isInvestment;
+    const showDestination = isIncome || isTransfer || isTopUp || isInvestment;
 
     const accountById = (id: string) => meta.accounts.find((acc) => acc.id === id);
     const selectedSourceAccount = accountById(form.sourceAccountId);
@@ -138,6 +145,8 @@ const TransactionModal = () => {
             if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
             if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet';
             if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTopUp && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTopUp && pickerType === 'destination') return acc.type === 'E-Wallet' || acc.type === 'RDN' || acc.type === 'Sekuritas';
             if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
             if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
 
@@ -153,6 +162,7 @@ const TransactionModal = () => {
         isExpense,
         isIncome,
         isInvestment,
+        isTopUp,
         isTransfer,
         meta.accounts,
         pickerQuery,
@@ -213,7 +223,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TRANSFER' : modalType,
+                    type: isInvestment ? 'TOP_UP' : modalType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                 };
@@ -224,7 +234,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TRANSFER' : modalType,
+                    type: isInvestment ? 'TOP_UP' : modalType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     categoryId: undefined, // categoryId optional/will be resolved by backend
@@ -235,7 +245,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TRANSFER' : modalType,
+                    type: isInvestment ? 'TOP_UP' : modalType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     notificationInboxId: modalPayload?.notificationInboxId,
@@ -291,12 +301,13 @@ const TransactionModal = () => {
                                 <option value="EXPENSE">Pengeluaran</option>
                                 <option value="INCOME">Pemasukan</option>
                                 <option value="TRANSFER">Transfer Dana</option>
+                                <option value="TOP_UP">Top Up</option>
                                 <option value="INVESTMENT">Setor/Investasi</option>
                             </select>
                         </div>
                     )}
 
-                    {(isIncome || isExpense || isInvestment) && (
+                    {(isIncome || isExpense || isTopUp || isInvestment) && (
                         <div>
                             <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Kepemilikan</label>
                             <select
@@ -331,7 +342,7 @@ const TransactionModal = () => {
                         <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Keterangan</label>
                         <input
                             type="text"
-                            placeholder={isIncome ? 'Contoh: Gaji Bulanan' : 'Contoh: Makan Siang'}
+                        placeholder={isIncome ? 'Contoh: Gaji Bulanan' : isTopUp ? 'Contoh: Top up DANA dari BCA' : 'Contoh: Makan Siang'}
                             className="w-full bg-slate-800/60 border border-slate-700 rounded-2xl h-12 px-4 text-sm text-slate-100 focus:outline-none focus:border-blue-500/60 transition-colors"
                             value={form.description}
                             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
@@ -366,7 +377,7 @@ const TransactionModal = () => {
                             {showDestination && (
                                 <div className={showSource ? '' : 'sm:col-span-2'}>
                                     <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">
-                                        {isIncome ? 'Rekening Tujuan' : isInvestment ? 'Rekening RDN' : 'Ke Rekening'}
+                                        {isIncome ? 'Rekening Tujuan' : isInvestment ? 'Rekening RDN' : isTopUp ? 'Ke Tujuan Top Up' : 'Ke Rekening'}
                                     </label>
                                     <button
                                         type="button"
@@ -452,6 +463,10 @@ const TransactionModal = () => {
                                         ? pickerType === 'source'
                                             ? 'Belum ada rekening bank yang bisa dipilih.'
                                             : 'Belum ada rekening RDN yang bisa dipilih.'
+                                        : isTopUp
+                                            ? pickerType === 'source'
+                                                ? 'Rekening sumber top up hanya bisa dari Bank atau E-Wallet.'
+                                                : 'Tujuan top up hanya bisa ke E-Wallet, RDN, atau Sekuritas.'
                                         : (isIncome || isExpense)
                                             ? 'Belum ada rekening bank yang bisa dipilih.'
                                             : (isTransfer && pickerType === 'source')

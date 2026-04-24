@@ -48,7 +48,7 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
             );
         }
 
-        if (tx.type === TransactionType.TRANSFER) {
+        if (tx.type === TransactionType.TRANSFER || tx.type === TransactionType.TOP_UP) {
             if (tx.sourceAccountId) {
                 balanceMap.set(
                     tx.sourceAccountId,

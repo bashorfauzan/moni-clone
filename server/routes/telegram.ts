@@ -34,6 +34,7 @@ const ACCOUNT_HINTS = ['bca', 'bni', 'bri', 'mandiri', 'seabank', 'jago', 'blu',
 const INCOME_KEYWORDS  = ['masuk', 'menerima', 'diterima', 'transfer masuk', 'cashback', 'gaji', 'income', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'debit', 'beli', 'makan', 'belanja', 'expense', 'pengeluaran'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'tf'];
+const TOP_UP_KEYWORDS = ['top up', 'topup', 'isi saldo', 'pengisian saldo'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'invest'];
 
 const normalizeText = (v: string) => v.toLowerCase().trim();
@@ -82,7 +83,10 @@ const parseTelegramMessage = (text: string): ParsedTx => {
     let type: TransactionType | null = null;
     let confidence = 0.2;
 
-    if (INVESTMENT_KEYWORDS.some((k) => lower.includes(k))) {
+    if (TOP_UP_KEYWORDS.some((k) => lower.includes(k))) {
+        type = TransactionType.TOP_UP;
+        confidence = 0.86;
+    } else if (INVESTMENT_KEYWORDS.some((k) => lower.includes(k))) {
         type = TransactionType.INVESTMENT_OUT;
         confidence = 0.85;
     } else if (INCOME_KEYWORDS.some((k) => lower.includes(k))) {
@@ -142,6 +146,7 @@ Kirim pesan dengan format:
 • Pemasukan: \`masuk\`, \`gaji\`, \`income\`
 • Pengeluaran: \`keluar\`, \`bayar\`, \`beli\`, \`makan\`, \`belanja\`
 • Transfer: \`transfer\`, \`tf\`, \`kirim\`
+• Top up: \`top up\`, \`topup\`, \`isi saldo\`
 • Investasi: \`investasi\`, \`saham\`
 
 *Contoh:*
@@ -230,7 +235,7 @@ router.post('/webhook', async (req, res) => {
             await sendTelegramMessage(chatId, '📭 Belum ada transaksi.');
             return;
         }
-        const typeEmoji: Record<string, string> = { INCOME: '🟢', EXPENSE: '🔴', TRANSFER: '🔵', INVESTMENT_IN: '📈', INVESTMENT_OUT: '📉' };
+        const typeEmoji: Record<string, string> = { INCOME: '🟢', EXPENSE: '🔴', TRANSFER: '🔵', TOP_UP: '🟣', INVESTMENT_IN: '📈', INVESTMENT_OUT: '📉' };
         const lines = txs.map((tx) => {
             const d = new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
             return `${typeEmoji[tx.type] ?? '⚪'} ${d} — *${formatCurrency(tx.amount)}* (${tx.activity.name})`;
@@ -271,6 +276,11 @@ router.post('/webhook', async (req, res) => {
         return;
     }
 
+    if (parsed.type === TransactionType.TOP_UP) {
+        await sendTelegramMessage(chatId, '⏳ Top up dikenali, tapi tetap dimasukkan ke Inbox dulu agar rekening sumber dan tujuan bisa dipilih dengan benar.');
+        return;
+    }
+
     // Create transaction
     const { owner, activity, account } = await ensureDefaults(parsed.accountHint);
 
@@ -299,6 +309,7 @@ router.post('/webhook', async (req, res) => {
         INCOME: '💚 Pemasukan',
         EXPENSE: '❤️ Pengeluaran',
         TRANSFER: '💙 Transfer',
+        TOP_UP: '💜 Top Up',
         INVESTMENT_OUT: '📉 Investasi',
         INVESTMENT_IN: '📈 Investasi Masuk',
     };

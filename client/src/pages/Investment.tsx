@@ -104,7 +104,7 @@ const Investment = () => {
         // Calculate Modal for this RDN
         let modal = 0;
         validatedTransactions.forEach(tx => {
-            if (tx.type === 'TRANSFER') {
+            if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
                 if (tx.destinationAccountId === rdn.id) {
                     modal += tx.amount;
                 } else if (tx.sourceAccountId === rdn.id) {
@@ -133,7 +133,7 @@ const Investment = () => {
                 validatedTransactions.forEach((tx: any) => {
                     if (tx.ownerId !== owner.id) return;
 
-                    if (tx.type === 'TRANSFER') {
+                    if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
                         if (tx.destinationAccountId === detailAccount.id) amount += tx.amount;
                         if (tx.sourceAccountId === detailAccount.id) amount -= tx.amount;
                     }
@@ -168,7 +168,7 @@ const Investment = () => {
             const destId = transferForm.type === 'DEPOSIT' ? selectedRdn.id : transferForm.bankId;
 
             await createTransaction({
-                type: 'TRANSFER',
+                type: transferForm.type === 'DEPOSIT' ? 'TOP_UP' : 'TRANSFER',
                 amount,
                 sourceAccountId: sourceId,
                 destinationAccountId: destId,

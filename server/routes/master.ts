@@ -93,6 +93,7 @@ router.get('/export-excel', async (_req, res) => {
             INCOME: 'Pemasukan',
             EXPENSE: 'Pengeluaran',
             TRANSFER: 'Transfer',
+            TOP_UP: 'Top Up',
             INVESTMENT_IN: 'Investasi Masuk',
             INVESTMENT_OUT: 'Investasi Keluar'
         };

@@ -7,6 +7,11 @@ const router = express.Router();
 
 const MANUAL_INVESTMENT_TYPE = 'INVESTMENT';
 
+const SOURCE_ONLY_TYPES: TransactionType[] = [TransactionType.EXPENSE, TransactionType.INVESTMENT_OUT];
+const DUAL_ACCOUNT_TYPES: TransactionType[] = [TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_IN];
+const isSourceOnlyType = (type: TransactionType) => SOURCE_ONLY_TYPES.includes(type);
+const isDualAccountType = (type: TransactionType) => DUAL_ACCOUNT_TYPES.includes(type);
+
 const normalizeTransactionType = (type: unknown): TransactionType | null => {
     if (type === MANUAL_INVESTMENT_TYPE) return TransactionType.INVESTMENT_OUT;
     if (typeof type !== 'string') return null;
@@ -28,6 +33,7 @@ const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionType, string> = {
     INCOME: 'Pemasukan',
     EXPENSE: 'Pengeluaran',
     TRANSFER: 'Transfer',
+    TOP_UP: 'Top Up',
     INVESTMENT_IN: 'Investasi Masuk',
     INVESTMENT_OUT: 'Investasi Keluar'
 };
@@ -59,7 +65,7 @@ const applyAccountBalanceChanges = async (
         return;
     }
 
-    if ((type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) && sourceAccountId) {
+    if (isSourceOnlyType(type) && sourceAccountId) {
         await trx.account.update({
             where: { id: sourceAccountId },
             data: { balance: { decrement: amount } }
@@ -67,7 +73,7 @@ const applyAccountBalanceChanges = async (
         return;
     }
 
-    if ((type === TransactionType.TRANSFER || type === TransactionType.INVESTMENT_IN) && sourceAccountId && destinationAccountId) {
+    if (isDualAccountType(type) && sourceAccountId && destinationAccountId) {
         await trx.account.update({
             where: { id: sourceAccountId },
             data: { balance: { decrement: amount } }
@@ -121,7 +127,8 @@ const ensureSourceAccountHasFunds = async (
 ) => {
     const requiresSourceBalance = type === TransactionType.EXPENSE
         || type === TransactionType.INVESTMENT_OUT
-        || type === TransactionType.TRANSFER;
+        || type === TransactionType.TRANSFER
+        || type === TransactionType.TOP_UP;
 
     if (!requiresSourceBalance || !sourceAccountId || !ownerId) return null;
 
@@ -139,7 +146,7 @@ const ensureSourceAccountHasFunds = async (
             ownerId,
             destinationAccountId: sourceAccountId,
             isValidated: true,
-            type: { in: ['INCOME', 'TRANSFER', 'INVESTMENT_IN'] },
+            type: { in: [TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_IN] },
             ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
         },
         _sum: { amount: true }
@@ -150,7 +157,7 @@ const ensureSourceAccountHasFunds = async (
             ownerId,
             sourceAccountId,
             isValidated: true,
-            type: { in: ['EXPENSE', 'TRANSFER', 'INVESTMENT_OUT'] },
+            type: { in: [TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_OUT] },
             ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
         },
         _sum: { amount: true }
@@ -192,16 +199,16 @@ const validateTransactionPayload = ({
         return 'Rekening tujuan wajib dipilih untuk pemasukan';
     }
 
-    if ((type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) && !sourceAccountId) {
+    if (isSourceOnlyType(type) && !sourceAccountId) {
         return 'Rekening sumber wajib dipilih untuk pengeluaran';
     }
 
-    if (type === TransactionType.TRANSFER) {
+    if (type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) {
         if (!sourceAccountId || !destinationAccountId) {
-            return 'Transfer harus memiliki rekening sumber dan tujuan';
+            return `${type === TransactionType.TOP_UP ? 'Top up' : 'Transfer'} harus memiliki rekening sumber dan tujuan`;
         }
         if (sourceAccountId === destinationAccountId) {
-            return 'Rekening sumber dan tujuan transfer tidak boleh sama';
+            return `Rekening sumber dan tujuan ${type === TransactionType.TOP_UP ? 'top up' : 'transfer'} tidak boleh sama`;
         }
     }
 
@@ -624,12 +631,12 @@ router.put('/:id', async (req, res) => {
                     where: { id: oldTx.destinationAccountId },
                     data: { balance: { decrement: oldTx.amount } }
                 });
-            } else if ((oldTx.type === TransactionType.EXPENSE || oldTx.type === TransactionType.INVESTMENT_OUT) && oldTx.sourceAccountId) {
+            } else if (isSourceOnlyType(oldTx.type) && oldTx.sourceAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
                 });
-            } else if ((oldTx.type === TransactionType.TRANSFER || oldTx.type === TransactionType.INVESTMENT_IN) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
+            } else if (isDualAccountType(oldTx.type) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
@@ -712,12 +719,12 @@ router.post('/bulk-delete', async (req, res) => {
                             where: { id: tx.destinationAccountId },
                             data: { balance: { decrement: tx.amount } }
                         });
-                    } else if ((tx.type === TransactionType.EXPENSE || tx.type === TransactionType.INVESTMENT_OUT) && tx.sourceAccountId) {
+                    } else if (isSourceOnlyType(tx.type) && tx.sourceAccountId) {
                         await trx.account.update({
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
                         });
-                    } else if ((tx.type === TransactionType.TRANSFER || tx.type === TransactionType.INVESTMENT_IN) && tx.sourceAccountId && tx.destinationAccountId) {
+                    } else if (isDualAccountType(tx.type) && tx.sourceAccountId && tx.destinationAccountId) {
                         await trx.account.update({
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
@@ -762,12 +769,12 @@ router.delete('/:id', async (req, res) => {
                         where: { id: txToDelete.destinationAccountId },
                         data: { balance: { decrement: txToDelete.amount } }
                     });
-                } else if ((txToDelete.type === TransactionType.EXPENSE || txToDelete.type === TransactionType.INVESTMENT_OUT) && txToDelete.sourceAccountId) {
+                } else if (isSourceOnlyType(txToDelete.type) && txToDelete.sourceAccountId) {
                     await trx.account.update({
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }
                     });
-                } else if ((txToDelete.type === TransactionType.TRANSFER || txToDelete.type === TransactionType.INVESTMENT_IN) && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
+                } else if (isDualAccountType(txToDelete.type) && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
                     await trx.account.update({
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }

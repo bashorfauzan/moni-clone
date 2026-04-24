@@ -145,10 +145,10 @@ const resolveAccountHints = (
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
 
-    if (type === TransactionType.TRANSFER) {
+    if (type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) {
         if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
-            destinationAccountHint = hintFromDestinationPhrase;
+            destinationAccountHint = hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
         } else if (transferDirection === 'IN') {
             sourceAccountHint = hintFromSourcePhrase;
             destinationAccountHint = sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
@@ -156,7 +156,7 @@ const resolveAccountHints = (
             sourceAccountHint = hintFromSourcePhrase
                 ?? sourceAppHint
                 ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
-            destinationAccountHint = hintFromDestinationPhrase;
+            destinationAccountHint = hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
         }
     } else if (type === TransactionType.INCOME) {
         destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
@@ -164,7 +164,7 @@ const resolveAccountHints = (
         sourceAccountHint = hintFromSourcePhrase ?? fallbackHint ?? sourceAppHint;
     }
 
-    if (type === TransactionType.TRANSFER && sourceAccountHint == destinationAccountHint) {
+    if ((type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) && sourceAccountHint == destinationAccountHint) {
         if (hintFromSourcePhrase && hintFromSourcePhrase != destinationAccountHint) {
             sourceAccountHint = hintFromSourcePhrase;
         } else if (hintFromDestinationPhrase && hintFromDestinationPhrase != sourceAccountHint) {
@@ -203,13 +203,12 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     let parseStatus: ParseStatus = 'FAILED';
     let parseNotes: string | null = 'Format belum dikenali';
 
-    if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
+    if (detectTransferLikeTopUp(sourceApp, lowerText)) {
+        type = TransactionType.TOP_UP;
+        confidenceScore = 0.84;
+    } else if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
         type = TransactionType.INVESTMENT_OUT;
         confidenceScore = 0.82;
-    } else if (detectTransferLikeTopUp(sourceApp, lowerText)) {
-        // Top-up ke e-wallet selalu TRANSFER (cek lebih awal agar tidak salah ke INCOME)
-        type = TransactionType.TRANSFER;
-        confidenceScore = 0.78;
     } else {
         // Hitung skor keyword untuk INCOME vs EXPENSE
         const incomeStrongHit = containsAny(lowerText, STRONG_INCOME_KEYWORDS);
@@ -241,10 +240,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         } else if (expenseAnyHit && !incomeAnyHit) {
             type = TransactionType.EXPENSE;
             confidenceScore = 0.78;
-        } else if (
-            normalizeText(sourceApp).includes('flip')
-            || containsAny(lowerText, TRANSFER_KEYWORDS)
-        ) {
+        } else if (normalizeText(sourceApp).includes('flip') || containsAny(lowerText, TRANSFER_KEYWORDS)) {
             type = TransactionType.TRANSFER;
             confidenceScore = 0.75;
         }
@@ -276,7 +272,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         lowerText,
         accountHint
     );
-    const displayAccountHint = type === TransactionType.TRANSFER
+    const displayAccountHint = type === TransactionType.TRANSFER || type === TransactionType.TOP_UP
         ? [sourceAccountHint, destinationAccountHint].filter(Boolean).join(' -> ') || accountHint
         : accountHint ?? sourceAccountHint ?? destinationAccountHint;
 
@@ -331,12 +327,12 @@ const ensureDefaults = async (
     let account = await findAccountByHint(parsed.accountHint);
 
     // If no match by hint, try matching by source app name (e.g. 'BRI', 'BCA')
-    if ((!account || (parsed.type === TransactionType.TRANSFER && !destinationAccount)) && sourceApp) {
+    if ((!account || ((parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP) && !destinationAccount)) && sourceApp) {
         const appShort = sourceApp.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
         const sourceAppAccount = await findAccountByHint(appShort);
         account = account ?? sourceAppAccount;
 
-        if (parsed.type === TransactionType.TRANSFER && !sourceAccount) {
+        if ((parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP) && !sourceAccount) {
             sourceAccount = sourceAppAccount;
         }
     }
@@ -346,6 +342,11 @@ const ensureDefaults = async (
     }
 
     if (parsed.type === TransactionType.INCOME) {
+        destinationAccount = destinationAccount ?? account;
+    }
+
+    if (parsed.type === TransactionType.TOP_UP) {
+        sourceAccount = sourceAccount ?? account;
         destinationAccount = destinationAccount ?? account;
     }
 
@@ -551,12 +552,12 @@ router.post('/notification', async (req, res) => {
         // Transaksi akan dibuat dengan isValidated: false agar user bisa approve/reject di Home
         const { owner, activity, account, sourceAccount, destinationAccount } = await ensureDefaults(parsed, String(appName));
         let effectiveType = parsed.type;
-        let sourceAccountId = parsed.type === TransactionType.TRANSFER
+        let sourceAccountId = parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP
             ? sourceAccount?.id ?? null
             : parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT
                 ? sourceAccount?.id ?? account?.id ?? null
                 : null;
-        let destinationAccountId = parsed.type === TransactionType.TRANSFER
+        let destinationAccountId = parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP
             ? destinationAccount?.id ?? null
             : parsed.type === TransactionType.INCOME
                 ? destinationAccount?.id ?? account?.id ?? null
@@ -564,34 +565,25 @@ router.post('/notification', async (req, res) => {
         const normalizedNotificationText = normalizeText(`${title || senderName || ''} ${text}`);
 
         let missingAccountReason = (
-            (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             || (effectiveType === TransactionType.INCOME && !destinationAccountId)
             || ((effectiveType === TransactionType.EXPENSE || effectiveType === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
         )
             ? (
-                effectiveType === TransactionType.TRANSFER
-                    ? 'Rekening transfer belum lengkap atau masih sama'
+                effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP
+                    ? `Rekening ${effectiveType === TransactionType.TOP_UP ? 'top up' : 'transfer'} belum lengkap atau masih sama`
                     : 'Rekening transaksi belum berhasil dipetakan'
             )
             : null;
 
-        if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
+        if ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && missingAccountReason) {
             const transferDirection = detectTransferDirection(normalizedNotificationText);
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
             if (isTransferLikeTopUp) {
-                const sourceAppHint = detectSourceAppHint(String(appName));
-                const sourceAppLooksLikeEWallet = sourceAppHint ? E_WALLET_APPS.includes(sourceAppHint) : false;
-
-                if (sourceAppLooksLikeEWallet) {
-                    effectiveType = TransactionType.INCOME;
-                    destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
-                    sourceAccountId = null;
-                } else {
-                    effectiveType = TransactionType.EXPENSE;
-                    sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
-                    destinationAccountId = null;
-                }
+                effectiveType = TransactionType.TOP_UP;
+                sourceAccountId = sourceAccount?.id ?? account?.id ?? null;
+                destinationAccountId = destinationAccount?.id ?? account?.id ?? null;
             } else if (transferDirection === 'OUT') {
                 effectiveType = TransactionType.EXPENSE;
                 sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
@@ -605,11 +597,11 @@ router.post('/notification', async (req, res) => {
             missingAccountReason = (
                 (effectiveType === TransactionType.INCOME && !destinationAccountId)
                 || (effectiveType === TransactionType.EXPENSE && !sourceAccountId)
-                || (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+                || ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             )
                 ? (
-                    effectiveType === TransactionType.TRANSFER
-                        ? 'Rekening transfer belum lengkap atau masih sama'
+                    effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP
+                        ? `Rekening ${effectiveType === TransactionType.TOP_UP ? 'top up' : 'transfer'} belum lengkap atau masih sama`
                         : 'Rekening transaksi belum berhasil dipetakan'
                 )
                 : null;
@@ -628,7 +620,7 @@ router.post('/notification', async (req, res) => {
             });
 
             // Untuk TRANSFER yang rekening-nya benar-benar belum bisa dipecahkan → kembalikan 202
-            if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
+            if ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && missingAccountReason) {
                 const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
                 return res.status(202).json({
                     success: true,
