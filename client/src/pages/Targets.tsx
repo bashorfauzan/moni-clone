@@ -5,6 +5,7 @@ import { fetchMasterMeta } from '../services/masterData';
 import { fetchTargets, type TargetItem } from '../services/targets';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
+import { getErrorMessage } from '../services/errors';
 
 const formatThousands = (raw: string) => {
     if (!raw) return '';
@@ -114,11 +115,8 @@ const Targets = () => {
             resetTargetForm();
             await refetchTargets();
             setIsTargetModalOpen(false);
-        } catch (error: any) {
-            const message = error?.response?.data?.detail
-                || error?.response?.data?.error
-                || 'Gagal menambah target';
-            alert(message);
+        } catch (error) {
+            alert(getErrorMessage(error, 'Gagal menyimpan target'));
         } finally {
             setSubmitting(false);
         }
@@ -129,8 +127,8 @@ const Targets = () => {
         try {
             await api.delete(`/targets/${id}`);
             await refetchTargets();
-        } catch {
-            alert('Gagal menghapus target');
+        } catch (error) {
+            alert(getErrorMessage(error, 'Gagal menghapus target'));
         }
     };
 
