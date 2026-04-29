@@ -316,7 +316,7 @@ const Home = () => {
                 iconWrap: 'bg-amber-50 text-amber-600',
                 icon: '↗',
                 amountClass: 'text-slate-800',
-                amountPrefix: '-',
+                amountPrefix: '',
                 badge: 'Investasi'
             };
         }
