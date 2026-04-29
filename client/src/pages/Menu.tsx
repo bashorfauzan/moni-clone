@@ -366,19 +366,23 @@ const MenuPage = () => {
         if (!accountForm.name.trim()) { alert('Nama rekening wajib diisi.'); return; }
         setSaving(true);
         try {
-            const payload = {
+            const basePayload = {
                 name: accountForm.name.trim(),
                 type: accountForm.type,
                 accountNumber: accountForm.accountNumber.trim() || null,
                 appPackageName: accountForm.appPackageName.trim() || null,
                 appDeepLink: accountForm.appDeepLink.trim() || null,
                 appStoreUrl: accountForm.appStoreUrl.trim() || null,
-                balance: Number(accountForm.balance || 0),
                 ownerId: accountForm.ownerId || meta.owners[0].id,
             };
             if (editingAccountId) {
+                const payload = basePayload;
                 await updateAccount(editingAccountId, payload);
             } else {
+                const payload = {
+                    ...basePayload,
+                    balance: Number(accountForm.balance || 0),
+                };
                 await createAccount(payload);
             }
             setShowAccountForm(false);
@@ -1907,9 +1911,16 @@ const MenuPage = () => {
                                         inputMode="numeric"
                                         value={formatThousands(accountForm.balance)}
                                         onChange={(e) => setAccountForm((p) => ({ ...p, balance: sanitizeAmount(e.target.value) }))}
-                                        placeholder="0"
-                                        className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                        placeholder={editingAccountId ? 'Saldo awal tidak bisa diubah' : '0'}
+                                        disabled={Boolean(editingAccountId)}
+                                        readOnly={Boolean(editingAccountId)}
+                                        className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed"
                                     />
+                                    {editingAccountId ? (
+                                        <p className="mt-1.5 text-[11px] text-slate-400">
+                                            Saldo awal hanya bisa diisi saat membuat rekening baru.
+                                        </p>
+                                    ) : null}
                                 </div>
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
                                     <div>
