@@ -58,6 +58,18 @@ const containsAny = (text: string, keywords: string[]) => keywords.some((keyword
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
+const ACCOUNT_HINT_ALIASES: Record<string, string> = {
+    brimo: 'bri',
+    mybca: 'bca',
+    livin: 'mandiri',
+    wondr: 'bni'
+};
+
+const canonicalizeAccountHint = (hint?: string | null) => {
+    if (!hint) return null;
+    const normalized = normalizeText(hint);
+    return ACCOUNT_HINT_ALIASES[normalized] ?? normalized;
+};
 
 const extractAmount = (text: string) => {
     // Handle Indonesian format: Rp2.700.000,00 OR Rp 2.700.000
@@ -200,7 +212,7 @@ const shouldIgnoreLikelyChatMessage = (sourceApp: string, title: string, text: s
 };
 
 const detectSourceAppHint = (sourceApp: string) => {
-    return detectAccountHint(sourceApp);
+    return canonicalizeAccountHint(detectAccountHint(sourceApp));
 };
 
 const detectHintAfterAnchors = (text: string, anchors: string[]) => {
@@ -217,6 +229,7 @@ const detectHintAfterAnchors = (text: string, anchors: string[]) => {
 };
 
 const detectTransferDirection = (text: string) => {
+    if (text.includes('rekening tujuan') || text.includes('nomor rekening tujuan')) return 'OUT';
     if (containsAny(text, TRANSFER_OUT_KEYWORDS)) return 'OUT';
     if (containsAny(text, TRANSFER_IN_KEYWORDS)) return 'IN';
     return 'UNKNOWN';
@@ -416,6 +429,8 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
 
 const findAccountByHint = async (hint?: string | null) => {
     if (!hint) return null;
+    hint = canonicalizeAccountHint(hint);
+    if (!hint) return null;
 
     const normalizedHintDigits = digitsOnly(hint);
     if (normalizedHintDigits.length >= 4) {
@@ -472,7 +487,7 @@ const ensureDefaults = async (
 
     // If no match by hint, try matching by source app name (e.g. 'BRI', 'BCA')
     if ((!account || ((parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP) && !destinationAccount)) && sourceApp) {
-        const appShort = sourceApp.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const appShort = canonicalizeAccountHint(sourceApp.replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
         const sourceAppAccount = await findAccountByHint(appShort);
         account = account ?? sourceAppAccount;
 

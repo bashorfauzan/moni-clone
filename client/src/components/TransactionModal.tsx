@@ -3,7 +3,7 @@ import { X, ChevronDown, Search } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
-import { createTransaction, fetchTransactions, updateTransaction, validateTransaction } from '../services/transactions';
+import { createTransaction, fetchTransactions, updateTransaction, validateTransaction, type TransactionTypeValue } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
@@ -218,12 +218,14 @@ const TransactionModal = () => {
         setSubmitting(true);
 
         try {
+            const submissionType: TransactionTypeValue = isInvestment ? 'INVESTMENT_OUT' : modalType;
+
             if (editTransactionId) {
                 const payload = {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TOP_UP' : modalType,
+                    type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                 };
@@ -234,7 +236,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TOP_UP' : modalType,
+                    type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     categoryId: undefined, // categoryId optional/will be resolved by backend
@@ -245,7 +247,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
-                    type: isInvestment ? 'TOP_UP' : modalType,
+                    type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
                     notificationInboxId: modalPayload?.notificationInboxId,

@@ -62,6 +62,18 @@ const containsAny = (text: string, keywords: string[]) => keywords.some((keyword
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
+const ACCOUNT_HINT_ALIASES: Record<string, string> = {
+    brimo: 'bri',
+    mybca: 'bca',
+    livin: 'mandiri',
+    wondr: 'bni'
+};
+
+const canonicalizeAccountHint = (hint?: string | null) => {
+    if (!hint) return null;
+    const normalized = normalizeText(hint);
+    return ACCOUNT_HINT_ALIASES[normalized] ?? normalized;
+};
 
 const extractAmount = (text: string) => {
     const candidates = [
@@ -205,7 +217,7 @@ const shouldIgnoreLikelyChatMessage = (sourceApp: string, title: string, text: s
 };
 
 const detectSourceAppHint = (sourceApp: string) => {
-    return detectAccountHint(sourceApp);
+    return canonicalizeAccountHint(detectAccountHint(sourceApp));
 };
 
 const detectHintAfterAnchors = (text: string, anchors: string[]) => {
@@ -220,6 +232,7 @@ const detectHintAfterAnchors = (text: string, anchors: string[]) => {
 };
 
 const detectTransferDirection = (text: string) => {
+    if (text.includes('rekening tujuan') || text.includes('nomor rekening tujuan')) return 'OUT';
     if (containsAny(text, TRANSFER_OUT_KEYWORDS)) return 'OUT';
     if (containsAny(text, TRANSFER_IN_KEYWORDS)) return 'IN';
     return 'UNKNOWN';
@@ -638,6 +651,8 @@ export default async function handler(req: any, res: any) {
 
         const findAccountByHint = async (hint: string | null) => {
             if (!hint) return null;
+            hint = canonicalizeAccountHint(hint);
+            if (!hint) return null;
             const { data: allAccounts } = await supabase.from('Account').select('*').order('createdAt', { ascending: true });
             if (!allAccounts || allAccounts.length === 0) return null;
 
@@ -693,7 +708,7 @@ export default async function handler(req: any, res: any) {
         let account = await findAccountByHint(parsed.accountHint);
 
         if ((!account || (parsed.type === TransactionType.TRANSFER && !destinationAccount)) && appName) {
-            const appShort = String(appName).replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const appShort = canonicalizeAccountHint(String(appName).replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
             const sourceAppAccount = await findAccountByHint(appShort);
             account = account ?? sourceAppAccount;
             if (parsed.type === TransactionType.TRANSFER && !sourceAccount) {
