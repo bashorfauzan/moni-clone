@@ -218,7 +218,7 @@ const TransactionModal = () => {
         setSubmitting(true);
 
         try {
-            const submissionType: TransactionTypeValue = isInvestment ? 'INVESTMENT_OUT' : modalType;
+            const submissionType: TransactionTypeValue = isInvestment ? 'TRANSFER' : modalType;
 
             if (editTransactionId) {
                 const payload = {

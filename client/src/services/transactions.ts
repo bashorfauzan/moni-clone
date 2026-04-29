@@ -67,6 +67,13 @@ const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionTypeValue, string> = {
     INVESTMENT_OUT: 'Investasi Keluar'
 };
 
+const DB_SAFE_TRANSFER_TYPES = ['TRANSFER'];
+const DB_SAFE_TRANSFER_INCOME_TYPES = ['INCOME', 'TRANSFER', 'INVESTMENT_IN'];
+const DB_SAFE_TRANSFER_EXPENSE_TYPES = ['EXPENSE', 'TRANSFER', 'INVESTMENT_OUT'];
+
+const toDbSafeTransactionType = (type: TransactionTypeValue): TransactionTypeValue =>
+    type === 'TOP_UP' ? 'TRANSFER' : type;
+
 const INVESTMENT_INCOME_ACTIVITY = {
     SUKUK: 'Pendapatan Sukuk',
     STOCK_GROWTH: 'Pertumbuhan Saham'
@@ -268,7 +275,7 @@ const computeBalanceMap = async () => {
             balanceMap.set(tx.sourceAccountId, (balanceMap.get(tx.sourceAccountId) || 0) - amount);
         }
 
-        if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
+        if (DB_SAFE_TRANSFER_TYPES.includes(tx.type)) {
             if (tx.sourceAccountId) {
                 balanceMap.set(tx.sourceAccountId, (balanceMap.get(tx.sourceAccountId) || 0) - amount);
             }
@@ -353,10 +360,10 @@ const ensureSourceFunds = async (
 ) => {
     if (!supabase) return;
 
-    const needsSourceCheck = payload.type === 'EXPENSE'
-        || payload.type === 'INVESTMENT_OUT'
-        || payload.type === 'TRANSFER'
-        || payload.type === 'TOP_UP';
+    const dbSafeType = toDbSafeTransactionType(payload.type);
+    const needsSourceCheck = dbSafeType === 'EXPENSE'
+        || dbSafeType === 'INVESTMENT_OUT'
+        || dbSafeType === 'TRANSFER';
 
     if (!needsSourceCheck || !payload.sourceAccountId || !payload.ownerId) return;
 
@@ -366,14 +373,14 @@ const ensureSourceFunds = async (
 
         if (
             tx.destinationAccountId === payload.sourceAccountId
-            && ['INCOME', 'TRANSFER', 'TOP_UP', 'INVESTMENT_IN'].includes(tx.type)
+            && DB_SAFE_TRANSFER_INCOME_TYPES.includes(tx.type)
         ) {
             return total + tx.amount;
         }
 
         if (
             tx.sourceAccountId === payload.sourceAccountId
-            && ['EXPENSE', 'TRANSFER', 'TOP_UP', 'INVESTMENT_OUT'].includes(tx.type)
+            && DB_SAFE_TRANSFER_EXPENSE_TYPES.includes(tx.type)
         ) {
             return total - tx.amount;
         }
@@ -402,6 +409,7 @@ const createTransactionDirect = async (payload: TransactionWritePayload): Promis
     validatePayload(payload);
     await ensureSourceFunds(payload);
 
+    const dbSafeType = toDbSafeTransactionType(payload.type);
     const activityId = await ensureActivityId(payload.activityId, payload.type);
     const timestamp = new Date().toISOString();
     const insertPayload = {
@@ -409,7 +417,7 @@ const createTransactionDirect = async (payload: TransactionWritePayload): Promis
         amount: payload.amount,
         description: payload.description || null,
         ownerId: payload.ownerId,
-        type: payload.type,
+        type: dbSafeType,
         activityId,
         sourceAccountId: payload.sourceAccountId || null,
         destinationAccountId: payload.destinationAccountId || null,
@@ -445,7 +453,7 @@ const createTransactionDirect = async (payload: TransactionWritePayload): Promis
             .from('NotificationInbox')
             .update({
                 parseStatus: 'PARSED',
-                parsedType: payload.type,
+                parsedType: dbSafeType,
                 parsedAmount: payload.amount,
                 updatedAt: new Date().toISOString()
             })
@@ -461,6 +469,7 @@ const createTransactionDirect = async (payload: TransactionWritePayload): Promis
 const updateTransactionDirect = async (id: string, payload: TransactionWritePayload): Promise<TransactionItem> => {
     validatePayload(payload);
     await ensureSourceFunds(payload, id);
+    const dbSafeType = toDbSafeTransactionType(payload.type);
 
     const { data: currentTx, error: currentTxError } = await ensureSupabase()
         .from('Transaction')
@@ -480,7 +489,7 @@ const updateTransactionDirect = async (id: string, payload: TransactionWritePayl
             amount: payload.amount,
             description: payload.description || null,
             ownerId: payload.ownerId,
-            type: payload.type,
+            type: dbSafeType,
             activityId,
             sourceAccountId: payload.sourceAccountId || null,
             destinationAccountId: payload.destinationAccountId || null,
@@ -555,6 +564,7 @@ const validateTransactionDirect = async (id: string, payload: ValidateTransactio
     validatePayload(nextPayload);
     await ensureSourceFunds(nextPayload, id);
 
+    const dbSafeType = toDbSafeTransactionType(nextPayload.type);
     const activityId = nextPayload.activityId || await ensureActivityId(undefined, nextPayload.type);
     const { data, error } = await sb
         .from('Transaction')
@@ -563,7 +573,7 @@ const validateTransactionDirect = async (id: string, payload: ValidateTransactio
             amount: nextPayload.amount,
             description: nextPayload.description || null,
             ownerId: nextPayload.ownerId,
-            type: nextPayload.type,
+            type: dbSafeType,
             activityId,
             sourceAccountId: nextPayload.sourceAccountId || null,
             destinationAccountId: nextPayload.destinationAccountId || null,

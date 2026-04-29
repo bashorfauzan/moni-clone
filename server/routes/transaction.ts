@@ -14,6 +14,7 @@ const isDualAccountType = (type: TransactionType) => DUAL_ACCOUNT_TYPES.includes
 
 const normalizeTransactionType = (type: unknown): TransactionType | null => {
     if (type === MANUAL_INVESTMENT_TYPE) return TransactionType.INVESTMENT_OUT;
+    if (type === 'TOP_UP') return TransactionType.TRANSFER;
     if (typeof type !== 'string') return null;
 
     const allowedTypes = Object.values(TransactionType) as string[];
@@ -146,7 +147,7 @@ const ensureSourceAccountHasFunds = async (
             ownerId,
             destinationAccountId: sourceAccountId,
             isValidated: true,
-            type: { in: [TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_IN] },
+            type: { in: [TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.INVESTMENT_IN] },
             ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
         },
         _sum: { amount: true }
@@ -157,7 +158,7 @@ const ensureSourceAccountHasFunds = async (
             ownerId,
             sourceAccountId,
             isValidated: true,
-            type: { in: [TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_OUT] },
+            type: { in: [TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.INVESTMENT_OUT] },
             ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
         },
         _sum: { amount: true }

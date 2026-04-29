@@ -84,7 +84,7 @@ const parseTelegramMessage = (text: string): ParsedTx => {
     let confidence = 0.2;
 
     if (TOP_UP_KEYWORDS.some((k) => lower.includes(k))) {
-        type = TransactionType.TOP_UP;
+        type = TransactionType.TRANSFER;
         confidence = 0.86;
     } else if (INVESTMENT_KEYWORDS.some((k) => lower.includes(k))) {
         type = TransactionType.INVESTMENT_OUT;

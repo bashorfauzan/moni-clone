@@ -337,7 +337,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     let parseNotes: string | null = 'Format belum dikenali';
 
     if (detectTransferLikeTopUp(sourceApp, lowerText)) {
-        type = TransactionType.TOP_UP;
+        type = TransactionType.TRANSFER;
         confidenceScore = 0.84;
     } else if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
         type = TransactionType.INVESTMENT_OUT;
@@ -740,7 +740,7 @@ router.post('/notification', async (req, res) => {
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
             if (isTransferLikeTopUp) {
-                effectiveType = TransactionType.TOP_UP;
+                effectiveType = TransactionType.TRANSFER;
                 sourceAccountId = sourceAccount?.id ?? account?.id ?? null;
                 destinationAccountId = destinationAccount?.id ?? account?.id ?? null;
             } else if (transferDirection === 'OUT') {
