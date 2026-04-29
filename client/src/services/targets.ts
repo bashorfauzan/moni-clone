@@ -19,6 +19,42 @@ export type TargetsResponse = {
     summary: { activeRemaining: number };
 };
 
+export type TargetWritePayload = {
+    title: string;
+    totalAmount: number;
+    monthCount: number;
+    ownerId?: string;
+};
+
+const ensureSupabase = () => {
+    if (!supabase) {
+        throw new Error('Supabase belum terhubung');
+    }
+
+    return supabase;
+};
+
+const parseMonthCount = (value: unknown) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return null;
+    return Math.floor(parsed);
+};
+
+const monthCountToPeriod = (monthCount: number): string => {
+    if (monthCount <= 1) return 'ONE_MONTH';
+    if (monthCount <= 3) return 'THREE_MONTH';
+    if (monthCount <= 6) return 'SIX_MONTH';
+    if (monthCount <= 12) return 'YEARLY';
+    if (monthCount <= 36) return 'THREE_YEAR';
+    return 'FIVE_YEAR';
+};
+
+const dueDateFromMonthCount = (monthCount: number, baseDate = new Date()) => {
+    const dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthCount, 0);
+    dueDate.setHours(23, 59, 59, 999);
+    return dueDate.toISOString();
+};
+
 const normalizeTarget = (row: any): TargetItem => ({
     id: row.id,
     title: row.title,
@@ -75,4 +111,109 @@ export const fetchTargets = async (): Promise<TargetsResponse> => {
             activeRemaining: Number(response.data.summary?.activeRemaining || 0)
         }
     };
+};
+
+export const createTarget = async (payload: TargetWritePayload): Promise<TargetItem> => {
+    const parsedMonthCount = parseMonthCount(payload.monthCount);
+    if (!parsedMonthCount) throw new Error('Jumlah bulan target tidak valid');
+
+    if (useDirectSupabaseData && supabase) {
+        const timestamp = new Date().toISOString();
+        const { data, error } = await ensureSupabase()
+            .from('Target')
+            .insert({
+                id: crypto.randomUUID(),
+                title: payload.title.trim(),
+                totalAmount: payload.totalAmount,
+                remainingAmount: payload.totalAmount,
+                period: monthCountToPeriod(parsedMonthCount),
+                ownerId: payload.ownerId,
+                dueDate: dueDateFromMonthCount(parsedMonthCount),
+                isActive: true,
+                createdAt: timestamp,
+                updatedAt: timestamp
+            })
+            .select(`
+                id,
+                title,
+                totalAmount,
+                remainingAmount,
+                period,
+                isActive,
+                dueDate,
+                createdAt,
+                ownerId,
+                owner:Owner(id, name)
+            `)
+            .single();
+
+        if (error) throw error;
+        return normalizeTarget(data);
+    }
+
+    const response = await api.post('/targets', payload);
+    return normalizeTarget(response.data);
+};
+
+export const updateTarget = async (id: string, payload: TargetWritePayload): Promise<TargetItem> => {
+    const parsedMonthCount = parseMonthCount(payload.monthCount);
+    if (!parsedMonthCount) throw new Error('Jumlah bulan target tidak valid');
+
+    if (useDirectSupabaseData && supabase) {
+        const sb = ensureSupabase();
+        const { data: current, error: currentError } = await sb
+            .from('Target')
+            .select('totalAmount, remainingAmount, createdAt')
+            .eq('id', id)
+            .limit(1)
+            .maybeSingle();
+
+        if (currentError) throw currentError;
+        if (!current) throw new Error('Target tidak ditemukan');
+
+        const completedAmount = Math.max(0, Number(current.totalAmount || 0) - Number(current.remainingAmount || 0));
+        const nextRemaining = Math.max(0, payload.totalAmount - completedAmount);
+
+        const { data, error } = await sb
+            .from('Target')
+            .update({
+                title: payload.title.trim(),
+                totalAmount: payload.totalAmount,
+                remainingAmount: nextRemaining,
+                isActive: nextRemaining > 0,
+                period: monthCountToPeriod(parsedMonthCount),
+                dueDate: dueDateFromMonthCount(parsedMonthCount, current.createdAt ? new Date(current.createdAt) : new Date()),
+                updatedAt: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select(`
+                id,
+                title,
+                totalAmount,
+                remainingAmount,
+                period,
+                isActive,
+                dueDate,
+                createdAt,
+                ownerId,
+                owner:Owner(id, name)
+            `)
+            .single();
+
+        if (error) throw error;
+        return normalizeTarget(data);
+    }
+
+    const response = await api.put(`/targets/${id}`, payload);
+    return normalizeTarget(response.data);
+};
+
+export const deleteTarget = async (id: string): Promise<void> => {
+    if (useDirectSupabaseData && supabase) {
+        const { error } = await ensureSupabase().from('Target').delete().eq('id', id);
+        if (error) throw error;
+        return;
+    }
+
+    await api.delete(`/targets/${id}`);
 };

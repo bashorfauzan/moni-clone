@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import api from '../services/api';
 import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
-import { fetchTargets, type TargetItem } from '../services/targets';
+import { createTarget, deleteTarget, fetchTargets, type TargetItem, updateTarget } from '../services/targets';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
@@ -108,9 +107,9 @@ const Targets = () => {
                 ownerId: data.owners[0]?.id || undefined
             };
             if (editingTargetId) {
-                await api.put(`/targets/${editingTargetId}`, payload);
+                await updateTarget(editingTargetId, payload);
             } else {
-                await api.post('/targets', payload);
+                await createTarget(payload);
             }
             resetTargetForm();
             await refetchTargets();
@@ -125,7 +124,7 @@ const Targets = () => {
     const handleDeleteTarget = async (id: string) => {
         if (!window.confirm('Hapus target ini?')) return;
         try {
-            await api.delete(`/targets/${id}`);
+            await deleteTarget(id);
             await refetchTargets();
         } catch (error) {
             alert(getErrorMessage(error, 'Gagal menghapus target'));
