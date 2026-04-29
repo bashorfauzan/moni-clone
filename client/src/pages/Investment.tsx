@@ -23,7 +23,7 @@ const formatThousands = (raw: string) => {
 };
 
 const isInvestmentFlowType = (type?: string) =>
-    type === 'TRANSFER' || type === 'TOP_UP' || type === 'INVESTMENT_IN' || type === 'INVESTMENT_OUT';
+    type === 'TRANSFER' || type === 'TOP_UP';
 
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
@@ -106,24 +106,34 @@ const Investment = () => {
     const portfolioData = filteredRdns.map(rdn => {
         // Calculate Modal for this RDN
         let modal = 0;
+        let currentValue = 0;
         validatedTransactions.forEach(tx => {
             if (isInvestmentFlowType(tx.type)) {
                 if (tx.destinationAccountId === rdn.id) {
                     modal += tx.amount;
+                    currentValue += tx.amount;
                 } else if (tx.sourceAccountId === rdn.id) {
                     modal -= tx.amount;
+                    currentValue -= tx.amount;
                 }
+            }
+
+            if (
+                tx.type === 'INCOME'
+                && tx.destinationAccountId === rdn.id
+                && (tx.activity?.name === 'Pendapatan Sukuk' || tx.activity?.name === 'Pertumbuhan Saham')
+            ) {
+                currentValue += tx.amount;
             }
         });
 
-        const currentValue = Math.abs(Number(rdn.balance || 0));
         const returnAmount = currentValue - modal;
         const returnPercent = modal > 0 ? (returnAmount / modal) * 100 : 0;
 
-        totalValue += currentValue;
+        totalValue += Math.abs(currentValue);
         totalModal += modal;
 
-        return { ...rdn, modal, returnAmount, returnPercent };
+        return { ...rdn, balance: currentValue, modal, returnAmount, returnPercent };
     }).filter(rdn => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
 
     const totalReturnAmount = totalValue - totalModal;
