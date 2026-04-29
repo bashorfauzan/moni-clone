@@ -29,7 +29,7 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
         if (!Number.isFinite(amount) || amount === 0) continue;
 
         if (
-            (tx.type === TransactionType.INCOME || tx.type === TransactionType.INVESTMENT_IN)
+            tx.type === TransactionType.INCOME
             && tx.destinationAccountId
         ) {
             balanceMap.set(
@@ -39,7 +39,7 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
         }
 
         if (
-            (tx.type === TransactionType.EXPENSE || tx.type === TransactionType.INVESTMENT_OUT)
+            tx.type === TransactionType.EXPENSE
             && tx.sourceAccountId
         ) {
             balanceMap.set(

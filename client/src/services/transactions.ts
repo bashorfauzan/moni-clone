@@ -68,6 +68,7 @@ const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionTypeValue, string> = {
 };
 
 const DB_SAFE_TRANSFER_TYPES = ['TRANSFER'];
+const HIDDEN_LEGACY_INVESTMENT_TYPES = ['INVESTMENT_IN', 'INVESTMENT_OUT'];
 
 const toDbSafeTransactionType = (type: TransactionTypeValue): TransactionTypeValue =>
     type === 'TOP_UP' ? 'TRANSFER' : type;
@@ -99,6 +100,9 @@ const normalizeTransaction = (row: any): TransactionItem => ({
         : undefined
 });
 
+const shouldHideLegacyInvestmentTransaction = (tx: TransactionItem) =>
+    HIDDEN_LEGACY_INVESTMENT_TYPES.includes(tx.type);
+
 const fetchTransactionsViaApi = async (options: FetchTransactionsOptions = {}): Promise<TransactionItem[]> => {
     const params = new URLSearchParams();
     if (typeof options.validated === 'boolean') params.set('validated', String(options.validated));
@@ -106,7 +110,9 @@ const fetchTransactionsViaApi = async (options: FetchTransactionsOptions = {}): 
     const suffix = params.toString() ? `?${params.toString()}` : '';
 
     const response = await api.get(`/transactions${suffix}`);
-    return (response.data || []).map(normalizeTransaction);
+    return (response.data || [])
+        .map(normalizeTransaction)
+        .filter((tx: TransactionItem) => !shouldHideLegacyInvestmentTransaction(tx));
 };
 
 const fetchTransactionsViaSupabase = async (options: FetchTransactionsOptions = {}): Promise<TransactionItem[]> => {
@@ -144,7 +150,9 @@ const fetchTransactionsViaSupabase = async (options: FetchTransactionsOptions = 
     const { data, error } = await query;
 
     if (error) throw error;
-    return (data || []).map(normalizeTransaction);
+    return (data || [])
+        .map(normalizeTransaction)
+        .filter((tx: TransactionItem) => !shouldHideLegacyInvestmentTransaction(tx));
 };
 
 const ensureSupabase = () => {
@@ -265,11 +273,11 @@ const computeBalanceMap = async () => {
         const amount = Number(tx.amount ?? 0);
         if (!Number.isFinite(amount) || amount === 0) return;
 
-        if ((tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') && tx.destinationAccountId) {
+        if (tx.type === 'INCOME' && tx.destinationAccountId) {
             balanceMap.set(tx.destinationAccountId, (balanceMap.get(tx.destinationAccountId) || 0) + amount);
         }
 
-        if ((tx.type === 'EXPENSE' || tx.type === 'INVESTMENT_OUT') && tx.sourceAccountId) {
+        if (tx.type === 'EXPENSE' && tx.sourceAccountId) {
             balanceMap.set(tx.sourceAccountId, (balanceMap.get(tx.sourceAccountId) || 0) - amount);
         }
 
@@ -310,7 +318,7 @@ const syncTargetsDirect = async () => {
     const sb = ensureSupabase();
     const [{ data: targets, error: targetsError }, { data: transactions, error: transactionsError }] = await Promise.all([
         sb.from('Target').select('id, ownerId, totalAmount, dueDate, createdAt').order('dueDate', { ascending: true }).order('createdAt', { ascending: true }),
-        sb.from('Transaction').select('ownerId, type, amount').eq('isValidated', true).in('type', ['EXPENSE', 'INVESTMENT_OUT'])
+        sb.from('Transaction').select('ownerId, type, amount').eq('isValidated', true).in('type', ['EXPENSE'])
     ]);
 
     if (targetsError) throw targetsError;
