@@ -68,8 +68,6 @@ const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionTypeValue, string> = {
 };
 
 const DB_SAFE_TRANSFER_TYPES = ['TRANSFER'];
-const DB_SAFE_TRANSFER_INCOME_TYPES = ['INCOME', 'TRANSFER', 'INVESTMENT_IN'];
-const DB_SAFE_TRANSFER_EXPENSE_TYPES = ['EXPENSE', 'TRANSFER', 'INVESTMENT_OUT'];
 
 const toDbSafeTransactionType = (type: TransactionTypeValue): TransactionTypeValue =>
     type === 'TOP_UP' ? 'TRANSFER' : type;
@@ -365,42 +363,38 @@ const ensureSourceFunds = async (
         || dbSafeType === 'INVESTMENT_OUT'
         || dbSafeType === 'TRANSFER';
 
-    if (!needsSourceCheck || !payload.sourceAccountId || !payload.ownerId) return;
+    if (!needsSourceCheck || !payload.sourceAccountId) return;
 
-    const allTransactions = await fetchTransactionsViaSupabase({ validated: true });
-    const ownerBalanceInAccount = allTransactions.reduce((total, tx) => {
-        if (tx.id === excludeTransactionId || tx.ownerId !== payload.ownerId) return total;
+    const { data: account, error } = await ensureSupabase()
+        .from('Account')
+        .select('name, balance')
+        .eq('id', payload.sourceAccountId)
+        .limit(1)
+        .maybeSingle();
 
-        if (
-            tx.destinationAccountId === payload.sourceAccountId
-            && DB_SAFE_TRANSFER_INCOME_TYPES.includes(tx.type)
-        ) {
-            return total + tx.amount;
-        }
+    if (error) throw error;
 
-        if (
-            tx.sourceAccountId === payload.sourceAccountId
-            && DB_SAFE_TRANSFER_EXPENSE_TYPES.includes(tx.type)
-        ) {
-            return total - tx.amount;
-        }
+    let availableBalance = Number(account?.balance || 0);
 
-        return total;
-    }, 0);
-
-    if (ownerBalanceInAccount < payload.amount) {
-        const { data: account, error } = await ensureSupabase()
-            .from('Account')
-            .select('name')
-            .eq('id', payload.sourceAccountId)
+    if (excludeTransactionId) {
+        const { data: existingTx, error: existingTxError } = await ensureSupabase()
+            .from('Transaction')
+            .select('amount, sourceAccountId')
+            .eq('id', excludeTransactionId)
             .limit(1)
             .maybeSingle();
 
-        if (error) throw error;
+        if (existingTxError) throw existingTxError;
 
+        if (existingTx?.sourceAccountId === payload.sourceAccountId) {
+            availableBalance += Number(existingTx.amount || 0);
+        }
+    }
+
+    if (availableBalance < payload.amount) {
         throw new Error(
-            `Modal/Saldo milik kepemilikan tersebut di rekening ${account?.name || 'sumber'} tidak cukup ` +
-            `(Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(ownerBalanceInAccount)})`
+            `Saldo rekening ${account?.name || 'sumber'} tidak cukup ` +
+            `(Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`
         );
     }
 };

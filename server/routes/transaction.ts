@@ -131,7 +131,7 @@ const ensureSourceAccountHasFunds = async (
         || type === TransactionType.TRANSFER
         || type === TransactionType.TOP_UP;
 
-    if (!requiresSourceBalance || !sourceAccountId || !ownerId) return null;
+    if (!requiresSourceBalance || !sourceAccountId) return null;
 
     const sourceAccount = await trx.account.findUnique({
         where: { id: sourceAccountId },
@@ -142,34 +142,21 @@ const ensureSourceAccountHasFunds = async (
         return 'Rekening sumber tidak ditemukan';
     }
 
-    const incomeTransactions = await trx.transaction.aggregate({
-        where: {
-            ownerId,
-            destinationAccountId: sourceAccountId,
-            isValidated: true,
-            type: { in: [TransactionType.INCOME, TransactionType.TRANSFER, TransactionType.INVESTMENT_IN] },
-            ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
-        },
-        _sum: { amount: true }
-    });
+    let availableBalance = Number(sourceAccount.balance || 0);
 
-    const expenseTransactions = await trx.transaction.aggregate({
-        where: {
-            ownerId,
-            sourceAccountId,
-            isValidated: true,
-            type: { in: [TransactionType.EXPENSE, TransactionType.TRANSFER, TransactionType.INVESTMENT_OUT] },
-            ...(excludeTransactionId ? { id: { not: excludeTransactionId } } : {})
-        },
-        _sum: { amount: true }
-    });
+    if (excludeTransactionId) {
+        const existingTx = await trx.transaction.findUnique({
+            where: { id: excludeTransactionId },
+            select: { amount: true, sourceAccountId: true }
+        });
 
-    const income = incomeTransactions._sum.amount || 0;
-    const expense = expenseTransactions._sum.amount || 0;
-    const ownerBalanceInAccount = income - expense;
+        if (existingTx?.sourceAccountId === sourceAccountId) {
+            availableBalance += Number(existingTx.amount || 0);
+        }
+    }
 
-    if (ownerBalanceInAccount < amount) {
-        return `Modal/Saldo milik kepemilikan tersebut di rekening ${sourceAccount.name} tidak cukup (Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(ownerBalanceInAccount)})`;
+    if (availableBalance < amount) {
+        return `Saldo rekening ${sourceAccount.name} tidak cukup (Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`;
     }
 
     return null;

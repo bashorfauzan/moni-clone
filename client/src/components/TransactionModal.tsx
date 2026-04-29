@@ -132,27 +132,6 @@ const TransactionModal = () => {
 
     const accountById = (id: string) => meta.accounts.find((acc) => acc.id === id);
     const selectedSourceAccount = accountById(form.sourceAccountId);
-    const selectedDestinationAccount = accountById(form.destinationAccountId);
-
-    useEffect(() => {
-        if (!isModalOpen) return;
-
-        const nextOwnerId = (
-            (showSource ? selectedSourceAccount?.ownerId : undefined)
-            ?? (isIncome ? selectedDestinationAccount?.ownerId : undefined)
-        );
-
-        if (nextOwnerId && nextOwnerId !== form.ownerId) {
-            setForm((prev) => ({ ...prev, ownerId: nextOwnerId }));
-        }
-    }, [
-        form.ownerId,
-        isIncome,
-        isModalOpen,
-        selectedDestinationAccount?.ownerId,
-        selectedSourceAccount?.ownerId,
-        showSource
-    ]);
 
     const filteredAccounts = useMemo(() => {
         const accounts = meta.accounts.filter((acc) => {
@@ -160,12 +139,6 @@ const TransactionModal = () => {
                 acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
 
             if (!matchesQuery) return false;
-            if (form.ownerId && acc.ownerId && acc.ownerId !== form.ownerId) {
-                if (!(isEditing && pickerType === 'source' && form.sourceAccountId === acc.id)
-                    && !(isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id)) {
-                    return false;
-                }
-            }
             if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
             if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
             if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
@@ -183,7 +156,6 @@ const TransactionModal = () => {
         return sortAccountsByUsage(accounts, accountUsage);
     }, [
         accountUsage,
-        form.ownerId,
         form.destinationAccountId,
         form.sourceAccountId,
         isEditing,
@@ -247,17 +219,12 @@ const TransactionModal = () => {
 
         try {
             const submissionType: TransactionTypeValue = isInvestment ? 'TRANSFER' : modalType;
-            const payloadOwnerId = (
-                (showSource ? selectedSourceAccount?.ownerId : undefined)
-                ?? (isIncome ? selectedDestinationAccount?.ownerId : undefined)
-                ?? form.ownerId
-            );
 
             if (editTransactionId) {
                 const payload = {
                     amount: Number(form.amount),
                     description: form.description,
-                    ownerId: payloadOwnerId,
+                    ownerId: form.ownerId,
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
@@ -268,7 +235,7 @@ const TransactionModal = () => {
                     action: 'APPROVE' as const,
                     amount: Number(form.amount),
                     description: form.description,
-                    ownerId: payloadOwnerId,
+                    ownerId: form.ownerId,
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
@@ -279,7 +246,7 @@ const TransactionModal = () => {
                 const payload = {
                     amount: Number(form.amount),
                     description: form.description,
-                    ownerId: payloadOwnerId,
+                    ownerId: form.ownerId,
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
@@ -476,17 +443,9 @@ const TransactionModal = () => {
                                     type="button"
                                     onClick={() => {
                                         if (pickerType === 'source') {
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                ownerId: item.ownerId || prev.ownerId,
-                                                sourceAccountId: item.id
-                                            }));
+                                            setForm((prev) => ({ ...prev, sourceAccountId: item.id }));
                                         } else {
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                ownerId: (isIncome ? item.ownerId : undefined) || prev.ownerId,
-                                                destinationAccountId: item.id
-                                            }));
+                                            setForm((prev) => ({ ...prev, destinationAccountId: item.id }));
                                         }
                                         closePicker();
                                     }}
