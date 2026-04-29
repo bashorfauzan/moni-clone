@@ -266,6 +266,7 @@ const Reports = () => {
     const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
         const isInvestmentTransfer = isInvestmentTopUp(tx);
         if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') return 'INVESTMENT';
+        if (tx.type === 'TOP_UP') return 'TRANSFER';
         if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER' || tx.type === 'TOP_UP') return tx.type;
         return 'INCOME';
     };

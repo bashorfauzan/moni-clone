@@ -25,6 +25,7 @@ interface TransactionContextType {
 }
 
 const TransactionContext = createContext<TransactionContextType | undefined>(undefined);
+const normalizeModalType = (type: TransactionType): TransactionType => type === 'TOP_UP' ? 'TRANSFER' : type;
 
 export const TransactionProvider = ({ children }: { children: ReactNode }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,14 +34,14 @@ export const TransactionProvider = ({ children }: { children: ReactNode }) => {
     const [editTransactionId, setEditTransactionId] = useState<string | undefined>(undefined);
 
     const openModal = (type: TransactionType = 'EXPENSE', payload?: TransactionModalPayload) => {
-        setModalType(type);
+        setModalType(normalizeModalType(type));
         setModalPayload(payload);
         setEditTransactionId(undefined);
         setIsModalOpen(true);
     };
 
     const openEditModal = (id: string, type: TransactionType = 'EXPENSE', payload?: TransactionModalPayload) => {
-        setModalType(type);
+        setModalType(normalizeModalType(type));
         setEditTransactionId(id);
         setModalPayload(payload);
         setIsModalOpen(true);

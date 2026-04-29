@@ -65,7 +65,7 @@ const TransactionModal = () => {
                 title: isEditing ? 'Edit Transfer Dana' : 'Transfer Dana',
                 accent: 'text-blue-400',
                 submit: isEditing ? 'Simpan Perubahan' : 'Simpan Transfer',
-                helper: 'Pindahkan saldo antar rekening Anda.'
+                helper: 'Pindahkan saldo antar rekening, e-wallet, atau investasi.'
             },
             TOP_UP: {
                 title: isEditing ? 'Edit Top Up' : 'Top Up',
@@ -303,7 +303,6 @@ const TransactionModal = () => {
                                 <option value="EXPENSE">Pengeluaran</option>
                                 <option value="INCOME">Pemasukan</option>
                                 <option value="TRANSFER">Transfer Dana</option>
-                                <option value="TOP_UP">Top Up</option>
                                 <option value="INVESTMENT">Setor/Investasi</option>
                             </select>
                         </div>
@@ -379,7 +378,7 @@ const TransactionModal = () => {
                             {showDestination && (
                                 <div className={showSource ? '' : 'sm:col-span-2'}>
                                     <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">
-                                        {isIncome ? 'Rekening Tujuan' : isInvestment ? 'Rekening RDN' : isTopUp ? 'Ke Tujuan Top Up' : 'Ke Rekening'}
+                                        {isIncome ? 'Rekening Tujuan' : isInvestment ? 'Rekening RDN' : 'Ke Rekening'}
                                     </label>
                                     <button
                                         type="button"

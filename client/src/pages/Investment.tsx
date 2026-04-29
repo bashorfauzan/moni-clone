@@ -168,7 +168,7 @@ const Investment = () => {
             const destId = transferForm.type === 'DEPOSIT' ? selectedRdn.id : transferForm.bankId;
 
             await createTransaction({
-                type: transferForm.type === 'DEPOSIT' ? 'TOP_UP' : 'TRANSFER',
+                type: 'TRANSFER',
                 amount,
                 sourceAccountId: sourceId,
                 destinationAccountId: destId,

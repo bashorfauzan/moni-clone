@@ -646,12 +646,11 @@ const Home = () => {
             )}
 
             {/* Quick Actions */}
-            <div className="mb-10 grid grid-cols-5 gap-2 rounded-[28px] border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
+            <div className="mb-10 grid grid-cols-4 gap-2 rounded-[28px] border border-slate-100 bg-white p-3 sm:p-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
                 {[
                     { label: 'Income', color: 'bg-gradient-to-br from-emerald-100 to-emerald-50 text-emerald-600', icon: '↘', type: 'INCOME' },
                     { label: 'Expense', color: 'bg-gradient-to-br from-rose-100 to-rose-50 text-rose-600', icon: '↗', type: 'EXPENSE' },
                     { label: 'Transfer', color: 'bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600', icon: '⇄', type: 'TRANSFER' },
-                    { label: 'Top Up', color: 'bg-gradient-to-br from-fuchsia-100 to-fuchsia-50 text-fuchsia-600', icon: '⬆', type: 'TOP_UP' },
                     { label: 'Invest', color: 'bg-gradient-to-br from-amber-100 to-amber-50 text-amber-600', icon: '📈', type: 'INVESTMENT' },
                 ].map((item, i) => (
                     <button
