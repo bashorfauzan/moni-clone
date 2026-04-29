@@ -31,6 +31,13 @@ const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk',
 const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
+const CHAT_APP_HINTS = ['whatsapp', 'wa business', 'telegram', 'line', 'discord', 'messenger', 'instagram', 'facebook', 'signal'];
+const PROMO_KEYWORDS = [
+    'promo', 'promosi', 'diskon', 'voucher', 'cashback spesial', 'cashback hingga',
+    'kesempatan terbatas', 'penawaran', 'pakai', 'pertama kali', 'khusus hari ini',
+    'berlaku sampai', 's.d.', 'sd.', 'hemat', 'bonus', 'kupon', 'kode promo',
+    'simpan kartu bankmu', 'lebih mudah', 'coba yuk'
+];
 const SECURITY_ALERT_KEYWORDS = [
     'login gagal', 'masuk gagal', 'gagal masuk', 'percobaan login', 'percobaan masuk',
     'aktivitas mencurigakan', 'suspicious activity', 'failed login', 'login failed',
@@ -48,6 +55,9 @@ const detectSecurityAlert = (text: string): boolean => {
 const normalizeText = (value: string) => value.toLowerCase().trim();
 
 const containsAny = (text: string, keywords: string[]) => keywords.some((keyword) => text.includes(keyword));
+
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const digitsOnly = (value: string) => value.replace(/\D/g, '');
 
 const extractAmount = (text: string) => {
     // Handle Indonesian format: Rp2.700.000,00 OR Rp 2.700.000
@@ -74,7 +84,49 @@ const extractAmount = (text: string) => {
 
 const detectAccountHint = (text: string) => {
     const lower = normalizeText(text);
-    return ACCOUNT_HINTS.find((hint) => lower.includes(hint)) ?? null;
+    return ACCOUNT_HINTS.find((hint) => new RegExp(`(^|[^a-z0-9])${escapeRegex(hint)}([^a-z0-9]|$)`, 'i').test(lower)) ?? null;
+};
+
+const detectAccountNumberHint = (text: string) => {
+    const accountAnchors = [
+        /rekening\s+([*\dxX-]{4,})/i,
+        /rek(?:ening)?\s+([*\dxX-]{4,})/i,
+        /tujuan\s+([*\dxX-]{4,})/i,
+        /-\s*([*\d]{4,})\b/i
+    ];
+
+    for (const pattern of accountAnchors) {
+        const raw = text.match(pattern)?.[1];
+        const digits = raw ? digitsOnly(raw) : '';
+        if (digits.length >= 4) return digits;
+    }
+
+    const standalone = text.match(/\b\d{10,18}\b/g) ?? [];
+    const candidate = standalone
+        .map((item) => digitsOnly(item))
+        .sort((a, b) => b.length - a.length)[0];
+
+    return candidate && candidate.length >= 10 ? candidate : null;
+};
+
+const isDirectionlessSuccessNotification = (text: string) => {
+    const genericSuccess = text.includes('transaksi berhasil')
+        || text.includes('kamu baru aja transaksi sebesar');
+    const hasDirectionProof = containsAny(text, [
+        'masuk ke rekening',
+        'telah dikirim ke',
+        'transfer ke',
+        'transfer dari',
+        'diterima dari',
+        'debit',
+        'kredit',
+        'top up',
+        'pengisian saldo',
+        'setor tunai',
+        'tarik tunai'
+    ]);
+
+    return genericSuccess && !hasDirectionProof;
 };
 
 const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
@@ -107,9 +159,48 @@ const shouldIgnoreRdnFinancialNote = (sourceApp: string, title: string, text: st
     return isBcaFamily && isFinancialNote && lowerText.includes('rdn');
 };
 
-const detectSourceAppHint = (sourceApp: string) => {
+const shouldIgnorePromotionalNotification = (sourceApp: string, title: string, text: string) => {
+    const combined = normalizeText(`${title} ${text}`.trim());
+
+    const hasPromoKeyword = PROMO_KEYWORDS.some((keyword) => combined.includes(keyword));
+    if (!hasPromoKeyword) return false;
+
+    const hasTransactionalProof = [
+        'transaksi berhasil', 'berhasil ditransfer', 'telah dikirim', 'dikirim ke',
+        'diterima dari', 'nomor referensi', 'no. referensi', 'ref:', 'sisa saldo',
+        'saldo akhir', 'mutasi', 'debit', 'kredit', 'tarik tunai', 'va ', 'briva'
+    ].some((keyword) => combined.includes(keyword));
+
+    if (hasTransactionalProof) return false;
+
+    return true;
+};
+
+const hasExplicitMoneyMarker = (text: string) => {
+    return /\brp\s?[\d.,]+/i.test(text)
+        || /\bidr\s?[\d.,]+/i.test(text)
+        || /(?:saldo|rekening|account|nominal|total|jumlah|debit|kredit|transfer|transaksi|mutasi|tagihan|top up|topup|bayar|pembayaran)/i.test(text);
+};
+
+const isChatAppSource = (sourceApp: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
-    return ACCOUNT_HINTS.find((hint) => lowerSourceApp.includes(hint)) ?? null;
+    return CHAT_APP_HINTS.some((hint) => lowerSourceApp.includes(hint));
+};
+
+const shouldIgnoreLikelyChatMessage = (sourceApp: string, title: string, text: string) => {
+    if (!isChatAppSource(sourceApp)) return false;
+
+    const combined = `${title} ${text}`.trim();
+
+    if (hasExplicitMoneyMarker(combined)) return false;
+    if (detectAccountHint(combined)) return false;
+    if (detectSecurityAlert(combined)) return false;
+
+    return true;
+};
+
+const detectSourceAppHint = (sourceApp: string) => {
+    return detectAccountHint(sourceApp);
 };
 
 const detectHintAfterAnchors = (text: string, anchors: string[]) => {
@@ -140,6 +231,7 @@ const resolveAccountHints = (
     const sourceAppHint = detectSourceAppHint(sourceApp);
     const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ']);
     const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
+    const accountNumberHint = detectAccountNumberHint(text);
     const transferDirection = detectTransferDirection(text);
 
     let sourceAccountHint: string | null = null;
@@ -148,20 +240,20 @@ const resolveAccountHints = (
     if (type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) {
         if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
-            destinationAccountHint = hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
         } else if (transferDirection === 'IN') {
             sourceAccountHint = hintFromSourcePhrase;
-            destinationAccountHint = sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
+            destinationAccountHint = accountNumberHint ?? sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
         } else {
             sourceAccountHint = hintFromSourcePhrase
                 ?? sourceAppHint
                 ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
-            destinationAccountHint = hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
         }
     } else if (type === TransactionType.INCOME) {
-        destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
+        destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
     } else if (type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) {
-        sourceAccountHint = hintFromSourcePhrase ?? fallbackHint ?? sourceAppHint;
+        sourceAccountHint = hintFromSourcePhrase ?? accountNumberHint ?? fallbackHint ?? sourceAppHint;
     }
 
     if ((type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) && sourceAccountHint == destinationAccountHint) {
@@ -193,6 +285,34 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
             confidenceScore: 0,
             parseStatus: 'IGNORED',
             parseNotes: 'Notifikasi Catatan Finansial BCA untuk RDN diabaikan'
+        };
+    }
+
+    if (shouldIgnorePromotionalNotification(sourceApp, title, text)) {
+        return {
+            amount: null,
+            type: null,
+            description: text.trim().slice(0, 160),
+            accountHint: null,
+            sourceAccountHint: null,
+            destinationAccountHint: null,
+            confidenceScore: 0,
+            parseStatus: 'IGNORED',
+            parseNotes: 'Notifikasi promo diabaikan'
+        };
+    }
+
+    if (shouldIgnoreLikelyChatMessage(sourceApp, title, text)) {
+        return {
+            amount: null,
+            type: null,
+            description: text.trim().slice(0, 160),
+            accountHint: null,
+            sourceAccountHint: null,
+            destinationAccountHint: null,
+            confidenceScore: 0,
+            parseStatus: 'IGNORED',
+            parseNotes: 'Pesan chat biasa tanpa penanda transaksi diabaikan'
         };
     }
 
@@ -248,9 +368,8 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
 
     if (!amount) {
         if (type) {
-            // Notifikasi ini jelas adalah transaksi (punya tipe), tapi nominal disembunyikan oleh aplikasi asalnya
-            parseStatus = 'FAILED';
-            parseNotes = 'Nominal tidak ada di teks (Silakan buat manual)';
+            parseStatus = 'PENDING';
+            parseNotes = 'Nominal tidak ada di teks. Buka notifikasi ini lalu isi nominal secara manual.';
         } else {
             parseStatus = 'IGNORED';
             parseNotes = 'Nominal tidak ditemukan';
@@ -264,6 +383,12 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         parseNotes = parseStatus === 'PARSED'
             ? 'Parser berhasil mengenali notifikasi'
             : 'Parser butuh konfirmasi tambahan';
+
+        if (isDirectionlessSuccessNotification(lowerText)) {
+            parseStatus = 'PENDING';
+            parseNotes = 'Notifikasi berhasil, tetapi arah dana belum jelas. Konfirmasi jenis dan rekening dulu.';
+            confidenceScore = Math.min(confidenceScore, 0.55);
+        }
     }
 
     const { sourceAccountHint, destinationAccountHint } = resolveAccountHints(
@@ -291,6 +416,25 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
 
 const findAccountByHint = async (hint?: string | null) => {
     if (!hint) return null;
+
+    const normalizedHintDigits = digitsOnly(hint);
+    if (normalizedHintDigits.length >= 4) {
+        const accounts = await prisma.account.findMany({
+            where: {
+                accountNumber: { not: null }
+            },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        const matchedByNumber = accounts.find((account) => {
+            const accountDigits = digitsOnly(account.accountNumber ?? '');
+            return accountDigits === normalizedHintDigits
+                || accountDigits.endsWith(normalizedHintDigits)
+                || normalizedHintDigits.endsWith(accountDigits);
+        });
+
+        if (matchedByNumber) return matchedByNumber;
+    }
 
     return prisma.account.findFirst({
         where: {
@@ -538,8 +682,8 @@ router.post('/notification', async (req, res) => {
             }
         });
 
-        // Jika tidak ada amount atau type, hanya simpan ke inbox saja (tidak bisa buat transaksi)
-        if (!parsed.amount || !parsed.type) {
+        // Jika belum cukup yakin / data belum lengkap, simpan dulu ke inbox untuk konfirmasi user
+        if (!parsed.amount || !parsed.type || parsed.parseStatus !== 'PARSED') {
             return res.status(202).json({
                 success: true,
                 notification,
@@ -630,6 +774,16 @@ router.post('/notification', async (req, res) => {
                 });
             }
 
+            if (missingAccountReason) {
+                const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
+                return res.status(202).json({
+                    success: true,
+                    notification: pendingNotification,
+                    createdTransaction: false,
+                    reason: missingAccountReason
+                });
+            }
+
             // Untuk INCOME/EXPENSE: jika tidak ada owner atau activity, return 202 (tidak bisa buat transaksi)
             if (!owner || !activity) {
                 const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
@@ -640,7 +794,6 @@ router.post('/notification', async (req, res) => {
                     reason: 'Master data (owner/activity) belum ada, silakan tambahkan terlebih dahulu'
                 });
             }
-            // Untuk INCOME/EXPENSE tanpa hint akun → tetap lanjut buat transaksi dengan akun fallback
         }
 
         if (effectiveType !== parsed.type) {

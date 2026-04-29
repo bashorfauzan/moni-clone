@@ -17,6 +17,16 @@ import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 
+const digitsOnly = (value: string) => value.replace(/\D/g, '');
+
+const extractAccountNumberCandidates = (value: string) => {
+    const matches = value.match(/(?:\*{0,4}\d[\d*-]{3,}|\d{10,18})/g) ?? [];
+    return Array.from(new Set(matches
+        .map((item) => digitsOnly(item))
+        .filter((item) => item.length >= 4)
+        .sort((a, b) => b.length - a.length)));
+};
+
 const Home = () => {
     const { openModal } = useTransaction();
     const navigate = useNavigate();
@@ -42,6 +52,64 @@ const Home = () => {
     const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState<TransactionItem | null>(null);
     const refreshTimeoutRef = useRef<number | null>(null);
+
+    const findAccountByNumberHint = (message: string) => {
+        const candidates = extractAccountNumberCandidates(message);
+        if (candidates.length === 0) return undefined;
+
+        return meta.accounts.find((account) => {
+            const accountDigits = digitsOnly(account.accountNumber || '');
+            return candidates.some((candidate) =>
+                accountDigits === candidate
+                || accountDigits.endsWith(candidate)
+                || candidate.endsWith(accountDigits)
+            );
+        });
+    };
+
+    const findAccountBySourceApp = (sourceApp: string) => {
+        const lower = sourceApp.toLowerCase();
+        return meta.accounts.find((account) =>
+            account.name.toLowerCase().includes(lower)
+            || (account.appPackageName ?? '').toLowerCase().includes(lower)
+        );
+    };
+
+    const buildNotificationPrefill = (item: NotificationItem) => {
+        const combinedText = `${item.title || ''} ${item.messageText || ''} ${item.parsedAccountHint || ''}`;
+        const matchedByNumber = findAccountByNumberHint(combinedText);
+        const matchedBySource = findAccountBySourceApp(item.sourceApp);
+
+        let sourceAccountId: string | undefined;
+        let destinationAccountId: string | undefined;
+
+        if (item.parsedType === 'INCOME') {
+            destinationAccountId = matchedByNumber?.id || matchedBySource?.id;
+        } else if (item.parsedType === 'EXPENSE' || item.parsedType === 'INVESTMENT_OUT') {
+            sourceAccountId = matchedBySource?.id || matchedByNumber?.id;
+        } else if (item.parsedType === 'TRANSFER' || item.parsedType === 'TOP_UP') {
+            sourceAccountId = matchedBySource?.id;
+            destinationAccountId = matchedByNumber?.id;
+
+            if (!sourceAccountId && matchedByNumber?.id) {
+                sourceAccountId = matchedByNumber.id;
+                destinationAccountId = undefined;
+            }
+            if (sourceAccountId && destinationAccountId && sourceAccountId === destinationAccountId) {
+                destinationAccountId = undefined;
+            }
+        }
+
+        const ownerId = meta.accounts.find((account) =>
+            account.id === sourceAccountId || account.id === destinationAccountId
+        )?.ownerId;
+
+        return {
+            ownerId: ownerId || undefined,
+            sourceAccountId,
+            destinationAccountId
+        };
+    };
 
     const toggleHideWealth = () => {
         setIsWealthHidden(prev => {
@@ -740,13 +808,7 @@ const Home = () => {
                 }}
                 onMakeTransaction={(item, overrideAmount) => {
                     setIsNotificationDrawerOpen(false); // Tutup drawer dulu
-
-                    // Coba cocokkan sourceApp ke rekening yang ada
-                    const srcLower = item.sourceApp.toLowerCase();
-                    const matchedAccount = meta.accounts.find(acc =>
-                        acc.name.toLowerCase().includes(srcLower) ||
-                        (acc.appPackageName ?? '').toLowerCase().includes(srcLower)
-                    );
+                    const prefill = buildNotificationPrefill(item);
 
                     openModal(
                         (item.parsedType as any) || 'EXPENSE',
@@ -755,7 +817,9 @@ const Home = () => {
                             description: item.messageText?.slice(0, 100) || item.parseNotes || undefined,
                             type: (item.parsedType as any) || undefined,
                             notificationInboxId: item.id,
-                            sourceAccountId: matchedAccount?.id || undefined
+                            ownerId: prefill.ownerId,
+                            sourceAccountId: prefill.sourceAccountId,
+                            destinationAccountId: prefill.destinationAccountId
                         }
                     );
                 }}
