@@ -22,6 +22,9 @@ const formatThousands = (raw: string) => {
     return new Intl.NumberFormat('id-ID').format(numeric);
 };
 
+const isInvestmentFlowType = (type?: string) =>
+    type === 'TRANSFER' || type === 'TOP_UP' || type === 'INVESTMENT_IN' || type === 'INVESTMENT_OUT';
+
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
     const [investmentIncomeAccounts, setInvestmentIncomeAccounts] = useState<any[]>([]);
@@ -104,7 +107,7 @@ const Investment = () => {
         // Calculate Modal for this RDN
         let modal = 0;
         validatedTransactions.forEach(tx => {
-            if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
+            if (isInvestmentFlowType(tx.type)) {
                 if (tx.destinationAccountId === rdn.id) {
                     modal += tx.amount;
                 } else if (tx.sourceAccountId === rdn.id) {
@@ -133,7 +136,7 @@ const Investment = () => {
                 validatedTransactions.forEach((tx: any) => {
                     if (tx.ownerId !== owner.id) return;
 
-                    if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP') {
+                    if (isInvestmentFlowType(tx.type)) {
                         if (tx.destinationAccountId === detailAccount.id) amount += tx.amount;
                         if (tx.sourceAccountId === detailAccount.id) amount -= tx.amount;
                     }
