@@ -286,19 +286,41 @@ const Home = () => {
         return isBalanceHidden ? 'Rp •••••••' : formatCurrency(value);
     };
 
+    const isInvestmentAccountType = (type?: string) => {
+        const normalizedType = type?.toLowerCase();
+        return normalizedType === 'rdn' || normalizedType === 'sekuritas';
+    };
+
+    const isInvestmentTransfer = (tx: TransactionItem) => {
+        return tx.type === 'TRANSFER' && isInvestmentAccountType(tx.destinationAccount?.type);
+    };
+
     const isTopUpTransaction = (tx: TransactionItem) => {
         const description = `${tx.description || ''} ${tx.activity?.name || ''}`.toLowerCase();
         const destinationType = tx.destinationAccount?.type?.toLowerCase();
-        return (tx.type === 'TOP_UP' || tx.type === 'TRANSFER') && (
+        return !isInvestmentTransfer(tx) && (tx.type === 'TOP_UP' || tx.type === 'TRANSFER') && (
             description.includes('top up')
             || description.includes('topup')
             || destinationType === 'e-wallet'
-            || destinationType === 'rdn'
-            || destinationType === 'sekuritas'
         );
     };
 
+    const getRecentTransactionTitle = (tx: TransactionItem) => {
+        if (isInvestmentTransfer(tx) || tx.type === 'INVESTMENT_OUT') return 'Investasi';
+        return tx.description || tx.activity?.name || 'Detail Transaksi';
+    };
+
     const getRecentTransactionVisual = (tx: TransactionItem) => {
+        if (isInvestmentTransfer(tx) || tx.type === 'INVESTMENT_OUT') {
+            return {
+                iconWrap: 'bg-amber-50 text-amber-600',
+                icon: '↗',
+                amountClass: 'text-slate-800',
+                amountPrefix: '-',
+                badge: 'Investasi'
+            };
+        }
+
         if (isTopUpTransaction(tx)) {
             return {
                 iconWrap: 'bg-rose-50 text-rose-600',
@@ -702,7 +724,7 @@ const Home = () => {
                                         🔔
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="font-bold text-sm text-slate-900 truncate">{tx.description || tx.activity?.name}</p>
+                                        <p className="font-bold text-sm text-slate-900 truncate">{getRecentTransactionTitle(tx)}</p>
                                         <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-0.5">
                                             {tx.type} • {formatCurrency(tx.amount)}
                                         </p>
@@ -767,7 +789,7 @@ const Home = () => {
                                             {visual.icon}
                                         </div>
                                         <div className="min-w-0">
-                                            <p className="mb-0.5 truncate text-sm font-bold text-slate-800">{tx.description || tx.activity?.name}</p>
+                                            <p className="mb-0.5 truncate text-sm font-bold text-slate-800">{getRecentTransactionTitle(tx)}</p>
                                             <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
                                                 <span>{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
                                                 <span>•</span>
@@ -841,7 +863,7 @@ const Home = () => {
                                     {getRecentTransactionVisual(selectedTransaction).badge}
                                 </p>
                                 <h3 className="mt-2 text-lg font-bold text-slate-900">
-                                    {selectedTransaction.description || selectedTransaction.activity?.name || 'Detail Transaksi'}
+                                    {getRecentTransactionTitle(selectedTransaction)}
                                 </h3>
                             </div>
                             <button
