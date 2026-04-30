@@ -1,5 +1,5 @@
 import { X, Bell, PencilLine } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { NotificationItem } from '../services/notificationInbox';
 import type { Account } from '../services/masterData';
 import { canonicalizeAccountAlias } from '../lib/accountAliases';
@@ -175,7 +175,36 @@ const NotificationDrawer = ({
         IGNORED: 0
     });
 
-    const visibleNotifications = notifications.filter((item) =>
+    useEffect(() => {
+        if (!isOpen) return;
+        if (filterCounts.REVIEW > 0) {
+            setActiveFilter('REVIEW');
+        } else if (filterCounts.APPROVED > 0) {
+            setActiveFilter('APPROVED');
+        } else {
+            setActiveFilter('ALL');
+        }
+    }, [filterCounts.APPROVED, filterCounts.REVIEW, isOpen]);
+
+    const getNotificationPriority = (item: NotificationItem) => {
+        if (item.parseStatus === 'FAILED') return 0;
+        if (getNotificationBucket(item) === 'REVIEW') return 1;
+        if (getNotificationBucket(item) === 'APPROVED') return 2;
+        return 3;
+    };
+
+    const sortedNotifications = [...notifications].sort((a, b) => {
+        const priorityDiff = getNotificationPriority(a) - getNotificationPriority(b);
+        if (priorityDiff !== 0) return priorityDiff;
+
+        const confidenceA = typeof a.confidenceScore === 'number' ? a.confidenceScore : -1;
+        const confidenceB = typeof b.confidenceScore === 'number' ? b.confidenceScore : -1;
+        if (confidenceA !== confidenceB) return confidenceA - confidenceB;
+
+        return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime();
+    });
+
+    const visibleNotifications = sortedNotifications.filter((item) =>
         activeFilter === 'ALL' ? true : getNotificationBucket(item) === activeFilter
     );
 
@@ -242,6 +271,15 @@ const NotificationDrawer = ({
                             </button>
                         ))}
                     </div>
+
+                    {filterCounts.REVIEW > 0 && (
+                        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-700">Prioritas Review</p>
+                            <p className="mt-1 text-[11px] text-amber-700">
+                                Ada {filterCounts.REVIEW} notifikasi yang masih perlu diperiksa. Item dengan confidence lebih rendah akan ditampilkan lebih dulu.
+                            </p>
+                        </div>
+                    )}
 
                     {visibleNotifications.length > 0 ? (
                         visibleNotifications.map((item) => {
