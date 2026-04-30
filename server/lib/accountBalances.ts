@@ -1,4 +1,10 @@
 import { TransactionType, type Prisma } from '@prisma/client';
+import {
+    isDualAccountTransactionType,
+    isLegacyInvestmentTransactionType,
+    isSourceOnlyTransactionType,
+    normalizeTransactionType
+} from './transactionRules.js';
 
 type PrismaExecutor = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
 
@@ -27,9 +33,10 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
     for (const tx of transactions) {
         const amount = Number(tx.amount || 0);
         if (!Number.isFinite(amount) || amount === 0) continue;
+        if (isLegacyInvestmentTransactionType(tx.type)) continue;
 
         if (
-            tx.type === TransactionType.INCOME
+            normalizeTransactionType(tx.type) === TransactionType.INCOME
             && tx.destinationAccountId
         ) {
             balanceMap.set(
@@ -39,7 +46,7 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
         }
 
         if (
-            tx.type === TransactionType.EXPENSE
+            isSourceOnlyTransactionType(tx.type)
             && tx.sourceAccountId
         ) {
             balanceMap.set(
@@ -48,7 +55,7 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
             );
         }
 
-        if (tx.type === TransactionType.TRANSFER || tx.type === TransactionType.TOP_UP) {
+        if (isDualAccountTransactionType(tx.type)) {
             if (tx.sourceAccountId) {
                 balanceMap.set(
                     tx.sourceAccountId,

@@ -48,9 +48,6 @@ const Layout = () => {
                                 <span className="sm:hidden">{item.mobileLabel}</span>
                                 <span className="hidden sm:inline">{item.label}</span>
                             </span>
-                            {isActive && (
-                                <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-600" />
-                            )}
                         </Link>
                     );
                 })}

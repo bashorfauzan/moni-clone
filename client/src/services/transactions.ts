@@ -1,7 +1,14 @@
 import api from './api';
 import { supabase, useDirectSupabaseData } from '../lib/supabase';
-
-export type TransactionTypeValue = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT_IN' | 'INVESTMENT_OUT';
+import {
+    getDefaultActivityName,
+    normalizeTransactionType,
+    requiresDestinationAccount,
+    requiresSourceAccount,
+    shouldHideLegacyInvestmentTransactionType,
+    type TransactionTypeValue
+} from '../lib/transactionRules';
+export type { TransactionTypeValue } from '../lib/transactionRules';
 
 export type TransactionItem = {
     id: string;
@@ -58,20 +65,10 @@ export type InvestmentIncomePayload = {
     date?: string;
 };
 
-const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionTypeValue, string> = {
-    INCOME: 'Pemasukan',
-    EXPENSE: 'Pengeluaran',
-    TRANSFER: 'Transfer',
-    TOP_UP: 'Top Up',
-    INVESTMENT_IN: 'Investasi Masuk',
-    INVESTMENT_OUT: 'Investasi Keluar'
-};
-
 const DB_SAFE_TRANSFER_TYPES = ['TRANSFER'];
-const HIDDEN_LEGACY_INVESTMENT_TYPES = ['INVESTMENT_IN', 'INVESTMENT_OUT'];
 
 const toDbSafeTransactionType = (type: TransactionTypeValue): TransactionTypeValue =>
-    type === 'TOP_UP' ? 'TRANSFER' : type;
+    normalizeTransactionType(type) ?? type;
 
 const INVESTMENT_INCOME_ACTIVITY = {
     SUKUK: 'Pendapatan Sukuk',
@@ -101,7 +98,7 @@ const normalizeTransaction = (row: any): TransactionItem => ({
 });
 
 const shouldHideLegacyInvestmentTransaction = (tx: TransactionItem) =>
-    HIDDEN_LEGACY_INVESTMENT_TYPES.includes(tx.type);
+    shouldHideLegacyInvestmentTransactionType(tx.type);
 
 const fetchTransactionsViaApi = async (options: FetchTransactionsOptions = {}): Promise<TransactionItem[]> => {
     const params = new URLSearchParams();
@@ -172,21 +169,21 @@ const validatePayload = (payload: TransactionWritePayload) => {
         throw new Error('Pemilik wajib diisi');
     }
 
-    if (payload.type === 'INCOME' && !payload.destinationAccountId) {
+    if (requiresDestinationAccount(payload.type) && !payload.destinationAccountId) {
         throw new Error('Rekening tujuan wajib dipilih untuk pemasukan');
     }
 
-    if ((payload.type === 'EXPENSE' || payload.type === 'INVESTMENT_OUT') && !payload.sourceAccountId) {
+    if (requiresSourceAccount(payload.type) && !payload.sourceAccountId) {
         throw new Error('Rekening sumber wajib dipilih untuk pengeluaran');
     }
 
-    if (payload.type === 'TRANSFER' || payload.type === 'TOP_UP') {
+    if (normalizeTransactionType(payload.type) === 'TRANSFER') {
         if (!payload.sourceAccountId || !payload.destinationAccountId) {
-            throw new Error(`${payload.type === 'TOP_UP' ? 'Top up' : 'Transfer'} harus memiliki rekening sumber dan tujuan`);
+            throw new Error('Transfer harus memiliki rekening sumber dan tujuan');
         }
 
         if (payload.sourceAccountId === payload.destinationAccountId) {
-            throw new Error(`Rekening sumber dan tujuan ${payload.type === 'TOP_UP' ? 'top up' : 'transfer'} tidak boleh sama`);
+            throw new Error('Rekening sumber dan tujuan transfer tidak boleh sama');
         }
     }
 };
@@ -196,7 +193,7 @@ const ensureActivityId = async (activityId: string | undefined, type: Transactio
 
     if (activityId) return activityId;
 
-    const name = DEFAULT_ACTIVITY_BY_TYPE[type];
+    const name = getDefaultActivityName(type);
     const { data: existing, error: findError } = await sb
         .from('Activity')
         .select('id, name')

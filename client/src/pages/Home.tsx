@@ -16,6 +16,13 @@ import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
+import {
+    isInvestmentIncome,
+    isInvestmentTransfer,
+    isTopUpLikeTransfer,
+    normalizeTransactionType,
+    shouldHideLegacyInvestmentTransactionType
+} from '../lib/transactionRules';
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
 
@@ -149,9 +156,6 @@ const Home = () => {
             ]);
             const nextMeta = metaResult.status === 'fulfilled' ? metaResult.value : { owners: [], accounts: [], activities: [] };
             const nextNotifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
-            const isInvestmentAccount = (accountType?: string) => accountType === 'RDN' || accountType === 'Sekuritas';
-            const isInvestmentIncome = (tx: TransactionItem) => tx.type === 'INCOME' && isInvestmentAccount(tx.destinationAccount?.type);
-
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -286,32 +290,13 @@ const Home = () => {
         return isBalanceHidden ? 'Rp •••••••' : formatCurrency(value);
     };
 
-    const isInvestmentAccountType = (type?: string) => {
-        const normalizedType = type?.toLowerCase();
-        return normalizedType === 'rdn' || normalizedType === 'sekuritas';
-    };
-
-    const isInvestmentTransfer = (tx: TransactionItem) => {
-        return tx.type === 'TRANSFER' && isInvestmentAccountType(tx.destinationAccount?.type);
-    };
-
-    const isTopUpTransaction = (tx: TransactionItem) => {
-        const description = `${tx.description || ''} ${tx.activity?.name || ''}`.toLowerCase();
-        const destinationType = tx.destinationAccount?.type?.toLowerCase();
-        return !isInvestmentTransfer(tx) && (tx.type === 'TOP_UP' || tx.type === 'TRANSFER') && (
-            description.includes('top up')
-            || description.includes('topup')
-            || destinationType === 'e-wallet'
-        );
-    };
-
     const getRecentTransactionTitle = (tx: TransactionItem) => {
-        if (isInvestmentTransfer(tx) || tx.type === 'INVESTMENT_OUT') return 'Investasi';
+        if (isInvestmentTransfer(tx)) return 'Investasi';
         return tx.description || tx.activity?.name || 'Detail Transaksi';
     };
 
     const getRecentTransactionVisual = (tx: TransactionItem) => {
-        if (isInvestmentTransfer(tx) || tx.type === 'INVESTMENT_OUT') {
+        if (isInvestmentTransfer(tx)) {
             return {
                 iconWrap: 'bg-amber-50 text-amber-600',
                 icon: '↗',
@@ -321,7 +306,7 @@ const Home = () => {
             };
         }
 
-        if (isTopUpTransaction(tx)) {
+        if (isTopUpLikeTransfer(tx)) {
             return {
                 iconWrap: 'bg-rose-50 text-rose-600',
                 icon: '↗',
@@ -351,17 +336,7 @@ const Home = () => {
             };
         }
 
-        if (tx.type === 'TOP_UP') {
-            return {
-                iconWrap: 'bg-fuchsia-50 text-fuchsia-600',
-                icon: '⬆',
-                amountClass: 'text-fuchsia-600',
-                amountPrefix: '-',
-                badge: 'Top Up'
-            };
-        }
-
-        if (tx.type === 'TRANSFER') {
+        if (normalizeTransactionType(tx.type) === 'TRANSFER') {
             return {
                 iconWrap: 'bg-blue-50 text-blue-600',
                 icon: '⇄',
@@ -386,15 +361,15 @@ const Home = () => {
         const source = tx.sourceAccount?.name;
         const destination = tx.destinationAccount?.name;
 
-        if ((tx.type === 'TRANSFER' || tx.type === 'TOP_UP') && source && destination) {
+        if (normalizeTransactionType(tx.type) === 'TRANSFER' && source && destination) {
             return `${source} -> ${destination}`;
         }
 
-        if ((tx.type === 'INCOME' || tx.type === 'INVESTMENT_IN') && destination) {
+        if (normalizeTransactionType(tx.type) === 'INCOME' && destination) {
             return destination;
         }
 
-        if ((tx.type === 'EXPENSE' || tx.type === 'INVESTMENT' || tx.type === 'INVESTMENT_OUT') && source) {
+        if (normalizeTransactionType(tx.type) === 'EXPENSE' && source) {
             return source;
         }
 
@@ -412,16 +387,17 @@ const Home = () => {
 
                 validatedTransactions.forEach((tx) => {
                     if (tx.ownerId !== owner.id) return;
+                    if (shouldHideLegacyInvestmentTransactionType(tx.type)) return;
 
-                    if ((tx.type === 'INCOME') && tx.destinationAccountId === account.id) {
+                    if (normalizeTransactionType(tx.type) === 'INCOME' && tx.destinationAccountId === account.id) {
                         amount += tx.amount;
                     }
 
-                    if ((tx.type === 'EXPENSE') && tx.sourceAccountId === account.id) {
+                    if (normalizeTransactionType(tx.type) === 'EXPENSE' && tx.sourceAccountId === account.id) {
                         amount -= tx.amount;
                     }
 
-                    if (tx.type === 'TRANSFER' || tx.type === 'TOP_UP' || tx.type === 'INVESTMENT_IN' || tx.type === 'INVESTMENT_OUT') {
+                    if (normalizeTransactionType(tx.type) === 'TRANSFER') {
                         if (tx.destinationAccountId === account.id) amount += tx.amount;
                         if (tx.sourceAccountId === account.id) amount -= tx.amount;
                     }

@@ -4,6 +4,12 @@ import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, fetchTransactions } from '../services/transactions';
 import { Link } from 'react-router-dom';
 import Spinner from '../components/Spinner';
+import {
+    isInvestmentIncome,
+    isInvestmentTransfer,
+    normalizeTransactionType,
+    shouldHideLegacyInvestmentTransactionType
+} from '../lib/transactionRules';
 
 const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -21,9 +27,6 @@ const formatThousands = (raw: string) => {
     if (!Number.isFinite(numeric)) return '';
     return new Intl.NumberFormat('id-ID').format(numeric);
 };
-
-const isInvestmentFlowType = (type?: string) =>
-    type === 'TRANSFER' || type === 'TOP_UP';
 
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
@@ -99,7 +102,7 @@ const Investment = () => {
     // Derived Metrics
     let totalValue = 0;
     let totalModal = 0;
-    const validatedTransactions = transactions.filter((tx: any) => tx.isValidated);
+    const validatedTransactions = transactions.filter((tx: any) => tx.isValidated && !shouldHideLegacyInvestmentTransactionType(tx.type));
 
     const filteredRdns = rdnAccounts;
 
@@ -108,21 +111,19 @@ const Investment = () => {
         let modal = 0;
         let currentValue = 0;
         validatedTransactions.forEach(tx => {
-            if (isInvestmentFlowType(tx.type)) {
+            if (isInvestmentTransfer(tx)) {
                 if (tx.destinationAccountId === rdn.id) {
                     modal += tx.amount;
                     currentValue += tx.amount;
-                } else if (tx.sourceAccountId === rdn.id) {
-                    modal -= tx.amount;
-                    currentValue -= tx.amount;
                 }
             }
 
-            if (
-                tx.type === 'INCOME'
-                && tx.destinationAccountId === rdn.id
-                && (tx.activity?.name === 'Pendapatan Sukuk' || tx.activity?.name === 'Pertumbuhan Saham')
-            ) {
+            if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === rdn.id) {
+                modal -= tx.amount;
+                currentValue -= tx.amount;
+            }
+
+            if (isInvestmentIncome(tx) && tx.destinationAccountId === rdn.id) {
                 currentValue += tx.amount;
             }
         });
@@ -146,16 +147,15 @@ const Investment = () => {
                 validatedTransactions.forEach((tx: any) => {
                     if (tx.ownerId !== owner.id) return;
 
-                    if (isInvestmentFlowType(tx.type)) {
+                    if (isInvestmentTransfer(tx)) {
                         if (tx.destinationAccountId === detailAccount.id) amount += tx.amount;
+                    }
+
+                    if (normalizeTransactionType(tx.type) === 'TRANSFER') {
                         if (tx.sourceAccountId === detailAccount.id) amount -= tx.amount;
                     }
 
-                    if (
-                        tx.type === 'INCOME'
-                        && tx.destinationAccountId === detailAccount.id
-                        && (tx.activity?.name === 'Pendapatan Sukuk' || tx.activity?.name === 'Pertumbuhan Saham')
-                    ) {
+                    if (isInvestmentIncome(tx) && tx.destinationAccountId === detailAccount.id) {
                         amount += tx.amount;
                     }
                 });

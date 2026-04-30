@@ -2,18 +2,19 @@ import express from 'express';
 import { Prisma, TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { syncAccountBalances } from '../lib/accountBalances.js';
+import {
+    getDefaultActivityName,
+    isDualAccountTransactionType,
+    isSourceOnlyTransactionType,
+    shouldReduceTargetsForTransaction
+} from '../lib/transactionRules.js';
 
 const router = express.Router();
 
 const MANUAL_INVESTMENT_TYPE = 'INVESTMENT';
 
-const SOURCE_ONLY_TYPES: TransactionType[] = [TransactionType.EXPENSE, TransactionType.INVESTMENT_OUT];
-const DUAL_ACCOUNT_TYPES: TransactionType[] = [TransactionType.TRANSFER, TransactionType.TOP_UP, TransactionType.INVESTMENT_IN];
-const isSourceOnlyType = (type: TransactionType) => SOURCE_ONLY_TYPES.includes(type);
-const isDualAccountType = (type: TransactionType) => DUAL_ACCOUNT_TYPES.includes(type);
-
 const normalizeTransactionType = (type: unknown): TransactionType | null => {
-    if (type === MANUAL_INVESTMENT_TYPE) return TransactionType.INVESTMENT_OUT;
+    if (type === MANUAL_INVESTMENT_TYPE) return TransactionType.TRANSFER;
     if (type === 'TOP_UP') return TransactionType.TRANSFER;
     if (typeof type !== 'string') return null;
 
@@ -21,23 +22,10 @@ const normalizeTransactionType = (type: unknown): TransactionType | null => {
     return allowedTypes.includes(type) ? (type as TransactionType) : null;
 };
 
-const shouldReduceTargets = (type: TransactionType) => (
-    type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT
-);
-
 const INVESTMENT_INCOME_ACTIVITY = {
     SUKUK: 'Pendapatan Sukuk',
     STOCK_GROWTH: 'Pertumbuhan Saham'
 } as const;
-
-const DEFAULT_ACTIVITY_BY_TYPE: Record<TransactionType, string> = {
-    INCOME: 'Pemasukan',
-    EXPENSE: 'Pengeluaran',
-    TRANSFER: 'Transfer',
-    TOP_UP: 'Top Up',
-    INVESTMENT_IN: 'Investasi Masuk',
-    INVESTMENT_OUT: 'Investasi Keluar'
-};
 
 const ensureActivityByName = async (trx: Prisma.TransactionClient, name: string) => {
     const existing = await trx.activity.findFirst({
@@ -66,7 +54,7 @@ const applyAccountBalanceChanges = async (
         return;
     }
 
-    if (isSourceOnlyType(type) && sourceAccountId) {
+    if (isSourceOnlyTransactionType(type) && sourceAccountId) {
         await trx.account.update({
             where: { id: sourceAccountId },
             data: { balance: { decrement: amount } }
@@ -74,7 +62,7 @@ const applyAccountBalanceChanges = async (
         return;
     }
 
-    if (isDualAccountType(type) && sourceAccountId && destinationAccountId) {
+    if (isDualAccountTransactionType(type) && sourceAccountId && destinationAccountId) {
         await trx.account.update({
             where: { id: sourceAccountId },
             data: { balance: { decrement: amount } }
@@ -126,10 +114,8 @@ const ensureSourceAccountHasFunds = async (
     ownerId?: string,
     excludeTransactionId?: string
 ) => {
-    const requiresSourceBalance = type === TransactionType.EXPENSE
-        || type === TransactionType.INVESTMENT_OUT
-        || type === TransactionType.TRANSFER
-        || type === TransactionType.TOP_UP;
+    const requiresSourceBalance = isSourceOnlyTransactionType(type)
+        || isDualAccountTransactionType(type);
 
     if (!requiresSourceBalance || !sourceAccountId) return null;
 
@@ -187,16 +173,16 @@ const validateTransactionPayload = ({
         return 'Rekening tujuan wajib dipilih untuk pemasukan';
     }
 
-    if (isSourceOnlyType(type) && !sourceAccountId) {
+    if (isSourceOnlyTransactionType(type) && !sourceAccountId) {
         return 'Rekening sumber wajib dipilih untuk pengeluaran';
     }
 
-    if (type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) {
+    if (isDualAccountTransactionType(type)) {
         if (!sourceAccountId || !destinationAccountId) {
-            return `${type === TransactionType.TOP_UP ? 'Top up' : 'Transfer'} harus memiliki rekening sumber dan tujuan`;
+            return 'Transfer harus memiliki rekening sumber dan tujuan';
         }
         if (sourceAccountId === destinationAccountId) {
-            return `Rekening sumber dan tujuan ${type === TransactionType.TOP_UP ? 'top up' : 'transfer'} tidak boleh sama`;
+            return 'Rekening sumber dan tujuan transfer tidak boleh sama';
         }
     }
 
@@ -210,7 +196,7 @@ const resolveActivityId = async (
 ) => {
     if (activityId) return activityId;
 
-    const activity = await ensureActivityByName(trx, DEFAULT_ACTIVITY_BY_TYPE[type]);
+    const activity = await ensureActivityByName(trx, getDefaultActivityName(type));
     return activity.id;
 };
 
@@ -318,7 +304,7 @@ router.post('/', async (req, res) => {
                 destinationAccountId
             );
 
-            if (shouldReduceTargets(txType)) {
+            if (shouldReduceTargetsForTransaction(txType)) {
                 await reduceActiveTargets(trx, ownerId, parsedAmount);
             }
 

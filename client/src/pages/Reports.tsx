@@ -11,25 +11,21 @@ import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
+import {
+    isInvestmentLiquidation,
+    isInvestmentTransfer,
+    isTopUpLikeTransfer,
+    normalizeTransactionType
+} from '../lib/transactionRules';
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
 
-const isInvestmentAccountType = (type?: string) => type === 'RDN' || type === 'Sekuritas';
-
-const isInvestmentTopUp = (tx: TransactionItem) =>
-    tx.type === 'TRANSFER' && isInvestmentAccountType(tx.destinationAccount?.type);
-
-const isInvestmentLiquidation = (tx: TransactionItem) =>
-    tx.type === 'TRANSFER' && isInvestmentAccountType(tx.sourceAccount?.type);
-
 const getReportTransactionKind = (tx: TransactionItem) => {
-    if (tx.type === 'TOP_UP') {
-        return isInvestmentTopUp(tx) ? 'INVESTMENT_TOP_UP' : 'TOP_UP';
-    }
-    if (isInvestmentTopUp(tx)) return 'INVESTMENT_TOP_UP';
+    if (isInvestmentTransfer(tx)) return 'INVESTMENT_TOP_UP';
     if (isInvestmentLiquidation(tx)) return 'INVESTMENT_LIQUIDATION';
-    return tx.type;
+    if (isTopUpLikeTransfer(tx)) return 'TOP_UP';
+    return normalizeTransactionType(tx.type) || tx.type;
 };
 
 const Reports = () => {
@@ -264,10 +260,10 @@ const Reports = () => {
     };
 
     const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
-        const isInvestmentTransfer = isInvestmentTopUp(tx);
-        if (isInvestmentTransfer || tx.type === 'INVESTMENT_OUT') return 'INVESTMENT';
-        if (tx.type === 'TOP_UP') return 'TRANSFER';
-        if (tx.type === 'INCOME' || tx.type === 'EXPENSE' || tx.type === 'TRANSFER' || tx.type === 'TOP_UP') return tx.type;
+        if (isInvestmentTransfer(tx) || isInvestmentLiquidation(tx)) return 'INVESTMENT';
+        if (normalizeTransactionType(tx.type) === 'INCOME') return 'INCOME';
+        if (normalizeTransactionType(tx.type) === 'EXPENSE') return 'EXPENSE';
+        if (normalizeTransactionType(tx.type) === 'TRANSFER') return 'TRANSFER';
         return 'INCOME';
     };
 
@@ -277,15 +273,15 @@ const Reports = () => {
         if (kind === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
         if (kind === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
         if (kind === 'TOP_UP') return { label: 'Top Up', cls: 'bg-fuchsia-50 text-fuchsia-700' };
-        if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
-        if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
+        if (kind === 'INVESTMENT_TOP_UP') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
+        if (kind === 'INVESTMENT_LIQUIDATION') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
         return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
     };
 
     const getAmountColor = (tx: TransactionItem) => {
         const kind = getReportTransactionKind(tx);
-        if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
-        if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
+        if (kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
+        if (kind === 'EXPENSE' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
         if (kind === 'TOP_UP') return 'text-fuchsia-600';
         return 'text-slate-900';
     };

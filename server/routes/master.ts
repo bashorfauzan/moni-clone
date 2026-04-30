@@ -2,6 +2,7 @@ import express from 'express';
 import { prisma } from '../lib/prisma.js';
 import { computeValidatedAccountBalances, syncAccountBalances } from '../lib/accountBalances.js';
 import XLSX from 'xlsx';
+import { normalizeTransactionType } from '../lib/transactionRules.js';
 
 const router = express.Router();
 
@@ -89,19 +90,14 @@ router.get('/export-excel', async (_req, res) => {
             Aktif: target.isActive ? 'Ya' : 'Tidak'
         }));
         
-        const typeMap: Record<string, string> = {
-            INCOME: 'Pemasukan',
-            EXPENSE: 'Pengeluaran',
-            TRANSFER: 'Transfer',
-            TOP_UP: 'Top Up',
-            INVESTMENT_IN: 'Investasi Masuk',
-            INVESTMENT_OUT: 'Investasi Keluar'
-        };
-
         const transactionRows = transactions.map((tx, idx) => ({
             No: idx + 1,
             Tanggal: new Date(tx.date).toLocaleDateString('id-ID'),
-            Tipe: typeMap[tx.type] || tx.type,
+            Tipe: normalizeTransactionType(tx.type) === 'INCOME'
+                ? 'Pemasukan'
+                : normalizeTransactionType(tx.type) === 'EXPENSE'
+                    ? 'Pengeluaran'
+                    : 'Transfer',
             Nominal: tx.amount,
             'Pelaku Transaksi': tx.owner?.name || '',
             'Rekening Asal': tx.sourceAccount ? `${tx.sourceAccount.name} (${tx.sourceAccount.owner?.name || '-'})` : '-',

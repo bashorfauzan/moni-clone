@@ -1,6 +1,7 @@
 import express from 'express';
 import { PrismaClient, TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
+import { normalizeTransactionType } from '../lib/transactionRules.js';
 
 const router = express.Router();
 const notificationInboxClient = (prisma as PrismaClient & { notificationInbox: any }).notificationInbox;
@@ -87,7 +88,7 @@ const parseTelegramMessage = (text: string): ParsedTx => {
         type = TransactionType.TRANSFER;
         confidence = 0.86;
     } else if (INVESTMENT_KEYWORDS.some((k) => lower.includes(k))) {
-        type = TransactionType.INVESTMENT_OUT;
+        type = TransactionType.TRANSFER;
         confidence = 0.85;
     } else if (INCOME_KEYWORDS.some((k) => lower.includes(k))) {
         type = TransactionType.INCOME;
@@ -235,10 +236,10 @@ router.post('/webhook', async (req, res) => {
             await sendTelegramMessage(chatId, '📭 Belum ada transaksi.');
             return;
         }
-        const typeEmoji: Record<string, string> = { INCOME: '🟢', EXPENSE: '🔴', TRANSFER: '🔵', TOP_UP: '🟣', INVESTMENT_IN: '📈', INVESTMENT_OUT: '📉' };
+        const typeEmoji: Record<string, string> = { INCOME: '🟢', EXPENSE: '🔴', TRANSFER: '🔵' };
         const lines = txs.map((tx) => {
             const d = new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' });
-            return `${typeEmoji[tx.type] ?? '⚪'} ${d} — *${formatCurrency(tx.amount)}* (${tx.activity.name})`;
+            return `${typeEmoji[normalizeTransactionType(tx.type)] ?? '⚪'} ${d} — *${formatCurrency(tx.amount)}* (${tx.activity.name})`;
         }).join('\n');
         await sendTelegramMessage(chatId, `📋 *5 Transaksi Terakhir*\n\n${lines}`);
         return;
@@ -276,8 +277,8 @@ router.post('/webhook', async (req, res) => {
         return;
     }
 
-    if (parsed.type === TransactionType.TOP_UP) {
-        await sendTelegramMessage(chatId, '⏳ Top up dikenali, tapi tetap dimasukkan ke Inbox dulu agar rekening sumber dan tujuan bisa dipilih dengan benar.');
+    if (parsed.type === TransactionType.TRANSFER) {
+        await sendTelegramMessage(chatId, '⏳ Transfer atau investasi dikenali, tapi dimasukkan ke Inbox dulu agar rekening sumber dan tujuan bisa dipilih dengan benar.');
         return;
     }
 
@@ -308,16 +309,13 @@ router.post('/webhook', async (req, res) => {
     const typeLabel: Record<string, string> = {
         INCOME: '💚 Pemasukan',
         EXPENSE: '❤️ Pengeluaran',
-        TRANSFER: '💙 Transfer',
-        TOP_UP: '💜 Top Up',
-        INVESTMENT_OUT: '📉 Investasi',
-        INVESTMENT_IN: '📈 Investasi Masuk',
+        TRANSFER: '💙 Transfer'
     };
 
     const replyText = [
         `✅ *Transaksi berhasil dicatat!*`,
         ``,
-        `📌 Jenis: ${typeLabel[transaction.type] ?? transaction.type}`,
+        `📌 Jenis: ${typeLabel[normalizeTransactionType(transaction.type)] ?? normalizeTransactionType(transaction.type)}`,
         `💰 Nominal: *${formatCurrency(transaction.amount)}*`,
         `🏦 Rekening: ${account.name}`,
         `👤 Pemilik: ${owner.name}`,

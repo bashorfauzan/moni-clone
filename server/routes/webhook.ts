@@ -2,6 +2,7 @@ import express from 'express';
 import { TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { syncAccountBalances } from '../lib/accountBalances.js';
+import { isDualAccountTransactionType, isSourceOnlyTransactionType } from '../lib/transactionRules.js';
 
 const router = express.Router();
 // Removed hacky notificationInboxClient definition
@@ -20,7 +21,7 @@ type ParsedNotification = {
     parseNotes: string | null;
 };
 
-const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
+const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'rhb', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
@@ -250,10 +251,10 @@ const resolveAccountHints = (
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
 
-    if (type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) {
+    if (type && isDualAccountTransactionType(type)) {
         if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
-            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         } else if (transferDirection === 'IN') {
             sourceAccountHint = hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
@@ -261,15 +262,15 @@ const resolveAccountHints = (
             sourceAccountHint = hintFromSourcePhrase
                 ?? sourceAppHint
                 ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
-            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? (type === TransactionType.TOP_UP ? fallbackHint ?? sourceAppHint : null);
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         }
     } else if (type === TransactionType.INCOME) {
         destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
-    } else if (type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) {
+    } else if (type && isSourceOnlyTransactionType(type)) {
         sourceAccountHint = hintFromSourcePhrase ?? accountNumberHint ?? fallbackHint ?? sourceAppHint;
     }
 
-    if ((type === TransactionType.TRANSFER || type === TransactionType.TOP_UP) && sourceAccountHint == destinationAccountHint) {
+    if (type && isDualAccountTransactionType(type) && sourceAccountHint == destinationAccountHint) {
         if (hintFromSourcePhrase && hintFromSourcePhrase != destinationAccountHint) {
             sourceAccountHint = hintFromSourcePhrase;
         } else if (hintFromDestinationPhrase && hintFromDestinationPhrase != sourceAccountHint) {
@@ -340,7 +341,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         type = TransactionType.TRANSFER;
         confidenceScore = 0.84;
     } else if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
-        type = TransactionType.INVESTMENT_OUT;
+        type = TransactionType.TRANSFER;
         confidenceScore = 0.82;
     } else {
         // Hitung skor keyword untuk INCOME vs EXPENSE
@@ -410,7 +411,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         lowerText,
         accountHint
     );
-    const displayAccountHint = type === TransactionType.TRANSFER || type === TransactionType.TOP_UP
+    const displayAccountHint = type && isDualAccountTransactionType(type)
         ? [sourceAccountHint, destinationAccountHint].filter(Boolean).join(' -> ') || accountHint
         : accountHint ?? sourceAccountHint ?? destinationAccountHint;
 
@@ -486,12 +487,12 @@ const ensureDefaults = async (
     let account = await findAccountByHint(parsed.accountHint);
 
     // If no match by hint, try matching by source app name (e.g. 'BRI', 'BCA')
-    if ((!account || ((parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP) && !destinationAccount)) && sourceApp) {
+    if ((!account || (parsed.type && isDualAccountTransactionType(parsed.type) && !destinationAccount)) && sourceApp) {
         const appShort = canonicalizeAccountHint(sourceApp.replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
         const sourceAppAccount = await findAccountByHint(appShort);
         account = account ?? sourceAppAccount;
 
-        if ((parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP) && !sourceAccount) {
+        if (parsed.type && isDualAccountTransactionType(parsed.type) && !sourceAccount) {
             sourceAccount = sourceAppAccount;
         }
     }
@@ -504,12 +505,7 @@ const ensureDefaults = async (
         destinationAccount = destinationAccount ?? account;
     }
 
-    if (parsed.type === TransactionType.TOP_UP) {
-        sourceAccount = sourceAccount ?? account;
-        destinationAccount = destinationAccount ?? account;
-    }
-
-    if (parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT) {
+    if (parsed.type && isSourceOnlyTransactionType(parsed.type)) {
         sourceAccount = sourceAccount ?? account;
     }
 
@@ -711,12 +707,12 @@ router.post('/notification', async (req, res) => {
         // Transaksi akan dibuat dengan isValidated: false agar user bisa approve/reject di Home
         const { owner, activity, account, sourceAccount, destinationAccount } = await ensureDefaults(parsed, String(appName));
         let effectiveType = parsed.type;
-        let sourceAccountId = parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP
+        let sourceAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? sourceAccount?.id ?? null
-            : parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT
+            : parsed.type && isSourceOnlyTransactionType(parsed.type)
                 ? sourceAccount?.id ?? account?.id ?? null
                 : null;
-        let destinationAccountId = parsed.type === TransactionType.TRANSFER || parsed.type === TransactionType.TOP_UP
+        let destinationAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? destinationAccount?.id ?? null
             : parsed.type === TransactionType.INCOME
                 ? destinationAccount?.id ?? account?.id ?? null
@@ -724,18 +720,18 @@ router.post('/notification', async (req, res) => {
         const normalizedNotificationText = normalizeText(`${title || senderName || ''} ${text}`);
 
         let missingAccountReason = (
-            ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            ((effectiveType && isDualAccountTransactionType(effectiveType)) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             || (effectiveType === TransactionType.INCOME && !destinationAccountId)
-            || ((effectiveType === TransactionType.EXPENSE || effectiveType === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
+            || ((effectiveType && isSourceOnlyTransactionType(effectiveType)) && !sourceAccountId)
         )
             ? (
-                effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP
-                    ? `Rekening ${effectiveType === TransactionType.TOP_UP ? 'top up' : 'transfer'} belum lengkap atau masih sama`
+                effectiveType && isDualAccountTransactionType(effectiveType)
+                    ? 'Rekening transfer belum lengkap atau masih sama'
                     : 'Rekening transaksi belum berhasil dipetakan'
             )
             : null;
 
-        if ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && missingAccountReason) {
+        if (effectiveType && isDualAccountTransactionType(effectiveType) && missingAccountReason) {
             const transferDirection = detectTransferDirection(normalizedNotificationText);
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
@@ -756,11 +752,11 @@ router.post('/notification', async (req, res) => {
             missingAccountReason = (
                 (effectiveType === TransactionType.INCOME && !destinationAccountId)
                 || (effectiveType === TransactionType.EXPENSE && !sourceAccountId)
-                || ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+                || ((effectiveType && isDualAccountTransactionType(effectiveType)) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             )
                 ? (
-                    effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP
-                        ? `Rekening ${effectiveType === TransactionType.TOP_UP ? 'top up' : 'transfer'} belum lengkap atau masih sama`
+                    effectiveType && isDualAccountTransactionType(effectiveType)
+                        ? 'Rekening transfer belum lengkap atau masih sama'
                         : 'Rekening transaksi belum berhasil dipetakan'
                 )
                 : null;
@@ -779,7 +775,7 @@ router.post('/notification', async (req, res) => {
             });
 
             // Untuk TRANSFER yang rekening-nya benar-benar belum bisa dipecahkan → kembalikan 202
-            if ((effectiveType === TransactionType.TRANSFER || effectiveType === TransactionType.TOP_UP) && missingAccountReason) {
+            if (effectiveType && isDualAccountTransactionType(effectiveType) && missingAccountReason) {
                 const pendingNotification = await prisma.notificationInbox.findUnique({ where: { id: notification.id } });
                 return res.status(202).json({
                     success: true,
