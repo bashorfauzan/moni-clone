@@ -28,6 +28,35 @@ const formatThousands = (raw: string) => {
     return new Intl.NumberFormat('id-ID').format(numeric);
 };
 
+const summarizeFlows = (transactions: any[], accountId: string) => {
+    let modal = 0;
+    let currentValue = 0;
+    let depositCount = 0;
+    let withdrawalCount = 0;
+    let incomeCount = 0;
+
+    transactions.forEach((tx) => {
+        if (isInvestmentTransfer(tx) && tx.destinationAccountId === accountId) {
+            modal += tx.amount;
+            currentValue += tx.amount;
+            depositCount += 1;
+        }
+
+        if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === accountId) {
+            modal -= tx.amount;
+            currentValue -= tx.amount;
+            withdrawalCount += 1;
+        }
+
+        if (isInvestmentIncome(tx) && tx.destinationAccountId === accountId) {
+            currentValue += tx.amount;
+            incomeCount += 1;
+        }
+    });
+
+    return { modal, currentValue, depositCount, withdrawalCount, incomeCount };
+};
+
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
     const [investmentIncomeAccounts, setInvestmentIncomeAccounts] = useState<any[]>([]);
@@ -100,71 +129,62 @@ const Investment = () => {
     }, []);
 
     // Derived Metrics
-    let totalValue = 0;
-    let totalModal = 0;
     const validatedTransactions = transactions.filter((tx: any) => tx.isValidated && !shouldHideLegacyInvestmentTransactionType(tx.type));
+    const scopedTransactions = selectedOwnerId === 'ALL'
+        ? validatedTransactions
+        : validatedTransactions.filter((tx: any) => tx.ownerId === selectedOwnerId);
 
     const filteredRdns = rdnAccounts;
 
-    const portfolioData = filteredRdns.map(rdn => {
-        // Calculate Modal for this RDN
-        let modal = 0;
-        let currentValue = 0;
-        validatedTransactions.forEach(tx => {
-            if (isInvestmentTransfer(tx)) {
-                if (tx.destinationAccountId === rdn.id) {
-                    modal += tx.amount;
-                    currentValue += tx.amount;
-                }
-            }
+    const portfolioData = filteredRdns.map((rdn) => {
+        const summary = summarizeFlows(scopedTransactions, rdn.id);
+        const returnAmount = summary.currentValue - summary.modal;
+        const returnPercent = summary.modal > 0 ? (returnAmount / summary.modal) * 100 : 0;
 
-            if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === rdn.id) {
-                modal -= tx.amount;
-                currentValue -= tx.amount;
-            }
+        return {
+            ...rdn,
+            balance: summary.currentValue,
+            modal: summary.modal,
+            returnAmount,
+            returnPercent,
+            depositCount: summary.depositCount,
+            withdrawalCount: summary.withdrawalCount,
+            incomeCount: summary.incomeCount
+        };
+    }).filter((rdn) => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
 
-            if (isInvestmentIncome(tx) && tx.destinationAccountId === rdn.id) {
-                currentValue += tx.amount;
-            }
-        });
-
-        const returnAmount = currentValue - modal;
-        const returnPercent = modal > 0 ? (returnAmount / modal) * 100 : 0;
-
-        totalValue += Math.abs(currentValue);
-        totalModal += modal;
-
-        return { ...rdn, balance: currentValue, modal, returnAmount, returnPercent };
-    }).filter(rdn => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
-
+    const totalValue = portfolioData.reduce((sum, rdn) => sum + Math.abs(Number(rdn.balance || 0)), 0);
+    const totalModal = portfolioData.reduce((sum, rdn) => sum + Number(rdn.modal || 0), 0);
     const totalReturnAmount = totalValue - totalModal;
     const totalReturnPercent = totalModal > 0 ? (totalReturnAmount / totalModal) * 100 : 0;
+    const totalDepositCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.depositCount || 0), 0);
+    const totalIncomeCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.incomeCount || 0), 0);
     const ownershipRows = detailAccount
         ? owners
             .map((owner) => {
-                let amount = 0;
+                const ownerTransactions = validatedTransactions.filter((tx: any) => tx.ownerId === owner.id);
+                const summary = summarizeFlows(ownerTransactions, detailAccount.id);
 
-                validatedTransactions.forEach((tx: any) => {
-                    if (tx.ownerId !== owner.id) return;
-
-                    if (isInvestmentTransfer(tx)) {
-                        if (tx.destinationAccountId === detailAccount.id) amount += tx.amount;
-                    }
-
-                    if (normalizeTransactionType(tx.type) === 'TRANSFER') {
-                        if (tx.sourceAccountId === detailAccount.id) amount -= tx.amount;
-                    }
-
-                    if (isInvestmentIncome(tx) && tx.destinationAccountId === detailAccount.id) {
-                        amount += tx.amount;
-                    }
-                });
-
-                return { ownerId: owner.id, name: owner.name, amount };
+                return {
+                    ownerId: owner.id,
+                    name: owner.name,
+                    amount: summary.currentValue,
+                    depositCount: summary.depositCount,
+                    withdrawalCount: summary.withdrawalCount,
+                    incomeCount: summary.incomeCount
+                };
             })
-            .filter((row) => row.amount !== 0)
+            .filter((row) => row.amount !== 0 || row.depositCount > 0 || row.incomeCount > 0)
             .sort((a, b) => b.amount - a.amount)
         : [];
+
+    const selectedOwnerName = selectedOwnerId === 'ALL'
+        ? 'semua kepemilikan'
+        : owners.find((owner) => owner.id === selectedOwnerId)?.name || 'kepemilikan terpilih';
+
+    const detailAccountSummary = detailAccount
+        ? summarizeFlows(scopedTransactions, detailAccount.id)
+        : null;
 
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -187,7 +207,7 @@ const Investment = () => {
                 destinationAccountId: destId,
                 ownerId: transferForm.ownerId || owners[0]?.id,
                 activityId: activities[0]?.id,
-                description: `${transferForm.type === 'DEPOSIT' ? 'Deposit ke' : 'Penarikan dari'} RDN ${selectedRdn.name}`
+                description: `${transferForm.type === 'DEPOSIT' ? 'Transfer ke investasi' : 'Pencairan investasi dari'} ${selectedRdn.name}`
             });
 
             setIsTransferModalOpen(false);
@@ -251,6 +271,9 @@ const Investment = () => {
                 <div>
                     <h1 className="text-2xl font-bold italic text-slate-900">Portofolio Investasi</h1>
                     <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-wider">Rekapitulasi Modal & Return Multi-Sekuritas</p>
+                    <p className="mt-2 text-xs text-slate-500">
+                        Menampilkan portofolio untuk {selectedOwnerName}. Modal dihitung dari transfer ke rekening investasi, return berasal dari hasil investasi yang masuk.
+                    </p>
                 </div>
                 <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-between">
 
@@ -298,6 +321,7 @@ const Investment = () => {
                         <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
                             <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Modal</p>
                             <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(totalModal)}</p>
+                            <p className="mt-1 text-[8px] font-bold text-white/55">{totalDepositCount} transfer masuk</p>
                         </div>
                         <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
                             <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Return</p>
@@ -307,6 +331,7 @@ const Investment = () => {
                             <p className={`text-[8px] font-bold mt-0.5 ${totalReturnAmount >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
                                 {totalReturnPercent.toFixed(2)}%
                             </p>
+                            <p className="text-[8px] font-bold text-white/55">{totalIncomeCount} pemasukan investasi</p>
                         </div>
                     </div>
                 </div>
@@ -329,8 +354,11 @@ const Investment = () => {
                             <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
                                 <div className="min-w-0">
                                     <h3 className="font-bold text-lg text-slate-900">{rdn.name}</h3>
-                                    <p className="text-[10px] font-bold uppercase text-slate-400">Nilai Saat Ini</p>
+                                    <p className="text-[10px] font-bold uppercase text-slate-400">Nilai Tercatat</p>
                                     <p className="text-xl font-bold text-blue-600 break-words">{formatCurrency(rdn.balance)}</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">
+                                        Modal dari {rdn.depositCount} transfer, hasil investasi {rdn.incomeCount} transaksi
+                                    </p>
                                 </div>
                                 <div className="min-w-0 sm:text-right">
                                     <p className="text-[10px] font-bold uppercase text-slate-400">Modal</p>
@@ -340,6 +368,11 @@ const Investment = () => {
                                         {rdn.returnAmount >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
                                         {formatCurrency(Math.abs(rdn.returnAmount))} ({rdn.returnPercent.toFixed(2)}%)
                                     </div>
+                                    {rdn.withdrawalCount > 0 && (
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            Termasuk {rdn.withdrawalCount} pencairan ke rekening lain
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 
@@ -360,7 +393,7 @@ const Investment = () => {
                                     }}
                                     className="flex items-center justify-center gap-2 h-11 w-full rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors"
                                 >
-                                    <ArrowRightLeft size={14} /> Deposit / Tarik
+                                    <ArrowRightLeft size={14} /> Transfer / Cairkan
                                 </button>
                                 <button
                                     onClick={() => setDetailAccount(rdn)}
@@ -381,7 +414,7 @@ const Investment = () => {
                             <div>
                                 <h3 className="font-bold text-slate-900">Detail Kepemilikan</h3>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                                    Informasi pemilik rekening investasi
+                                    Rincian modal, hasil investasi, dan kontribusi per pemilik
                                 </p>
                             </div>
                             <button onClick={() => setDetailAccount(null)} className="p-2 text-slate-400"><X size={18} /></button>
@@ -391,15 +424,25 @@ const Investment = () => {
                             <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rekening</p>
                                 <p className="text-lg font-bold text-slate-900">{detailAccount.name}</p>
+                                {detailAccountSummary && (
+                                    <p className="mt-2 text-[11px] text-slate-600">
+                                        Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil investasi {detailAccountSummary.incomeCount} transaksi.
+                                    </p>
+                                )}
                             </div>
                             <div className="overflow-hidden rounded-2xl border border-slate-200">
                                 <div className="grid grid-cols-[1fr_auto] gap-3 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
                                     <span>Nama</span>
-                                    <span>Jumlah Dana</span>
+                                    <span>Nilai Tercatat</span>
                                 </div>
                                 {ownershipRows.length > 0 ? ownershipRows.map((row) => (
                                     <div key={row.ownerId} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-4 py-3 text-sm">
-                                        <span className="font-semibold text-slate-900">{row.name}</span>
+                                        <div>
+                                            <span className="font-semibold text-slate-900">{row.name}</span>
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                {row.depositCount} setoran, {row.incomeCount} hasil investasi
+                                            </p>
+                                        </div>
                                         <span className="font-bold text-slate-900">{formatCurrency(row.amount)}</span>
                                     </div>
                                 )) : (
@@ -538,7 +581,7 @@ const Investment = () => {
                 <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => setIsTransferModalOpen(false)}>
                     <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-slate-900">Transfer Dana RDN</h3>
+                            <h3 className="font-bold text-slate-900">Transfer Dana Investasi</h3>
                             <button onClick={() => setIsTransferModalOpen(false)} className="p-2 text-slate-400"><X size={18} /></button>
                         </div>
 
@@ -547,13 +590,13 @@ const Investment = () => {
                                 onClick={() => setTransferForm({ ...transferForm, type: 'DEPOSIT' })}
                                 className={`flex-1 text-xs font-bold h-9 rounded-lg transition-all ${transferForm.type === 'DEPOSIT' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
                             >
-                                Deposit (+Modal)
+                                Transfer ke Investasi
                             </button>
                             <button
                                 onClick={() => setTransferForm({ ...transferForm, type: 'WITHDRAW' })}
                                 className={`flex-1 text-xs font-bold h-9 rounded-lg transition-all ${transferForm.type === 'WITHDRAW' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}
                             >
-                                Tarik (-Modal)
+                                Pencairan ke Bank
                             </button>
                         </div>
 
@@ -574,7 +617,9 @@ const Investment = () => {
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Rekening Bank Sumber/Tujuan</label>
+                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                                    {transferForm.type === 'DEPOSIT' ? 'Rekening Sumber Dana' : 'Rekening Tujuan Pencairan'}
+                                </label>
                                 <select
                                     className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
                                     value={transferForm.bankId}
@@ -582,7 +627,9 @@ const Investment = () => {
                                     required
                                     disabled={bankAccounts.length === 0}
                                 >
-                                    <option value="" disabled>Pilih Rekening Bank...</option>
+                                    <option value="" disabled>
+                                        {transferForm.type === 'DEPOSIT' ? 'Pilih rekening sumber...' : 'Pilih rekening tujuan...'}
+                                    </option>
                                     {bankAccounts.map(b => (
                                         <option key={b.id} value={b.id}>{b.name} ({formatCurrency(b.balance)})</option>
                                     ))}
@@ -608,7 +655,7 @@ const Investment = () => {
                             </div>
 
                             <button disabled={submitting} className="w-full h-12 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-wider disabled:opacity-60 flex items-center justify-center gap-2 mt-2">
-                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : 'Transfer Dana'}
+                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : transferForm.type === 'DEPOSIT' ? 'Catat Transfer ke Investasi' : 'Catat Pencairan ke Bank'}
                             </button>
                         </form>
                     </div>
