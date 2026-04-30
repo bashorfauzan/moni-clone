@@ -641,6 +641,8 @@ const Reports = () => {
                             { label: 'Pengeluaran', value: data.totalExpense, icon: '↗', color: 'text-rose-300', iconBg: 'bg-rose-400/20 text-rose-300' },
                             { label: 'Perputaran', value: data.totalVolume, icon: '⇄', color: 'text-sky-300', iconBg: 'bg-sky-400/20 text-sky-300' },
                             { label: 'Est. Zakat', value: data.zakatAmount, icon: '🙏', color: 'text-amber-300', iconBg: 'bg-amber-400/20 text-amber-300' },
+                            { label: 'Ke Investasi', value: data.snapshotData.investmentTopUp, icon: '↑', color: 'text-orange-200', iconBg: 'bg-orange-300/20 text-orange-200' },
+                            { label: 'Sisa Kas', value: data.snapshotData.endingLiquidCash, icon: '◌', color: 'text-cyan-200', iconBg: 'bg-cyan-300/20 text-cyan-200' },
                         ].map(stat => (
                             <div
                                 key={stat.label}
@@ -658,45 +660,14 @@ const Reports = () => {
                             </div>
                         ))}
                     </div>
-                </div>
-            </div>
-
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Snapshot Periode</h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            Ringkasan cepat untuk arus kas dan posisi kas pada akhir periode.
+                    <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-[11px] text-white/75 sm:flex-row sm:items-center sm:justify-between">
+                        <p>
+                            Dana kembali dari investasi pada periode ini: <span className="font-bold text-white">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
+                        </p>
+                        <p>
+                            Arus kas bersih periode ini: <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
                         </p>
                     </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
-                        Bank + E-Wallet
-                    </span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                    {[
-                        { label: 'Pemasukan', value: data.totalIncome, tone: 'text-emerald-600 bg-emerald-50' },
-                        { label: 'Pengeluaran', value: data.totalExpense, tone: 'text-rose-600 bg-rose-50' },
-                        { label: 'Ke Investasi', value: data.snapshotData.investmentTopUp, tone: 'text-amber-700 bg-amber-50' },
-                        { label: 'Sisa Kas', value: data.snapshotData.endingLiquidCash, tone: 'text-blue-700 bg-blue-50' },
-                    ].map((item) => (
-                        <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-                            <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${item.tone}`}>
-                                {item.label}
-                            </span>
-                            <p className="mt-3 text-base font-black text-slate-900 sm:text-lg">
-                                {formatCurrency(item.value)}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-                <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
-                    <p>
-                        Dana kembali dari investasi pada periode ini: <span className="font-bold text-slate-700">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
-                    </p>
-                    <p>
-                        Arus kas bersih periode ini: <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
-                    </p>
                 </div>
             </div>
 
