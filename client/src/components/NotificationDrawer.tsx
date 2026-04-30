@@ -60,6 +60,18 @@ const getParserSummary = (item: NotificationItem) => {
     return 'Parser masih membutuhkan konfirmasi tambahan.';
 };
 
+const getSuggestedActionText = (item: NotificationItem) => {
+    const normalizedType = normalizeTransactionType(item.parsedType) || item.parsedType;
+    if (item.transaction?.isValidated) return 'Sudah tercatat, biasanya tidak perlu tindakan lagi.';
+    if (item.transaction && !item.transaction.isValidated) return 'Periksa rekening dan kategori, lalu setujui transaksi pending ini.';
+    if (!item.parsedAmount && normalizedType) return 'Lengkapi nominal dulu, lalu buat transaksi dari notifikasi ini.';
+    if (normalizedType === 'INCOME') return 'Cek rekening tujuan, lalu simpan sebagai pemasukan.';
+    if (normalizedType === 'EXPENSE') return 'Cek rekening sumber, lalu simpan sebagai pengeluaran.';
+    if (normalizedType === 'TRANSFER') return 'Cek rekening sumber dan tujuan, lalu simpan sebagai transfer.';
+    if (item.parseStatus === 'IGNORED') return 'Notifikasi ini sengaja diabaikan dan tidak akan mengubah saldo.';
+    return 'Tinjau manual untuk memastikan jenis transaksi dan rekeningnya benar.';
+};
+
 const notificationTone = (status: NotificationItem['parseStatus'], isSecurityAlert?: boolean) => {
     if (isSecurityAlert) {
         return {
@@ -131,6 +143,16 @@ const NotificationDrawer = ({
             acc.name.toLowerCase().includes(lower) ||
             (acc.appPackageName ?? '').toLowerCase().includes(lower) ||
             acc.type.toLowerCase().includes(lower)
+        );
+    };
+
+    const resolveHintAccount = (hint?: string): Account | undefined => {
+        if (!hint) return undefined;
+        const lower = hint.toLowerCase();
+        return accounts.find((acc) =>
+            acc.name.toLowerCase().includes(lower)
+            || acc.type.toLowerCase().includes(lower)
+            || (acc.accountNumber ?? '').toLowerCase().includes(lower)
         );
     };
 
@@ -231,6 +253,8 @@ const NotificationDrawer = ({
                                 sourceApp: item.sourceApp,
                                 parsedType: item.parsedType
                             });
+                            const sourceAccount = resolveSourceAccount(item.sourceApp);
+                            const hintedAccount = resolveHintAccount(item.parsedAccountHint);
                             return (
                                 <div key={item.id} className={`border rounded-2xl p-4 shadow-sm ${tone.shell}`}>
                                     <div className="flex items-start justify-between gap-3">
@@ -301,6 +325,16 @@ const NotificationDrawer = ({
                                         <p className="mt-1 text-[11px] font-medium text-slate-600">
                                             {getParserSummary(item)}
                                         </p>
+                                        {sourceAccount ? (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Sumber aplikasi cocok ke rekening: <span className="font-semibold text-slate-700">{sourceAccount.name}</span>
+                                            </p>
+                                        ) : null}
+                                        {hintedAccount ? (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Hint rekening terdeteksi: <span className="font-semibold text-slate-700">{hintedAccount.name}</span>
+                                            </p>
+                                        ) : null}
                                         {item.parsedDescription ? (
                                             <p className="mt-1 text-[11px] text-slate-500">
                                                 Catatan: {item.parsedDescription}
@@ -311,6 +345,9 @@ const NotificationDrawer = ({
                                                 Alasan: {item.parseNotes}
                                             </p>
                                         ) : null}
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            Saran tindakan: <span className="font-semibold text-slate-700">{getSuggestedActionText(item)}</span>
+                                        </p>
                                     </div>
 
                                     {/* === INLINE "Lengkapi Transaksi" untuk notif tanpa nominal === */}
