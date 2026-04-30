@@ -60,7 +60,8 @@ import {
     canLaunchAccountApp,
     launchAccountApp
 } from '../services/accountLauncher';
-import { hasSupabaseEnv, supabase, useDirectSupabaseData } from '../lib/supabase';
+import { getAllDataAccessSnapshots } from '../services/dataAccessMode';
+import { hasSupabaseEnv, supabase } from '../lib/supabase';
 import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
@@ -93,6 +94,8 @@ type DiagnosticsState = {
     notificationFailedCount: number;
     notificationPrioritySummary: string;
     notificationUpdatedAt: string | null;
+    runtimeModeSummary: string;
+    runtimeModeHint: string;
 };
 
 const MenuPage = () => {
@@ -176,7 +179,9 @@ const MenuPage = () => {
         notificationIgnoredCount: 0,
         notificationFailedCount: 0,
         notificationPrioritySummary: 'Belum ada data review.',
-        notificationUpdatedAt: null
+        notificationUpdatedAt: null,
+        runtimeModeSummary: 'Belum ada data runtime',
+        runtimeModeHint: 'Buka modul transaksi/target/master dulu agar mode aksesnya tercatat.'
     });
     const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
     const [accountSettingsSaving, setAccountSettingsSaving] = useState(false);
@@ -747,6 +752,21 @@ const MenuPage = () => {
             const approvedCount = notificationItems.filter((item) => getNotificationBucket(item) === 'APPROVED').length;
             const ignoredCount = notificationItems.filter((item) => getNotificationBucket(item) === 'IGNORED').length;
             const failedCount = notificationItems.filter((item) => item.parseStatus === 'FAILED').length;
+            const runtimeSnapshots = getAllDataAccessSnapshots();
+            const runtimeSummary = runtimeSnapshots.length > 0
+                ? runtimeSnapshots
+                    .map((snapshot) => {
+                        if (snapshot.mode === 'direct-supabase') return `${snapshot.module}: Supabase`;
+                        if (snapshot.mode === 'supabase-fallback-to-api') return `${snapshot.module}: Fallback API`;
+                        return `${snapshot.module}: Backend API`;
+                    })
+                    .join(' • ')
+                : 'Belum ada data runtime';
+            const runtimeHint = runtimeSnapshots.length > 0
+                ? runtimeSnapshots
+                    .map((snapshot) => `${snapshot.module}: ${snapshot.detail}`)
+                    .join(' | ')
+                : 'Buka modul transaksi, target, atau master data dulu agar jalur runtime tercatat di sini.';
 
             setDiagnostics({
                 loading: false,
@@ -769,7 +789,9 @@ const MenuPage = () => {
                     : 'Prioritas review belum bisa dihitung karena inbox gagal diambil.',
                 notificationUpdatedAt: notificationsRes.status === 'fulfilled' && notificationItems.length > 0
                     ? notificationItems[0]?.receivedAt ?? null
-                    : null
+                    : null,
+                runtimeModeSummary: runtimeSummary,
+                runtimeModeHint: runtimeHint
             });
         });
 
@@ -894,8 +916,8 @@ const MenuPage = () => {
         },
         {
             label: 'Mode Data',
-            value: useDirectSupabaseData ? 'Direct Supabase' : 'Backend API',
-            hint: useDirectSupabaseData ? 'Client membaca data langsung dari Supabase' : 'Client membaca data melalui endpoint backend'
+            value: diagnostics.runtimeModeSummary,
+            hint: diagnostics.runtimeModeHint
         },
         {
             label: 'Inbox Notifikasi',

@@ -1,4 +1,5 @@
 import api from './api';
+import { recordDataAccessMode } from './dataAccessMode';
 
 export type NotificationItem = {
     id: string;
@@ -40,13 +41,16 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
 export const fetchNotificationInbox = async (limit = 8): Promise<NotificationItem[]> => {
 
     const response = await api.get(`/webhook/notifications?limit=${limit}`);
+    recordDataAccessMode('notifications', 'backend-api', 'Inbox notifikasi dibaca lewat backend API.');
     return response.data.map(normalizeNotificationRow);
 };
 
 export const deleteNotificationInboxItem = async (id: string) => {
     await api.delete(`/webhook/notifications/${id}`);
+    recordDataAccessMode('notifications', 'backend-api', 'Hapus item inbox notifikasi lewat backend API.');
 };
 
 export const clearNotificationInbox = async () => {
     await api.delete('/webhook/notifications');
+    recordDataAccessMode('notifications', 'backend-api', 'Kosongkan inbox notifikasi lewat backend API.');
 };

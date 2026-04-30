@@ -1,18 +1,21 @@
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/layout/Layout';
-import Home from './pages/Home';
-import Reports from './pages/Reports';
-import Targets from './pages/Targets';
-import MenuPage from './pages/Menu';
-import Investment from './pages/Investment';
-import Login from './pages/Login';
-import Register from './pages/Register';
 import { TransactionProvider } from './context/TransactionContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { SecurityProvider } from './context/SecurityContext';
 import Spinner from './components/Spinner';
-import { type ReactNode } from 'react';
+
+const Layout = lazy(() => import('./components/layout/Layout'));
+const Home = lazy(() => import('./pages/Home'));
+const Reports = lazy(() => import('./pages/Reports'));
+const Targets = lazy(() => import('./pages/Targets'));
+const MenuPage = lazy(() => import('./pages/Menu'));
+const Investment = lazy(() => import('./pages/Investment'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+
+const RouteFallback = () => <Spinner message="Membuka Halaman..." />;
 
 // Guard: redirect to /login if not authenticated
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -25,23 +28,25 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
 function AppRoutes() {
   return (
     <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+      <Suspense fallback={<RouteFallback />}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
-        {/* Protected routes */}
-        <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-          <Route index element={<Home />} />
-          <Route path="reports" element={<Reports />} />
-          <Route path="targets" element={<Targets />} />
-          <Route path="investment" element={<Investment />} />
-          <Route path="menu" element={<MenuPage />} />
-        </Route>
+          {/* Protected routes */}
+          <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route index element={<Home />} />
+            <Route path="reports" element={<Reports />} />
+            <Route path="targets" element={<Targets />} />
+            <Route path="investment" element={<Investment />} />
+            <Route path="menu" element={<MenuPage />} />
+          </Route>
 
-        {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

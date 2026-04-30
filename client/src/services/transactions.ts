@@ -1,5 +1,7 @@
 import api from './api';
 import { supabase, useDirectSupabaseData } from '../lib/supabase';
+import { recordDataAccessMode } from './dataAccessMode';
+import { getErrorMessage } from './errors';
 import {
     getDefaultActivityName,
     normalizeTransactionType,
@@ -100,6 +102,13 @@ const normalizeTransaction = (row: any): TransactionItem => ({
 const shouldHideLegacyInvestmentTransaction = (tx: TransactionItem) =>
     shouldHideLegacyInvestmentTransactionType(tx.type);
 
+const recordTransactionsMode = (
+    mode: 'backend-api' | 'direct-supabase' | 'supabase-fallback-to-api',
+    detail: string
+) => {
+    recordDataAccessMode('transactions', mode, detail);
+};
+
 const fetchTransactionsViaApi = async (options: FetchTransactionsOptions = {}): Promise<TransactionItem[]> => {
     const params = new URLSearchParams();
     if (typeof options.validated === 'boolean') params.set('validated', String(options.validated));
@@ -107,6 +116,7 @@ const fetchTransactionsViaApi = async (options: FetchTransactionsOptions = {}): 
     const suffix = params.toString() ? `?${params.toString()}` : '';
 
     const response = await api.get(`/transactions${suffix}`);
+    recordTransactionsMode('backend-api', 'Transaksi dibaca lewat backend API.');
     return (response.data || [])
         .map(normalizeTransaction)
         .filter((tx: TransactionItem) => !shouldHideLegacyInvestmentTransaction(tx));
@@ -147,6 +157,7 @@ const fetchTransactionsViaSupabase = async (options: FetchTransactionsOptions = 
     const { data, error } = await query;
 
     if (error) throw error;
+    recordTransactionsMode('direct-supabase', 'Transaksi berhasil dibaca langsung dari Supabase.');
     return (data || [])
         .map(normalizeTransaction)
         .filter((tx: TransactionItem) => !shouldHideLegacyInvestmentTransaction(tx));
@@ -462,6 +473,7 @@ const createTransactionDirect = async (payload: TransactionWritePayload): Promis
     }
 
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Create transaksi berhasil langsung ke Supabase.');
     return normalizeTransaction(data);
 };
 
@@ -513,6 +525,7 @@ const updateTransactionDirect = async (id: string, payload: TransactionWritePayl
     if (error) throw error;
 
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Update transaksi berhasil langsung ke Supabase.');
     return normalizeTransaction(data);
 };
 
@@ -547,6 +560,7 @@ const validateTransactionDirect = async (id: string, payload: ValidateTransactio
         if (deleteError) throw deleteError;
 
         await syncDerivedDataDirect();
+        recordTransactionsMode('direct-supabase', 'Transaksi pending berhasil ditolak langsung di Supabase.');
         return { message: 'Transaksi ditolak dan ditiadakan' };
     }
 
@@ -609,6 +623,7 @@ const validateTransactionDirect = async (id: string, payload: ValidateTransactio
     }
 
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Transaksi pending berhasil divalidasi langsung di Supabase.');
     return normalizeTransaction(data);
 };
 
@@ -616,12 +631,14 @@ const deleteTransactionDirect = async (id: string): Promise<void> => {
     const { error } = await ensureSupabase().from('Transaction').delete().eq('id', id);
     if (error) throw error;
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Hapus transaksi berhasil langsung di Supabase.');
 };
 
 const bulkDeleteTransactionsDirect = async (ids: string[]): Promise<void> => {
     const { error } = await ensureSupabase().from('Transaction').delete().in('id', ids);
     if (error) throw error;
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Bulk delete transaksi berhasil langsung di Supabase.');
 };
 
 const createInvestmentIncomeDirect = async (payload: InvestmentIncomePayload): Promise<TransactionItem> => {
@@ -682,6 +699,7 @@ const createInvestmentIncomeDirect = async (payload: InvestmentIncomePayload): P
     if (error) throw error;
 
     await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Pemasukan investasi berhasil dicatat langsung di Supabase.');
     return normalizeTransaction(data);
 };
 
@@ -691,6 +709,7 @@ export const fetchTransactions = async (options: FetchTransactionsOptions = {}):
             return await fetchTransactionsViaSupabase(options);
         } catch (error) {
             console.warn('Supabase transactions query failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Query transaksi fallback ke backend API.'));
         }
     }
 
@@ -699,52 +718,88 @@ export const fetchTransactions = async (options: FetchTransactionsOptions = {}):
 
 export const createTransaction = async (payload: TransactionWritePayload): Promise<TransactionItem> => {
     if (useDirectSupabaseData && supabase) {
-        return createTransactionDirect(payload);
+        try {
+            return await createTransactionDirect(payload);
+        } catch (error) {
+            console.warn('Supabase transaction create failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Create transaksi fallback ke backend API.'));
+        }
     }
 
     const response = await api.post('/transactions', payload);
+    recordTransactionsMode('backend-api', 'Create transaksi berhasil lewat backend API.');
     return normalizeTransaction(response.data);
 };
 
 export const updateTransaction = async (id: string, payload: TransactionWritePayload): Promise<TransactionItem> => {
     if (useDirectSupabaseData && supabase) {
-        return updateTransactionDirect(id, payload);
+        try {
+            return await updateTransactionDirect(id, payload);
+        } catch (error) {
+            console.warn('Supabase transaction update failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Update transaksi fallback ke backend API.'));
+        }
     }
 
     const response = await api.put(`/transactions/${id}`, payload);
+    recordTransactionsMode('backend-api', 'Update transaksi berhasil lewat backend API.');
     return normalizeTransaction(response.data);
 };
 
 export const validateTransaction = async (id: string, payload: ValidateTransactionPayload): Promise<TransactionItem | { message: string }> => {
     if (useDirectSupabaseData && supabase) {
-        return validateTransactionDirect(id, payload);
+        try {
+            return await validateTransactionDirect(id, payload);
+        } catch (error) {
+            console.warn('Supabase transaction validation failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Validasi transaksi fallback ke backend API.'));
+        }
     }
 
     const response = await api.put(`/transactions/${id}/validate`, payload);
+    recordTransactionsMode('backend-api', 'Validasi transaksi berhasil lewat backend API.');
     return response.data;
 };
 
 export const deleteTransaction = async (id: string): Promise<void> => {
     if (useDirectSupabaseData && supabase) {
-        return deleteTransactionDirect(id);
+        try {
+            return await deleteTransactionDirect(id);
+        } catch (error) {
+            console.warn('Supabase transaction delete failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Hapus transaksi fallback ke backend API.'));
+        }
     }
 
     await api.delete(`/transactions/${id}`);
+    recordTransactionsMode('backend-api', 'Hapus transaksi berhasil lewat backend API.');
 };
 
 export const bulkDeleteTransactions = async (ids: string[]): Promise<void> => {
     if (useDirectSupabaseData && supabase) {
-        return bulkDeleteTransactionsDirect(ids);
+        try {
+            return await bulkDeleteTransactionsDirect(ids);
+        } catch (error) {
+            console.warn('Supabase bulk transaction delete failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Bulk delete transaksi fallback ke backend API.'));
+        }
     }
 
     await api.post('/transactions/bulk-delete', { ids });
+    recordTransactionsMode('backend-api', 'Bulk delete transaksi berhasil lewat backend API.');
 };
 
 export const createInvestmentIncome = async (payload: InvestmentIncomePayload): Promise<TransactionItem> => {
     if (useDirectSupabaseData && supabase) {
-        return createInvestmentIncomeDirect(payload);
+        try {
+            return await createInvestmentIncomeDirect(payload);
+        } catch (error) {
+            console.warn('Supabase investment income create failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Pemasukan investasi fallback ke backend API.'));
+        }
     }
 
     const response = await api.post('/transactions/investment-income', payload);
+    recordTransactionsMode('backend-api', 'Pemasukan investasi berhasil dicatat lewat backend API.');
     return normalizeTransaction(response.data);
 };

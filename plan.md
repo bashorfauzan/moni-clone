@@ -21,7 +21,7 @@ Dokumen ini mengubah masukan produk menjadi langkah kerja yang bisa langsung die
 
 ## Fase 1 - Stabilkan Source of Truth
 
-Status: prioritas paling tinggi
+Status: selesai
 
 ### Outcome
 
@@ -50,7 +50,7 @@ Status: prioritas paling tinggi
 
 ## Fase 2 - Bersihkan Model Investasi
 
-Status: sesudah Fase 1
+Status: selesai
 
 ### Outcome
 
@@ -77,7 +77,7 @@ Status: sesudah Fase 1
 
 ## Fase 3 - Rapikan Jalur Data Production
 
-Status: paralel setelah Fase 1 mulai stabil
+Status: selesai
 
 ### Outcome
 
@@ -103,7 +103,7 @@ Status: paralel setelah Fase 1 mulai stabil
 
 ## Fase 4 - Rekonsiliasi Notifikasi dan Transaksi
 
-Status: setelah Fase 1
+Status: selesai
 
 ### Outcome
 
@@ -133,7 +133,7 @@ Status: setelah Fase 1
 
 ## Fase 5 - Transparansi Angka di UI
 
-Status: quick win sesudah Fase 1
+Status: selesai
 
 ### Outcome
 
@@ -158,7 +158,20 @@ Status: quick win sesudah Fase 1
 
 ## Fase 6 - Fitur Bernilai Tinggi
 
-Status: setelah fondasi stabil
+Status: selesai
+
+## Ringkasan Progress
+
+- `Fase 1` selesai: aturan transaksi sudah dipusatkan, enum legacy dinormalisasi, dan saldo aktif hanya memakai `INCOME`, `EXPENSE`, `TRANSFER`.
+- `Fase 2` selesai: investasi sekarang punya rumus yang lebih jelas untuk `modal`, `nilai saat ini`, `return`, lengkap dengan snapshot dan rincian transaksi pembentuk angka.
+- `Fase 3` selesai: jalur `master`, `targets`, `transactions`, dan `notifications` sekarang punya fallback yang lebih terkontrol, diagnostics runtime, serta pesan error yang lebih manusiawi.
+- `Fase 4` selesai: inbox notifikasi punya review workflow, prioritas, alias rekening, ringkasan parser, saran tindakan, dan prefill transaksi yang lebih aman.
+- `Fase 5` selesai: Home, Laporan, Investasi, Target, dan modal transaksi sekarang jauh lebih bisa menjelaskan asal angka ke pengguna.
+- `Fase 6` selesai: riwayat saldo, snapshot periode, undo hapus, kategori otomatis, dan `Sudah TF` di Target sudah masuk.
+
+## Catatan Penutup
+
+- Fokus berikutnya bukan lagi fondasi utama, tetapi quality pass lanjutan seperti test coverage tambahan, optimasi ukuran bundle frontend, dan audit UX kecil setelah pemakaian production beberapa hari.
 
 ### Prioritas
 

@@ -1,5 +1,7 @@
 import api from './api';
 import { supabase, useDirectSupabaseData } from '../lib/supabase';
+import { recordDataAccessMode } from './dataAccessMode';
+import { getErrorMessage } from './errors';
 
 export type TargetItem = {
     id: string;
@@ -110,6 +112,7 @@ export const fetchTargets = async (): Promise<TargetsResponse> => {
             .order('createdAt', { ascending: false });
 
         if (!error && Array.isArray(data)) {
+            recordDataAccessMode('targets', 'direct-supabase', 'Target berhasil dibaca langsung dari Supabase.');
             const targets = data.map(normalizeTarget);
             return {
                 targets,
@@ -122,9 +125,11 @@ export const fetchTargets = async (): Promise<TargetsResponse> => {
         }
 
         console.warn('Supabase targets query failed, falling back to backend API.', error);
+        recordDataAccessMode('targets', 'supabase-fallback-to-api', getErrorMessage(error, 'Query target fallback ke backend API.'));
     }
 
     const response = await api.get('/targets');
+    recordDataAccessMode('targets', 'backend-api', 'Target dibaca lewat backend API.');
     return {
         targets: (response.data.targets || []).map(normalizeTarget),
         summary: {
@@ -168,10 +173,12 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
             .single();
 
         if (error) throw error;
+        recordDataAccessMode('targets', 'direct-supabase', 'Create target berhasil langsung ke Supabase.');
         return normalizeTarget(data);
     }
 
     const response = await api.post('/targets', payload);
+    recordDataAccessMode('targets', 'backend-api', 'Create target berhasil lewat backend API.');
     return normalizeTarget(response.data);
 };
 
@@ -221,10 +228,12 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
             .single();
 
         if (error) throw error;
+        recordDataAccessMode('targets', 'direct-supabase', 'Update target berhasil langsung ke Supabase.');
         return normalizeTarget(data);
     }
 
     const response = await api.put(`/targets/${id}`, payload);
+    recordDataAccessMode('targets', 'backend-api', 'Update target berhasil lewat backend API.');
     return normalizeTarget(response.data);
 };
 
@@ -232,10 +241,12 @@ export const deleteTarget = async (id: string): Promise<void> => {
     if (useDirectSupabaseData && supabase) {
         const { error } = await ensureSupabase().from('Target').delete().eq('id', id);
         if (error) throw error;
+        recordDataAccessMode('targets', 'direct-supabase', 'Hapus target berhasil langsung di Supabase.');
         return;
     }
 
     await api.delete(`/targets/${id}`);
+    recordDataAccessMode('targets', 'backend-api', 'Hapus target berhasil lewat backend API.');
 };
 
 export const markTargetAsTransferred = async (id: string): Promise<TargetContributionResult> => {
@@ -293,6 +304,7 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
             .single();
 
         if (error) throw error;
+        recordDataAccessMode('targets', 'direct-supabase', 'Setoran target berhasil diproses langsung di Supabase.');
         return {
             target: normalizeTarget(data),
             appliedAmount
@@ -300,6 +312,7 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
     }
 
     const response = await api.post(`/targets/${id}/mark-progress`);
+    recordDataAccessMode('targets', 'backend-api', 'Setoran target berhasil diproses lewat backend API.');
     return {
         target: normalizeTarget(response.data.target),
         appliedAmount: Number(response.data.appliedAmount || 0)
