@@ -59,7 +59,7 @@ import {
     canLaunchAccountApp,
     launchAccountApp
 } from '../services/accountLauncher';
-import { supabase } from '../lib/supabase';
+import { hasSupabaseEnv, supabase, useDirectSupabaseData } from '../lib/supabase';
 import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
@@ -78,6 +78,14 @@ type RestorePreview = {
     includeNotifications?: boolean;
     counts: Record<string, number>;
     payload: unknown;
+};
+
+type DiagnosticsState = {
+    loading: boolean;
+    apiHealth: 'ok' | 'error' | 'unknown';
+    apiMessage: string;
+    notificationInboxCount: number | null;
+    notificationStatus: string;
 };
 
 const MenuPage = () => {
@@ -125,6 +133,7 @@ const MenuPage = () => {
     const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
     const [isAccountSettingsOpen, setIsAccountSettingsOpen] = useState(false);
     const [isHelpSupportOpen, setIsHelpSupportOpen] = useState(false);
+    const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
     const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
     const [securityPinStep, setSecurityPinStep] = useState<'menu' | 'set-pin' | 'confirm-pin' | 'change-pin'>('menu');
     const [securityPinInput, setSecurityPinInput] = useState('');
@@ -149,6 +158,13 @@ const MenuPage = () => {
     const [restoreError, setRestoreError] = useState('');
     const [selectedBackupFileName, setSelectedBackupFileName] = useState('');
     const [restorePreview, setRestorePreview] = useState<RestorePreview | null>(null);
+    const [diagnostics, setDiagnostics] = useState<DiagnosticsState>({
+        loading: false,
+        apiHealth: 'unknown',
+        apiMessage: 'Belum diperiksa',
+        notificationInboxCount: null,
+        notificationStatus: 'Belum diperiksa'
+    });
     const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
     const [accountSettingsSaving, setAccountSettingsSaving] = useState(false);
     const [accountSettingsError, setAccountSettingsError] = useState('');
@@ -652,6 +668,38 @@ const MenuPage = () => {
         setAccountSettingsError('');
     }, [isAccountSettingsOpen, meta.owners, user]);
 
+    useEffect(() => {
+        if (!isDiagnosticsOpen) return;
+
+        let isActive = true;
+        setDiagnostics((prev) => ({ ...prev, loading: true }));
+
+        void Promise.allSettled([
+            api.get('/health'),
+            api.get('/webhook/notifications?limit=50')
+        ]).then(([healthRes, notificationsRes]) => {
+            if (!isActive) return;
+
+            setDiagnostics({
+                loading: false,
+                apiHealth: healthRes.status === 'fulfilled' && healthRes.value.data?.ok ? 'ok' : 'error',
+                apiMessage: healthRes.status === 'fulfilled'
+                    ? 'API merespons normal'
+                    : (healthRes.reason?.response?.data?.error || healthRes.reason?.message || 'API tidak merespons'),
+                notificationInboxCount: notificationsRes.status === 'fulfilled' && Array.isArray(notificationsRes.value.data)
+                    ? notificationsRes.value.data.length
+                    : null,
+                notificationStatus: notificationsRes.status === 'fulfilled'
+                    ? 'Inbox notifikasi dapat diambil'
+                    : (notificationsRes.reason?.response?.data?.error || notificationsRes.reason?.message || 'Inbox notifikasi gagal diambil')
+            });
+        });
+
+        return () => {
+            isActive = false;
+        };
+    }, [isDiagnosticsOpen]);
+
     const saveAccountSettings = async () => {
         if (!supabase || !user) {
             setAccountSettingsError('Konfigurasi akun tidak tersedia.');
@@ -754,6 +802,34 @@ const MenuPage = () => {
             timeStyle: 'short'
         }).format(parsed);
     };
+
+    const diagnosticsRows = [
+        {
+            label: 'API Health',
+            value: diagnostics.apiHealth === 'ok' ? 'Normal' : diagnostics.apiHealth === 'error' ? 'Bermasalah' : 'Belum dicek',
+            hint: diagnostics.apiMessage
+        },
+        {
+            label: 'Supabase Env',
+            value: hasSupabaseEnv ? 'Tersedia' : 'Tidak tersedia',
+            hint: hasSupabaseEnv ? 'Client memiliki URL dan anon key' : 'Env Supabase belum lengkap di client'
+        },
+        {
+            label: 'Mode Data',
+            value: useDirectSupabaseData ? 'Direct Supabase' : 'Backend API',
+            hint: useDirectSupabaseData ? 'Client membaca data langsung dari Supabase' : 'Client membaca data melalui endpoint backend'
+        },
+        {
+            label: 'Inbox Notifikasi',
+            value: diagnostics.notificationInboxCount != null ? `${diagnostics.notificationInboxCount} item` : 'Tidak diketahui',
+            hint: diagnostics.notificationStatus
+        },
+        {
+            label: 'Master Data',
+            value: `${meta.owners.length} owner • ${meta.accounts.length} rekening • ${meta.activities.length} kategori`,
+            hint: 'Ringkasan data yang sedang termuat di menu'
+        }
+    ];
 
     const updateBackupSettings = (patch: Partial<BackupSettings>) => {
         setBackupSettings((prev) => ({ ...prev, ...patch }));
@@ -1000,6 +1076,22 @@ const MenuPage = () => {
                             <div className="min-w-0">
                                 <span className="block text-sm font-semibold text-slate-800 truncate">Backup Data</span>
                                 <span className="block text-[11px] text-slate-500 truncate">Terakhir: {formatBackupDate(backupSettings.lastBackupAt)}</span>
+                            </div>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-400" />
+                    </button>
+
+                    <button
+                        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
+                        onClick={() => setIsDiagnosticsOpen(true)}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                                <Shield size={16} />
+                            </div>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Diagnostics</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Cek health API, mode data, dan inbox notifikasi</span>
                             </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-400" />
@@ -1660,6 +1752,53 @@ const MenuPage = () => {
                                 </div>
                                 <p className="text-xs text-slate-500 mt-3 leading-relaxed">
                                     Setelah setup selesai, pengguna bisa mulai input transaksi, menerima notifikasi otomatis, membuat target, dan membaca laporan tanpa harus menata ulang data dasar lagi.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isDiagnosticsOpen && (
+                <div
+                    className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4"
+                    onClick={() => setIsDiagnosticsOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-900">Diagnostics</h3>
+                                <p className="text-sm text-slate-500 mt-1">Pemeriksaan cepat status aplikasi yang sedang berjalan.</p>
+                            </div>
+                            <button onClick={() => setIsDiagnosticsOpen(false)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-100">
+                                <X size={16} />
+                            </button>
+                        </div>
+
+                        <div className="p-4 sm:p-5 space-y-3">
+                            {diagnostics.loading ? (
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-medium text-slate-500">
+                                    Memeriksa status aplikasi...
+                                </div>
+                            ) : null}
+
+                            {diagnosticsRows.map((row) => (
+                                <div key={row.label} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">{row.label}</p>
+                                        <p className="text-sm font-bold text-slate-800 text-right">{row.value}</p>
+                                    </div>
+                                    <p className="mt-1 text-[11px] text-slate-500">{row.hint}</p>
+                                </div>
+                            ))}
+
+                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
+                                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-500">Cara Pakai</p>
+                                <p className="mt-1 text-[11px] text-slate-600">
+                                    Jika `API Health` bermasalah tapi `Supabase Env` tersedia, biasanya masalah ada di jalur backend production. Jika dua-duanya normal, cek lagi data transaksi atau notifikasi yang sedang diproses.
                                 </p>
                             </div>
                         </div>
