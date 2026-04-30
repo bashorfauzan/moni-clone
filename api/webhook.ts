@@ -11,6 +11,21 @@ const TransactionType = {
 } as const;
 type TransactionType = keyof typeof TransactionType;
 
+const normalizeTransactionType = (type: TransactionType | null) => {
+    if (type === TransactionType.INVESTMENT_OUT) return TransactionType.EXPENSE;
+    if (type === TransactionType.INVESTMENT_IN) return TransactionType.TRANSFER;
+    return type;
+};
+
+const isSourceOnlyTransactionType = (type: TransactionType | null) =>
+    normalizeTransactionType(type) === TransactionType.EXPENSE;
+
+const isDualAccountTransactionType = (type: TransactionType | null) =>
+    normalizeTransactionType(type) === TransactionType.TRANSFER;
+
+const isLegacyInvestmentTransactionType = (type?: string | null) =>
+    type === TransactionType.INVESTMENT_IN || type === TransactionType.INVESTMENT_OUT;
+
 type ParseStatus = 'PENDING' | 'PARSED' | 'IGNORED' | 'FAILED';
 
 type ParsedNotification = {
@@ -253,10 +268,10 @@ const resolveAccountHints = (
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
 
-    if (type === TransactionType.TRANSFER) {
+    if (type && isDualAccountTransactionType(type)) {
         if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
-            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase;
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         } else if (transferDirection === 'IN') {
             sourceAccountHint = hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
@@ -264,15 +279,15 @@ const resolveAccountHints = (
             sourceAccountHint = hintFromSourcePhrase
                 ?? sourceAppHint
                 ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
-            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase;
+            destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         }
     } else if (type === TransactionType.INCOME) {
         destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
-    } else if (type === TransactionType.EXPENSE || type === TransactionType.INVESTMENT_OUT) {
+    } else if (type && isSourceOnlyTransactionType(type)) {
         sourceAccountHint = hintFromSourcePhrase ?? accountNumberHint ?? fallbackHint ?? sourceAppHint;
     }
 
-    if (type === TransactionType.TRANSFER && sourceAccountHint == destinationAccountHint) {
+    if (type && isDualAccountTransactionType(type) && sourceAccountHint == destinationAccountHint) {
         if (hintFromSourcePhrase && hintFromSourcePhrase != destinationAccountHint) {
             sourceAccountHint = hintFromSourcePhrase;
         } else if (hintFromDestinationPhrase && hintFromDestinationPhrase != sourceAccountHint) {
@@ -340,7 +355,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
     let parseNotes: string | null = 'Format belum dikenali';
 
     if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
-        type = TransactionType.INVESTMENT_OUT;
+        type = TransactionType.TRANSFER;
         confidenceScore = 0.82;
     } else if (detectFeeCharge(lowerText)) {
         // Prioritas tinggi: notifikasi biaya/fee SELALU expense
@@ -415,7 +430,7 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         lowerText,
         accountHint
     );
-    const displayAccountHint = type === TransactionType.TRANSFER
+    const displayAccountHint = type && isDualAccountTransactionType(type)
         ? [sourceAccountHint, destinationAccountHint].filter(Boolean).join(' -> ') || accountHint
         : accountHint ?? sourceAccountHint ?? destinationAccountHint;
 
@@ -707,11 +722,11 @@ export default async function handler(req: any, res: any) {
         let destinationAccount = await findAccountByHint(parsed.destinationAccountHint);
         let account = await findAccountByHint(parsed.accountHint);
 
-        if ((!account || (parsed.type === TransactionType.TRANSFER && !destinationAccount)) && appName) {
+        if ((!account || (parsed.type && isDualAccountTransactionType(parsed.type) && !destinationAccount)) && appName) {
             const appShort = canonicalizeAccountHint(String(appName).replace(/[^a-zA-Z0-9]/g, '').toLowerCase());
             const sourceAppAccount = await findAccountByHint(appShort);
             account = account ?? sourceAppAccount;
-            if (parsed.type === TransactionType.TRANSFER && !sourceAccount) {
+            if (parsed.type && isDualAccountTransactionType(parsed.type) && !sourceAccount) {
                 sourceAccount = sourceAppAccount;
             }
         }
@@ -722,7 +737,7 @@ export default async function handler(req: any, res: any) {
         }
 
         if (parsed.type === TransactionType.INCOME) destinationAccount = destinationAccount ?? account;
-        if (parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT) sourceAccount = sourceAccount ?? account;
+        if (parsed.type && isSourceOnlyTransactionType(parsed.type)) sourceAccount = sourceAccount ?? account;
 
         const ownerId = sourceAccount?.ownerId ?? destinationAccount?.ownerId ?? account?.ownerId;
         if (ownerId && ownerId !== owner?.id) {
@@ -731,12 +746,12 @@ export default async function handler(req: any, res: any) {
         }
 
         let effectiveType = parsed.type;
-        let sourceAccountId = parsed.type === TransactionType.TRANSFER
+        let sourceAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? sourceAccount?.id ?? null
-            : parsed.type === TransactionType.EXPENSE || parsed.type === TransactionType.INVESTMENT_OUT
+            : parsed.type && isSourceOnlyTransactionType(parsed.type)
                 ? sourceAccount?.id ?? account?.id ?? null
                 : null;
-        let destinationAccountId = parsed.type === TransactionType.TRANSFER
+        let destinationAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? destinationAccount?.id ?? null
             : parsed.type === TransactionType.INCOME
                 ? destinationAccount?.id ?? account?.id ?? null
@@ -744,14 +759,14 @@ export default async function handler(req: any, res: any) {
         const normalizedNotificationText = normalizeText(`${title || senderName || ''} ${text}`);
 
         let missingAccountReason = (
-            (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+            ((effectiveType && isDualAccountTransactionType(effectiveType)) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             || (effectiveType === TransactionType.INCOME && !destinationAccountId)
-            || ((effectiveType === TransactionType.EXPENSE || effectiveType === TransactionType.INVESTMENT_OUT) && !sourceAccountId)
+            || ((effectiveType && isSourceOnlyTransactionType(effectiveType)) && !sourceAccountId)
         )
-            ? (effectiveType === TransactionType.TRANSFER ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
+            ? ((effectiveType && isDualAccountTransactionType(effectiveType)) ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
             : null;
 
-        if (effectiveType === TransactionType.TRANSFER && missingAccountReason) {
+        if (effectiveType && isDualAccountTransactionType(effectiveType) && missingAccountReason) {
             const transferDirection = detectTransferDirection(normalizedNotificationText);
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
@@ -781,9 +796,9 @@ export default async function handler(req: any, res: any) {
             missingAccountReason = (
                 (effectiveType === TransactionType.INCOME && !destinationAccountId)
                 || (effectiveType === TransactionType.EXPENSE && !sourceAccountId)
-                || (effectiveType === TransactionType.TRANSFER && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
+                || ((effectiveType && isDualAccountTransactionType(effectiveType)) && (!sourceAccountId || !destinationAccountId || sourceAccountId === destinationAccountId))
             )
-                ? (effectiveType === TransactionType.TRANSFER ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
+                ? ((effectiveType && isDualAccountTransactionType(effectiveType)) ? 'Rekening transfer belum lengkap atau masih sama' : 'Rekening transaksi belum berhasil dipetakan')
                 : null;
         }
 
@@ -827,7 +842,7 @@ export default async function handler(req: any, res: any) {
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({
             id: crypto.randomUUID(),
             amount: parsed.amount,
-            type: effectiveType,
+            type: normalizeTransactionType(effectiveType),
             date: nowIso,
             description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
             ownerId: owner!.id,
@@ -854,13 +869,16 @@ export default async function handler(req: any, res: any) {
                 if (validTxs) {
                     for (const tx of validTxs) {
                         const amount = Number(tx.amount || 0);
+                        if (isLegacyInvestmentTransactionType(tx.type)) {
+                            continue;
+                        }
                         if (
-                            (tx.type === TransactionType.INCOME || tx.type === TransactionType.INVESTMENT_IN) && tx.destinationAccountId === accId
+                            tx.type === TransactionType.INCOME && tx.destinationAccountId === accId
                         ) {
                             balance += amount;
                         }
                         if (
-                            (tx.type === TransactionType.EXPENSE || tx.type === TransactionType.INVESTMENT_OUT) && tx.sourceAccountId === accId
+                            tx.type === TransactionType.EXPENSE && tx.sourceAccountId === accId
                         ) {
                             balance -= amount;
                         }

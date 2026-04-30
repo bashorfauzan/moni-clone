@@ -540,7 +540,7 @@ router.put('/:id/validate', async (req, res) => {
                     destinationAccountId
                 );
 
-                if (shouldReduceTargets(txType)) {
+                if (shouldReduceTargetsForTransaction(txType)) {
                     await reduceActiveTargets(trx, updatedTx.ownerId, parsedAmount);
                 }
 
@@ -605,12 +605,12 @@ router.put('/:id', async (req, res) => {
                     where: { id: oldTx.destinationAccountId },
                     data: { balance: { decrement: oldTx.amount } }
                 });
-            } else if (isSourceOnlyType(oldTx.type) && oldTx.sourceAccountId) {
+            } else if (isSourceOnlyTransactionType(oldTx.type) && oldTx.sourceAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
                 });
-            } else if (isDualAccountType(oldTx.type) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
+            } else if (isDualAccountTransactionType(oldTx.type) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
                 await trx.account.update({
                     where: { id: oldTx.sourceAccountId },
                     data: { balance: { increment: oldTx.amount } }
@@ -693,12 +693,12 @@ router.post('/bulk-delete', async (req, res) => {
                             where: { id: tx.destinationAccountId },
                             data: { balance: { decrement: tx.amount } }
                         });
-                    } else if (isSourceOnlyType(tx.type) && tx.sourceAccountId) {
+                    } else if (isSourceOnlyTransactionType(tx.type) && tx.sourceAccountId) {
                         await trx.account.update({
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
                         });
-                    } else if (isDualAccountType(tx.type) && tx.sourceAccountId && tx.destinationAccountId) {
+                    } else if (isDualAccountTransactionType(tx.type) && tx.sourceAccountId && tx.destinationAccountId) {
                         await trx.account.update({
                             where: { id: tx.sourceAccountId },
                             data: { balance: { increment: tx.amount } }
@@ -743,12 +743,12 @@ router.delete('/:id', async (req, res) => {
                         where: { id: txToDelete.destinationAccountId },
                         data: { balance: { decrement: txToDelete.amount } }
                     });
-                } else if (isSourceOnlyType(txToDelete.type) && txToDelete.sourceAccountId) {
+                } else if (isSourceOnlyTransactionType(txToDelete.type) && txToDelete.sourceAccountId) {
                     await trx.account.update({
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }
                     });
-                } else if (isDualAccountType(txToDelete.type) && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
+                } else if (isDualAccountTransactionType(txToDelete.type) && txToDelete.sourceAccountId && txToDelete.destinationAccountId) {
                     await trx.account.update({
                         where: { id: txToDelete.sourceAccountId },
                         data: { balance: { increment: txToDelete.amount } }
