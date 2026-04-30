@@ -323,44 +323,7 @@ const syncAccountBalancesDirect = async () => {
 };
 
 const syncTargetsDirect = async () => {
-    const sb = ensureSupabase();
-    const [{ data: targets, error: targetsError }, { data: transactions, error: transactionsError }] = await Promise.all([
-        sb.from('Target').select('id, ownerId, totalAmount, dueDate, createdAt').order('dueDate', { ascending: true }).order('createdAt', { ascending: true }),
-        sb.from('Transaction').select('ownerId, type, amount').eq('isValidated', true).in('type', ['EXPENSE'])
-    ]);
-
-    if (targetsError) throw targetsError;
-    if (transactionsError) throw transactionsError;
-
-    const reductionByOwner = new Map<string, number>();
-    (transactions || []).forEach((tx: any) => {
-        const ownerId = String(tx.ownerId || '');
-        if (!ownerId) return;
-        reductionByOwner.set(ownerId, (reductionByOwner.get(ownerId) || 0) + Number(tx.amount || 0));
-    });
-
-    await Promise.all(
-        (targets || []).map(async (target: any) => {
-            const ownerId = String(target.ownerId || '');
-            const remainingReduction = reductionByOwner.get(ownerId) || 0;
-            const totalAmount = Number(target.totalAmount || 0);
-            const nextRemaining = Math.max(0, totalAmount - remainingReduction);
-            const reducedAmount = totalAmount - nextRemaining;
-
-            reductionByOwner.set(ownerId, Math.max(0, remainingReduction - reducedAmount));
-
-            const { error } = await sb
-                .from('Target')
-                .update({
-                    remainingAmount: nextRemaining,
-                    isActive: nextRemaining > 0,
-                    updatedAt: new Date().toISOString()
-                })
-                .eq('id', target.id);
-
-            if (error) throw error;
-        })
-    );
+    return;
 };
 
 const syncDerivedDataDirect = async () => {

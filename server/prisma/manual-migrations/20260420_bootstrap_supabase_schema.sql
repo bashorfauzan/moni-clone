@@ -98,6 +98,7 @@ CREATE TABLE "Target" (
     "title" TEXT NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
     "remainingAmount" DOUBLE PRECISION NOT NULL,
+    "remainingMonths" INTEGER NOT NULL,
     "period" "TargetPeriod" NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "lastContributionAt" TIMESTAMP(3),

@@ -145,8 +145,11 @@ const Targets = () => {
         setMarkingTargetId(target.id);
         try {
             const result = await markTargetAsTransferred(target.id);
-            await refetchTargets();
-            alert(`Setoran target dicatat sebesar ${formatCurrency(result.appliedAmount)}.`);
+            setTargets((currentTargets) => currentTargets.map((item) => (
+                item.id === target.id ? result.target : item
+            )));
+
+            void refetchTargets();
         } catch (error) {
             alert(getErrorMessage(error, 'Gagal menandai setoran target'));
         } finally {
@@ -175,7 +178,6 @@ const Targets = () => {
     const isSafe = bankIncomeMonth >= totalTargetAmount;
     const progressBase = totalTargetAmount <= 0 ? 100 : Math.min(100, (bankIncomeMonth / totalTargetAmount) * 100);
     const now = new Date();
-    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
@@ -245,15 +247,9 @@ const Targets = () => {
                 <div className="space-y-4">
                 {targets.map((target) => {
                     const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
-                    const monthsLeft = target.isActive
-                        ? Math.max(0, diffInCalendarMonthsInclusive(startOfCurrentMonth.toISOString(), target.dueDate) || 0)
-                        : 0;
-                    const suggestedContribution = Math.max(0, Math.min(
-                        target.remainingAmount,
-                        Math.ceil(target.totalAmount / totalMonths)
-                    ));
-                    const paidAmount = Math.max(0, target.totalAmount - target.remainingAmount);
-                    const progressPercent = target.totalAmount <= 0 ? 100 : Math.min(100, (paidAmount / target.totalAmount) * 100);
+                    const monthsLeft = Math.max(0, target.remainingMonths);
+                    const paidAmount = Math.max(0, (totalMonths - monthsLeft) * target.totalAmount);
+                    const progressPercent = totalMonths <= 0 ? 100 : Math.min(100, ((totalMonths - monthsLeft) / totalMonths) * 100);
                     const lastContributionAt = target.lastContributionAt ? new Date(target.lastContributionAt) : null;
                     const alreadyMarkedThisMonth = Boolean(
                         lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
@@ -266,9 +262,8 @@ const Targets = () => {
                             : alreadyMarkedThisMonth
                                 ? 'Sudah TF Bulan Ini'
                                 : 'Tandai Sudah TF';
-                    const remainingTimeLabel = target.isActive ? `${monthsLeft} bulan lagi` : 'Selesai';
-                    const remainingTargetLabel = target.remainingAmount > 0 ? formatCurrency(target.remainingAmount) : 'Lunas';
-                    const recommendationLabel = suggestedContribution > 0 ? formatCurrency(suggestedContribution) : 'Tidak ada setoran';
+                    const remainingTimeLabel = `${monthsLeft} bulan lagi`;
+                    const remainingTargetLabel = formatCurrency(target.remainingAmount);
 
                     return (
                         <div
@@ -350,13 +345,13 @@ const Targets = () => {
 
                             <div className="mt-4 rounded-[24px] bg-slate-50 p-5">
                                 <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Setoran Bulanan</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Progress Target</p>
                                     <span className="text-[10px] font-bold tracking-widest text-slate-500">
                                         {Math.round(progressPercent)}%
                                     </span>
                                 </div>
-                                <p className="mt-1 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
-                                    {recommendationLabel}
+                                <p className="mt-1 text-[13px] font-semibold tracking-tight text-slate-500 sm:text-[14px]">
+                                    1 klik = 1 bulan tagihan selesai
                                 </p>
 
                                 <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
@@ -369,10 +364,10 @@ const Targets = () => {
                                 <div className="mt-5">
                                     <p className="text-[10px] text-slate-500 leading-relaxed">
                                         {!target.isActive
-                                            ? 'Target ini sudah lunas, jadi tidak perlu setoran tambahan.'
+                                            ? 'Target ini sudah selesai karena semua bulan tagihan sudah ditandai.'
                                             : alreadyMarkedThisMonth
                                                 ? 'Setoran bulan ini sudah ditandai. Tombol akan aktif lagi di bulan berikutnya.'
-                                                : `Tombol ini mengurangi sisa target sebesar cicilan rekomendasi untuk periode berjalan.`}
+                                                : 'Tombol ini mengurangi sisa waktu 1 bulan dan mengurangi sisa target sebesar nominal tagihan.'}
                                     </p>
                                     <button
                                         type="button"

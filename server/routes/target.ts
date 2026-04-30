@@ -36,15 +36,8 @@ const diffInCalendarMonthsInclusive = (startValue?: Date | null, endValue?: Date
 
 const getSuggestedContributionAmount = (target: {
     totalAmount: number;
-    remainingAmount: number;
-    createdAt?: Date | null;
-    dueDate?: Date | null;
-}) => {
-    if (target.remainingAmount <= 0) return 0;
-    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
-    const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
-    return Math.max(0, Math.min(target.remainingAmount, rawInstallment));
-};
+    remainingMonths: number;
+}) => (target.remainingMonths > 0 ? target.totalAmount : 0);
 
 const isSameCalendarMonth = (left: Date, right: Date) =>
     left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
@@ -103,7 +96,8 @@ router.post('/', async (req, res) => {
             data: {
                 title: String(title),
                 totalAmount: parsedAmount,
-                remainingAmount: parsedAmount,
+                remainingMonths: parsedMonthCount || 1,
+                remainingAmount: parsedAmount * (parsedMonthCount || 1),
                 period: parsedPeriod,
                 ownerId: selectedOwnerId,
                 dueDate: parsedMonthCount
@@ -140,7 +134,7 @@ router.post('/:id/mark-progress', async (req, res) => {
             return res.status(404).json({ error: 'Target tidak ditemukan' });
         }
 
-        if (!current.isActive || current.remainingAmount <= 0) {
+        if (!current.isActive || current.remainingMonths <= 0) {
             return res.status(400).json({ error: 'Target ini sudah selesai' });
         }
 
@@ -149,13 +143,15 @@ router.post('/:id/mark-progress', async (req, res) => {
         }
 
         const appliedAmount = getSuggestedContributionAmount(current);
-        const nextRemaining = Math.max(0, current.remainingAmount - appliedAmount);
+        const nextRemainingMonths = Math.max(0, current.remainingMonths - 1);
+        const nextRemaining = current.totalAmount * nextRemainingMonths;
 
         const updated = await prisma.target.update({
             where: { id: req.params.id },
             data: {
+                remainingMonths: nextRemainingMonths,
                 remainingAmount: nextRemaining,
-                isActive: nextRemaining > 0,
+                isActive: nextRemainingMonths > 0,
                 lastContributionAt: new Date()
             },
             include: { owner: true }
@@ -185,8 +181,6 @@ router.put('/:id', async (req, res) => {
             return res.status(404).json({ error: 'Target tidak ditemukan' });
         }
 
-        const completedAmount = Math.max(0, current.totalAmount - current.remainingAmount);
-        const nextRemaining = Math.max(0, parsedAmount - completedAmount);
         const parsedMonthCount = parseMonthCount(monthCount);
         const nextPeriod = parsedMonthCount
             ? monthCountToPeriod(parsedMonthCount)
@@ -196,13 +190,18 @@ router.put('/:id', async (req, res) => {
             return res.status(400).json({ error: 'Jumlah bulan target tidak valid' });
         }
 
+        const currentTotalMonths = diffInCalendarMonthsInclusive(current.createdAt, current.dueDate) || current.remainingMonths || 1;
+        const completedMonths = Math.max(0, currentTotalMonths - current.remainingMonths);
+        const nextRemainingMonths = Math.max(0, (parsedMonthCount || currentTotalMonths) - completedMonths);
+
         const updated = await prisma.target.update({
             where: { id: req.params.id },
             data: {
                 title: String(title),
                 totalAmount: parsedAmount,
-                remainingAmount: nextRemaining,
-                isActive: nextRemaining > 0,
+                remainingMonths: nextRemainingMonths,
+                remainingAmount: parsedAmount * nextRemainingMonths,
+                isActive: nextRemainingMonths > 0,
                 period: nextPeriod,
                 dueDate: parsedMonthCount
                     ? dueDateFromMonthCount(parsedMonthCount, current.createdAt)

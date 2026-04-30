@@ -8,6 +8,7 @@ export type TargetItem = {
     title: string;
     totalAmount: number;
     remainingAmount: number;
+    remainingMonths: number;
     period: 'YEARLY' | 'FIVE_YEAR';
     isActive: boolean;
     lastContributionAt?: string | null;
@@ -74,18 +75,15 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
     return Math.max(1, months);
 };
 
-const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' | 'remainingAmount' | 'createdAt' | 'dueDate'>) => {
-    if (target.remainingAmount <= 0) return 0;
-    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
-    const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
-    return Math.max(0, Math.min(target.remainingAmount, rawInstallment));
-};
+const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' | 'remainingMonths'>) =>
+    target.remainingMonths > 0 ? target.totalAmount : 0;
 
 const targetSelectFields = (includeLastContributionAt: boolean) => `
     id,
     title,
     totalAmount,
     remainingAmount,
+    remainingMonths,
     period,
     isActive,
     ${includeLastContributionAt ? 'lastContributionAt,' : ''}
@@ -126,6 +124,7 @@ const normalizeTarget = (row: any): TargetItem => ({
     title: row.title,
     totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
     remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0),
+    remainingMonths: Number(row.remainingMonths ?? row.remaining_months ?? 0),
     period: row.period,
     isActive: Boolean(row.isActive ?? row.is_active),
     lastContributionAt: row.lastContributionAt ?? row.last_contribution_at ?? null,
@@ -188,7 +187,8 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
                     id: crypto.randomUUID(),
                     title: payload.title.trim(),
                     totalAmount: payload.totalAmount,
-                    remainingAmount: payload.totalAmount,
+                    remainingMonths: parsedMonthCount,
+                    remainingAmount: payload.totalAmount * parsedMonthCount,
                     period: monthCountToPeriod(parsedMonthCount),
                     ownerId: payload.ownerId,
                     dueDate: dueDateFromMonthCount(parsedMonthCount),
@@ -218,7 +218,7 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
         const sb = ensureSupabase();
         const { data: current, error: currentError } = await sb
             .from('Target')
-            .select('totalAmount, remainingAmount, createdAt')
+            .select('totalAmount, remainingAmount, remainingMonths, createdAt, dueDate')
             .eq('id', id)
             .limit(1)
             .maybeSingle();
@@ -226,8 +226,9 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
         if (currentError) throw currentError;
         if (!current) throw new Error('Target tidak ditemukan');
 
-        const completedAmount = Math.max(0, Number(current.totalAmount || 0) - Number(current.remainingAmount || 0));
-        const nextRemaining = Math.max(0, payload.totalAmount - completedAmount);
+        const currentTotalMonths = diffInCalendarMonthsInclusive(current.createdAt, current.dueDate) || Number(current.remainingMonths || 1);
+        const completedMonths = Math.max(0, currentTotalMonths - Number(current.remainingMonths || 0));
+        const nextRemainingMonths = Math.max(0, parsedMonthCount - completedMonths);
 
         const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
             sb
@@ -235,8 +236,9 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
                 .update({
                     title: payload.title.trim(),
                     totalAmount: payload.totalAmount,
-                    remainingAmount: nextRemaining,
-                    isActive: nextRemaining > 0,
+                    remainingMonths: nextRemainingMonths,
+                    remainingAmount: payload.totalAmount * nextRemainingMonths,
+                    isActive: nextRemainingMonths > 0,
                     period: monthCountToPeriod(parsedMonthCount),
                     dueDate: dueDateFromMonthCount(parsedMonthCount, current.createdAt ? new Date(current.createdAt) : new Date()),
                     updatedAt: new Date().toISOString()
@@ -284,7 +286,7 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
         if (!current) throw new Error('Target tidak ditemukan');
 
         const normalizedCurrent = normalizeTarget(current);
-        if (!normalizedCurrent.isActive || normalizedCurrent.remainingAmount <= 0) {
+        if (!normalizedCurrent.isActive || normalizedCurrent.remainingMonths <= 0) {
             throw new Error('Target ini sudah selesai');
         }
 
@@ -299,11 +301,13 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
         }
 
         const appliedAmount = getSuggestedContributionAmount(normalizedCurrent);
-        const nextRemaining = Math.max(0, normalizedCurrent.remainingAmount - appliedAmount);
+        const nextRemainingMonths = Math.max(0, normalizedCurrent.remainingMonths - 1);
+        const nextRemaining = normalizedCurrent.totalAmount * nextRemainingMonths;
 
         const updatePayload: Record<string, unknown> = {
+            remainingMonths: nextRemainingMonths,
             remainingAmount: nextRemaining,
-            isActive: nextRemaining > 0,
+            isActive: nextRemainingMonths > 0,
             updatedAt: now.toISOString()
         };
         if (supportsLastContributionAt !== false) {
@@ -314,8 +318,9 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
             sb
                 .from('Target')
                 .update(includeLastContributionAt ? updatePayload : {
+                    remainingMonths: nextRemainingMonths,
                     remainingAmount: nextRemaining,
-                    isActive: nextRemaining > 0,
+                    isActive: nextRemainingMonths > 0,
                     updatedAt: now.toISOString()
                 })
                 .eq('id', id)

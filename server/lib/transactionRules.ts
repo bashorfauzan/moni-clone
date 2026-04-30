@@ -12,8 +12,7 @@ export const isSourceOnlyTransactionType = (type: TransactionType) =>
 export const isDualAccountTransactionType = (type: TransactionType) =>
     normalizeTransactionType(type) === TransactionType.TRANSFER;
 
-export const shouldReduceTargetsForTransaction = (type: TransactionType) =>
-    normalizeTransactionType(type) === TransactionType.EXPENSE;
+export const shouldReduceTargetsForTransaction = (_type: TransactionType) => false;
 
 export const getDefaultActivityName = (type: TransactionType) => {
     const normalized = normalizeTransactionType(type);

@@ -141,6 +141,7 @@ model Target {
   title           String
   totalAmount     Float
   remainingAmount Float
+  remainingMonths Int
   period          TargetPeriod
   isActive        Boolean      @default(true)
   lastContributionAt DateTime?

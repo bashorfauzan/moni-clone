@@ -257,8 +257,10 @@ router.post('/restore-backup', async (req, res) => {
                         title: String(target.title || 'Target'),
                         totalAmount: Number(target.totalAmount || 0),
                         remainingAmount: Number(target.remainingAmount || 0),
+                        remainingMonths: Number(target.remainingMonths || 0),
                         period: target.period,
                         isActive: Boolean(target.isActive),
+                        lastContributionAt: asDate(target.lastContributionAt) ?? null,
                         dueDate: asDate(target.dueDate) ?? null,
                         ownerId: String(target.ownerId),
                         createdAt: asDate(target.createdAt),
@@ -533,14 +535,18 @@ router.post('/reset-data', async (req, res) => {
             } else if (shouldResetTransactions) {
                 try {
                     const targets = await trx.target.findMany({
-                        select: { id: true, totalAmount: true }
+                        select: { id: true, totalAmount: true, remainingMonths: true, dueDate: true, createdAt: true }
                     });
 
                     for (const target of targets) {
+                        const totalMonths = target.dueDate
+                            ? Math.max(1, ((target.dueDate.getFullYear() - target.createdAt.getFullYear()) * 12) + (target.dueDate.getMonth() - target.createdAt.getMonth()) + 1)
+                            : Math.max(1, target.remainingMonths || 1);
                         await trx.target.update({
                             where: { id: target.id },
                             data: {
-                                remainingAmount: target.totalAmount,
+                                remainingMonths: totalMonths,
+                                remainingAmount: target.totalAmount * totalMonths,
                                 isActive: true
                             }
                         });
