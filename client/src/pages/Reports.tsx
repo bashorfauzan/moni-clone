@@ -43,6 +43,63 @@ const getWealthDelta = (tx: TransactionItem) => {
     return 0;
 };
 
+const getLiquidCashDelta = (tx: TransactionItem) => {
+    const kind = getReportTransactionKind(tx);
+    if (kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION') return tx.amount;
+    if (kind === 'EXPENSE' || kind === 'INVESTMENT_TOP_UP') return -tx.amount;
+    return 0;
+};
+
+const getPeriodBounds = (currentDate: Date, viewMode: 'MONTHLY' | 'YEARLY') => {
+    const today = new Date();
+    const periodStart = viewMode === 'MONTHLY'
+        ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+        : new Date(currentDate.getFullYear(), 0, 1);
+    const periodEnd = viewMode === 'MONTHLY'
+        ? new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+        : new Date(currentDate.getFullYear(), 11, 31);
+    const cappedEnd = periodEnd > today ? today : periodEnd;
+    return { periodStart, cappedEnd };
+};
+
+const estimateEndingBalanceForPeriod = ({
+    transactions,
+    currentBalance,
+    currentDate,
+    viewMode,
+    getDelta,
+}: {
+    transactions: TransactionItem[];
+    currentBalance: number;
+    currentDate: Date;
+    viewMode: 'MONTHLY' | 'YEARLY';
+    getDelta: (tx: TransactionItem) => number;
+}) => {
+    const { periodStart, cappedEnd } = getPeriodBounds(currentDate, viewMode);
+    const deltaByDate = new Map<string, number>();
+
+    transactions.forEach((tx) => {
+        const delta = getDelta(tx);
+        if (!delta) return;
+        const key = toDateKey(new Date(tx.date));
+        deltaByDate.set(key, (deltaByDate.get(key) || 0) + delta);
+    });
+
+    let reverseBalance = currentBalance;
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+
+    while (cursor >= periodStart) {
+        if (toDateKey(cursor) === toDateKey(cappedEnd)) {
+            return reverseBalance;
+        }
+        reverseBalance -= deltaByDate.get(toDateKey(cursor)) || 0;
+        cursor.setDate(cursor.getDate() - 1);
+    }
+
+    return 0;
+};
+
 const buildWealthHistoryData = ({
     transactions,
     totalWealth,
@@ -54,14 +111,8 @@ const buildWealthHistoryData = ({
     currentDate: Date;
     viewMode: 'MONTHLY' | 'YEARLY';
 }) => {
+    const { periodStart, cappedEnd } = getPeriodBounds(currentDate, viewMode);
     const today = new Date();
-    const periodStart = viewMode === 'MONTHLY'
-        ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        : new Date(currentDate.getFullYear(), 0, 1);
-    const periodEnd = viewMode === 'MONTHLY'
-        ? new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-        : new Date(currentDate.getFullYear(), 11, 31);
-    const cappedEnd = periodEnd > today ? today : periodEnd;
 
     const deltaByDate = new Map<string, number>();
     transactions.forEach((tx) => {
@@ -125,6 +176,12 @@ const Reports = () => {
         totalVolume: 0,
         totalWealth: 0,
         zakatAmount: 0,
+        snapshotData: {
+            investmentTopUp: 0,
+            investmentLiquidation: 0,
+            endingLiquidCash: 0,
+            netCashFlow: 0
+        },
         categoryData: [],
         trendData: [],
         wealthHistoryData: [],
@@ -221,6 +278,10 @@ const Reports = () => {
                     { Metrik: 'Periode', Nilai: periodLabel },
                     { Metrik: 'Pemasukan', Nilai: data.totalIncome },
                     { Metrik: 'Pengeluaran', Nilai: data.totalExpense },
+                    { Metrik: 'Transfer ke Investasi', Nilai: data.snapshotData?.investmentTopUp || 0 },
+                    { Metrik: 'Pencairan Investasi', Nilai: data.snapshotData?.investmentLiquidation || 0 },
+                    { Metrik: 'Sisa Kas Akhir Periode', Nilai: data.snapshotData?.endingLiquidCash || 0 },
+                    { Metrik: 'Arus Kas Bersih', Nilai: data.snapshotData?.netCashFlow || 0 },
                     { Metrik: 'Perputaran', Nilai: data.totalVolume },
                     { Metrik: 'Total Kekayaan', Nilai: data.totalWealth },
                     { Metrik: 'Estimasi Zakat', Nilai: data.zakatAmount }
@@ -322,10 +383,24 @@ const Reports = () => {
                     return kind === 'EXPENSE' || kind === 'INVESTMENT_OUT';
                 })
                 .reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const investmentTopUp = filtered
+                .filter((tx: TransactionItem) => getReportTransactionKind(tx) === 'INVESTMENT_TOP_UP')
+                .reduce((acc: number, tx: TransactionItem) => acc + tx.amount, 0);
+            const investmentLiquidation = filtered
+                .filter((tx: TransactionItem) => getReportTransactionKind(tx) === 'INVESTMENT_LIQUIDATION')
+                .reduce((acc: number, tx: TransactionItem) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
             
             const totalWealth = liquidBalance + totalRdnAssets;
             const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const endingLiquidCash = estimateEndingBalanceForPeriod({
+                transactions,
+                currentBalance: liquidBalance,
+                currentDate,
+                viewMode,
+                getDelta: getLiquidCashDelta
+            });
+            const netCashFlow = totalIncome - totalExpense - investmentTopUp;
             const wealthHistoryData = buildWealthHistoryData({
                 transactions,
                 totalWealth,
@@ -374,6 +449,12 @@ const Reports = () => {
                 totalVolume,
                 totalWealth,
                 zakatAmount,
+                snapshotData: {
+                    investmentTopUp,
+                    investmentLiquidation,
+                    endingLiquidCash,
+                    netCashFlow
+                },
                 categoryData,
                 trendData,
                 wealthHistoryData,
@@ -533,6 +614,45 @@ const Reports = () => {
                             </div>
                         ))}
                     </div>
+                </div>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Snapshot Periode</h2>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            Ringkasan cepat untuk arus kas dan posisi kas pada akhir periode.
+                        </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                        Bank + E-Wallet
+                    </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {[
+                        { label: 'Pemasukan', value: data.totalIncome, tone: 'text-emerald-600 bg-emerald-50' },
+                        { label: 'Pengeluaran', value: data.totalExpense, tone: 'text-rose-600 bg-rose-50' },
+                        { label: 'Ke Investasi', value: data.snapshotData.investmentTopUp, tone: 'text-amber-700 bg-amber-50' },
+                        { label: 'Sisa Kas', value: data.snapshotData.endingLiquidCash, tone: 'text-blue-700 bg-blue-50' },
+                    ].map((item) => (
+                        <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                            <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${item.tone}`}>
+                                {item.label}
+                            </span>
+                            <p className="mt-3 text-base font-black text-slate-900 sm:text-lg">
+                                {formatCurrency(item.value)}
+                            </p>
+                        </div>
+                    ))}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-[11px] text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                        Dana kembali dari investasi pada periode ini: <span className="font-bold text-slate-700">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
+                    </p>
+                    <p>
+                        Arus kas bersih periode ini: <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
+                    </p>
                 </div>
             </div>
 
