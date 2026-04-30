@@ -210,6 +210,35 @@ const MenuPage = () => {
     const [resetConfirmationText, setResetConfirmationText] = useState('');
     const [resetFeedback, setResetFeedback] = useState<{ type: 'error' | 'success'; message: string } | null>(null);
 
+    const resetSecurityPinState = () => {
+        setSecurityPinStep('menu');
+        setSecurityPinInput('');
+        setSecurityPinConfirm('');
+        setSecurityPinError('');
+    };
+
+    const closeSecurityModal = () => {
+        setIsSecurityModalOpen(false);
+        resetSecurityPinState();
+    };
+
+    const handleSaveSecurityPin = () => {
+        if (securityPinInput.length !== 6 || securityPinConfirm.length !== 6) {
+            setSecurityPinError('PIN harus 6 digit.');
+            return;
+        }
+
+        if (securityPinInput !== securityPinConfirm) {
+            setSecurityPinError('PIN tidak cocok. Coba lagi.');
+            setSecurityPinConfirm('');
+            return;
+        }
+
+        setupSecurity(securityPinInput);
+        closeSecurityModal();
+        alert('PIN berhasil diatur! Gunakan PIN ini saat membuka aplikasi dan menyimpan transaksi.');
+    };
+
     const fetchMeta = async () => {
         try {
             const data = await fetchMasterMeta();
@@ -1222,7 +1251,7 @@ const MenuPage = () => {
                     {/* Keamanan Transaksi */}
                     <button
                         className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
-                        onClick={() => { setSecurityPinStep('menu'); setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setIsSecurityModalOpen(true); }}
+                        onClick={() => { resetSecurityPinState(); setIsSecurityModalOpen(true); }}
                     >
                         <div className="flex items-center gap-3 min-w-0">
                             <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
@@ -2725,7 +2754,7 @@ const MenuPage = () => {
             {isSecurityModalOpen && (
                 <div
                     className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/65 p-4 backdrop-blur-sm sm:items-center"
-                    onMouseDown={() => setIsSecurityModalOpen(false)}
+                    onMouseDown={closeSecurityModal}
                 >
                     <div
                         className="w-full max-w-md rounded-[28px] bg-white p-5 shadow-[0_30px_80px_-40px_rgba(15,23,42,0.55)] ring-1 ring-slate-200"
@@ -2744,7 +2773,7 @@ const MenuPage = () => {
                                     </p>
                                 </div>
                             </div>
-                            <button onClick={() => setIsSecurityModalOpen(false)} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">
+                            <button onClick={closeSecurityModal} className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200">
                                 <X size={16} />
                             </button>
                         </div>
@@ -2823,7 +2852,7 @@ const MenuPage = () => {
                                                 const ok = await verifySecurity('Nonaktifkan Keamanan');
                                                 if (ok) {
                                                     removeSecurity();
-                                                    setIsSecurityModalOpen(false);
+                                                    closeSecurityModal();
                                                     alert('Keamanan transaksi dinonaktifkan.');
                                                 }
                                             }}
@@ -2889,16 +2918,7 @@ const MenuPage = () => {
                                 <button
                                     disabled={securityPinConfirm.length !== 6}
                                     className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
-                                    onClick={() => {
-                                        if (securityPinInput !== securityPinConfirm) {
-                                            setSecurityPinError('PIN tidak cocok. Coba lagi.');
-                                            setSecurityPinConfirm('');
-                                            return;
-                                        }
-                                        setupSecurity(securityPinInput);
-                                        setIsSecurityModalOpen(false);
-                                        alert('PIN berhasil diatur! Gunakan PIN ini saat membuka aplikasi dan menyimpan transaksi.');
-                                    }}
+                                    onClick={handleSaveSecurityPin}
                                 >
                                     <Save size={16} /> Simpan PIN
                                 </button>

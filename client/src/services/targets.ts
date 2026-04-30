@@ -34,6 +34,8 @@ export type TargetWritePayload = {
     ownerId?: string;
 };
 
+let supportsLastContributionAt: boolean | null = null;
+
 const ensureSupabase = () => {
     if (!supabase) {
         throw new Error('Supabase belum terhubung');
@@ -79,6 +81,46 @@ const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' |
     return Math.max(0, Math.min(target.remainingAmount, rawInstallment));
 };
 
+const targetSelectFields = (includeLastContributionAt: boolean) => `
+    id,
+    title,
+    totalAmount,
+    remainingAmount,
+    period,
+    isActive,
+    ${includeLastContributionAt ? 'lastContributionAt,' : ''}
+    dueDate,
+    createdAt,
+    ownerId,
+    owner:Owner(id, name)
+`;
+
+const isMissingLastContributionColumnError = (error: unknown) => {
+    const message = getErrorMessage(error, '').toLowerCase();
+    return message.includes('lastcontributionat') && (
+        message.includes('does not exist')
+        || message.includes('column')
+        || message.includes('schema cache')
+    );
+};
+
+const withTargetSelectFallback = async <T>(runner: (includeLastContributionAt: boolean) => Promise<T>) => {
+    const preferred = supportsLastContributionAt !== false;
+
+    try {
+        const result = await runner(preferred);
+        if (preferred) supportsLastContributionAt = true;
+        return result;
+    } catch (error) {
+        if (!preferred || !isMissingLastContributionColumnError(error)) {
+            throw error;
+        }
+
+        supportsLastContributionAt = false;
+        return runner(false);
+    }
+};
+
 const normalizeTarget = (row: any): TargetItem => ({
     id: row.id,
     title: row.title,
@@ -97,23 +139,14 @@ const normalizeTarget = (row: any): TargetItem => ({
 
 export const fetchTargets = async (): Promise<TargetsResponse> => {
     if (useDirectSupabaseData && supabase) {
-        const { data, error } = await supabase
-            .from('Target')
-            .select(`
-                id,
-                title,
-                totalAmount,
-                remainingAmount,
-                period,
-                isActive,
-                lastContributionAt,
-                dueDate,
-                createdAt,
-                ownerId,
-                owner:Owner(id, name)
-            `)
-            .order('isActive', { ascending: false })
-            .order('createdAt', { ascending: false });
+        const sb = ensureSupabase();
+        const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
+            sb
+                .from('Target')
+                .select(targetSelectFields(includeLastContributionAt))
+                .order('isActive', { ascending: false })
+                .order('createdAt', { ascending: false })
+        );
 
         if (!error && Array.isArray(data)) {
             recordDataAccessMode('targets', 'direct-supabase', 'Target berhasil dibaca langsung dari Supabase.');
@@ -148,34 +181,24 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
 
     if (useDirectSupabaseData && supabase) {
         const timestamp = new Date().toISOString();
-        const { data, error } = await ensureSupabase()
-            .from('Target')
-            .insert({
-                id: crypto.randomUUID(),
-                title: payload.title.trim(),
-                totalAmount: payload.totalAmount,
-                remainingAmount: payload.totalAmount,
-                period: monthCountToPeriod(parsedMonthCount),
-                ownerId: payload.ownerId,
-                dueDate: dueDateFromMonthCount(parsedMonthCount),
-                isActive: true,
-                createdAt: timestamp,
-                updatedAt: timestamp
-            })
-            .select(`
-                id,
-                title,
-                totalAmount,
-                remainingAmount,
-                period,
-                isActive,
-                lastContributionAt,
-                dueDate,
-                createdAt,
-                ownerId,
-                owner:Owner(id, name)
-            `)
-            .single();
+        const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
+            ensureSupabase()
+                .from('Target')
+                .insert({
+                    id: crypto.randomUUID(),
+                    title: payload.title.trim(),
+                    totalAmount: payload.totalAmount,
+                    remainingAmount: payload.totalAmount,
+                    period: monthCountToPeriod(parsedMonthCount),
+                    ownerId: payload.ownerId,
+                    dueDate: dueDateFromMonthCount(parsedMonthCount),
+                    isActive: true,
+                    createdAt: timestamp,
+                    updatedAt: timestamp
+                })
+                .select(targetSelectFields(includeLastContributionAt))
+                .single()
+        );
 
         if (error) throw error;
         recordDataAccessMode('targets', 'direct-supabase', 'Create target berhasil langsung ke Supabase.');
@@ -206,32 +229,22 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
         const completedAmount = Math.max(0, Number(current.totalAmount || 0) - Number(current.remainingAmount || 0));
         const nextRemaining = Math.max(0, payload.totalAmount - completedAmount);
 
-        const { data, error } = await sb
-            .from('Target')
-            .update({
-                title: payload.title.trim(),
-                totalAmount: payload.totalAmount,
-                remainingAmount: nextRemaining,
-                isActive: nextRemaining > 0,
-                period: monthCountToPeriod(parsedMonthCount),
-                dueDate: dueDateFromMonthCount(parsedMonthCount, current.createdAt ? new Date(current.createdAt) : new Date()),
-                updatedAt: new Date().toISOString()
-            })
-            .eq('id', id)
-            .select(`
-                id,
-                title,
-                totalAmount,
-                remainingAmount,
-                period,
-                isActive,
-                lastContributionAt,
-                dueDate,
-                createdAt,
-                ownerId,
-                owner:Owner(id, name)
-            `)
-            .single();
+        const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
+            sb
+                .from('Target')
+                .update({
+                    title: payload.title.trim(),
+                    totalAmount: payload.totalAmount,
+                    remainingAmount: nextRemaining,
+                    isActive: nextRemaining > 0,
+                    period: monthCountToPeriod(parsedMonthCount),
+                    dueDate: dueDateFromMonthCount(parsedMonthCount, current.createdAt ? new Date(current.createdAt) : new Date()),
+                    updatedAt: new Date().toISOString()
+                })
+                .eq('id', id)
+                .select(targetSelectFields(includeLastContributionAt))
+                .single()
+        );
 
         if (error) throw error;
         recordDataAccessMode('targets', 'direct-supabase', 'Update target berhasil langsung ke Supabase.');
@@ -258,24 +271,14 @@ export const deleteTarget = async (id: string): Promise<void> => {
 export const markTargetAsTransferred = async (id: string): Promise<TargetContributionResult> => {
     if (useDirectSupabaseData && supabase) {
         const sb = ensureSupabase();
-        const { data: current, error: currentError } = await sb
-            .from('Target')
-            .select(`
-                id,
-                title,
-                totalAmount,
-                remainingAmount,
-                period,
-                isActive,
-                lastContributionAt,
-                dueDate,
-                createdAt,
-                ownerId,
-                owner:Owner(id, name)
-            `)
-            .eq('id', id)
-            .limit(1)
-            .maybeSingle();
+        const { data: current, error: currentError } = await withTargetSelectFallback(async (includeLastContributionAt) =>
+            sb
+                .from('Target')
+                .select(targetSelectFields(includeLastContributionAt))
+                .eq('id', id)
+                .limit(1)
+                .maybeSingle()
+        );
 
         if (currentError) throw currentError;
         if (!current) throw new Error('Target tidak ditemukan');
@@ -298,29 +301,27 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
         const appliedAmount = getSuggestedContributionAmount(normalizedCurrent);
         const nextRemaining = Math.max(0, normalizedCurrent.remainingAmount - appliedAmount);
 
-        const { data, error } = await sb
-            .from('Target')
-            .update({
-                remainingAmount: nextRemaining,
-                isActive: nextRemaining > 0,
-                lastContributionAt: now.toISOString(),
-                updatedAt: now.toISOString()
-            })
-            .eq('id', id)
-            .select(`
-                id,
-                title,
-                totalAmount,
-                remainingAmount,
-                period,
-                isActive,
-                lastContributionAt,
-                dueDate,
-                createdAt,
-                ownerId,
-                owner:Owner(id, name)
-            `)
-            .single();
+        const updatePayload: Record<string, unknown> = {
+            remainingAmount: nextRemaining,
+            isActive: nextRemaining > 0,
+            updatedAt: now.toISOString()
+        };
+        if (supportsLastContributionAt !== false) {
+            updatePayload.lastContributionAt = now.toISOString();
+        }
+
+        const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
+            sb
+                .from('Target')
+                .update(includeLastContributionAt ? updatePayload : {
+                    remainingAmount: nextRemaining,
+                    isActive: nextRemaining > 0,
+                    updatedAt: now.toISOString()
+                })
+                .eq('id', id)
+                .select(targetSelectFields(includeLastContributionAt))
+                .single()
+        );
 
         if (error) throw error;
         recordDataAccessMode('targets', 'direct-supabase', 'Setoran target berhasil diproses langsung di Supabase.');

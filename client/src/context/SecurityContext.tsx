@@ -47,6 +47,7 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const [pinError, setPinError] = useState(false);
 
     const isSecurityEnabled = !!pinHash;
+    const getCurrentPinHash = () => pinHash || localStorage.getItem('app-pin-hash');
 
     useEffect(() => {
         // App open lock check
@@ -252,7 +253,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
 
     const verifySecurity = (reason: string): Promise<boolean> => {
         return new Promise((resolve) => {
-            if (!isSecurityEnabled) {
+            const currentPinHash = getCurrentPinHash();
+            if (!currentPinHash) {
                 resolve(true);
                 return;
             }
@@ -286,8 +288,9 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
             setPinError(false);
 
             if (newVal.length === 6) {
+                const currentPinHash = getCurrentPinHash();
                 // Verify
-                if (hashString(newVal) === pinHash) {
+                if (currentPinHash && hashString(newVal) === currentPinHash) {
                     // Success
                     setIsLocked(false);
                     if (resolveAuth) resolveAuth(true);
