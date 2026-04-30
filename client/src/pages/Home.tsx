@@ -18,6 +18,7 @@ import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../context/SecurityContext';
 import {
+    inferNotificationCategoryLabel,
     isInvestmentIncome,
     isInvestmentTransfer,
     isTopUpLikeTransfer,
@@ -816,12 +817,18 @@ const Home = () => {
                     setIsNotificationDrawerOpen(false); // Tutup drawer dulu
                     const prefill = buildNotificationPrefill(item);
                     const normalizedType = normalizeTransactionType(item.parsedType);
+                    const suggestedCategory = inferNotificationCategoryLabel({
+                        title: item.title,
+                        messageText: item.messageText,
+                        sourceApp: item.sourceApp,
+                        parsedType: item.parsedType
+                    });
 
                     openModal(
                         (normalizedType as any) || 'EXPENSE',
                         {
                             amount: overrideAmount ?? item.parsedAmount ?? undefined,
-                            description: item.parsedDescription || item.messageText?.slice(0, 100) || item.parseNotes || undefined,
+                            description: suggestedCategory || item.parsedDescription || item.messageText?.slice(0, 100) || item.parseNotes || undefined,
                             type: (normalizedType as any) || undefined,
                             notificationInboxId: item.id,
                             ownerId: prefill.ownerId,

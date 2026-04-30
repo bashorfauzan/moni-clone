@@ -19,6 +19,11 @@ export type TargetsResponse = {
     summary: { activeRemaining: number };
 };
 
+export type TargetContributionResult = {
+    target: TargetItem;
+    appliedAmount: number;
+};
+
 export type TargetWritePayload = {
     title: string;
     totalAmount: number;
@@ -53,6 +58,21 @@ const dueDateFromMonthCount = (monthCount: number, baseDate = new Date()) => {
     const dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthCount, 0);
     dueDate.setHours(23, 59, 59, 999);
     return dueDate.toISOString();
+};
+
+const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: string | null) => {
+    if (!startValue || !endValue) return null;
+    const start = new Date(startValue);
+    const end = new Date(endValue);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    const months = ((end.getFullYear() - start.getFullYear()) * 12) + (end.getMonth() - start.getMonth()) + 1;
+    return Math.max(1, months);
+};
+
+const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' | 'remainingAmount' | 'createdAt' | 'dueDate'>) => {
+    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+    const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
+    return Math.max(1, Math.min(target.remainingAmount, rawInstallment));
 };
 
 const normalizeTarget = (row: any): TargetItem => ({
@@ -216,4 +236,72 @@ export const deleteTarget = async (id: string): Promise<void> => {
     }
 
     await api.delete(`/targets/${id}`);
+};
+
+export const markTargetAsTransferred = async (id: string): Promise<TargetContributionResult> => {
+    if (useDirectSupabaseData && supabase) {
+        const sb = ensureSupabase();
+        const { data: current, error: currentError } = await sb
+            .from('Target')
+            .select(`
+                id,
+                title,
+                totalAmount,
+                remainingAmount,
+                period,
+                isActive,
+                dueDate,
+                createdAt,
+                ownerId,
+                owner:Owner(id, name)
+            `)
+            .eq('id', id)
+            .limit(1)
+            .maybeSingle();
+
+        if (currentError) throw currentError;
+        if (!current) throw new Error('Target tidak ditemukan');
+
+        const normalizedCurrent = normalizeTarget(current);
+        if (!normalizedCurrent.isActive || normalizedCurrent.remainingAmount <= 0) {
+            throw new Error('Target ini sudah selesai');
+        }
+
+        const appliedAmount = getSuggestedContributionAmount(normalizedCurrent);
+        const nextRemaining = Math.max(0, normalizedCurrent.remainingAmount - appliedAmount);
+
+        const { data, error } = await sb
+            .from('Target')
+            .update({
+                remainingAmount: nextRemaining,
+                isActive: nextRemaining > 0,
+                updatedAt: new Date().toISOString()
+            })
+            .eq('id', id)
+            .select(`
+                id,
+                title,
+                totalAmount,
+                remainingAmount,
+                period,
+                isActive,
+                dueDate,
+                createdAt,
+                ownerId,
+                owner:Owner(id, name)
+            `)
+            .single();
+
+        if (error) throw error;
+        return {
+            target: normalizeTarget(data),
+            appliedAmount
+        };
+    }
+
+    const response = await api.post(`/targets/${id}/mark-progress`);
+    return {
+        target: normalizeTarget(response.data.target),
+        appliedAmount: Number(response.data.appliedAmount || 0)
+    };
 };

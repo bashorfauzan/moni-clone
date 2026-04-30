@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
-import { createTarget, deleteTarget, fetchTargets, type TargetItem, updateTarget } from '../services/targets';
+import { createTarget, deleteTarget, fetchTargets, markTargetAsTransferred, type TargetItem, updateTarget } from '../services/targets';
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
@@ -31,6 +31,7 @@ const Targets = () => {
     const [targets, setTargets] = useState<TargetItem[]>([]);
     const [transactions, setTransactions] = useState<TransactionItem[]>([]);
     const [submitting, setSubmitting] = useState(false);
+    const [markingTargetId, setMarkingTargetId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
     const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
@@ -135,6 +136,21 @@ const Targets = () => {
         }
     };
 
+    const handleMarkTargetTransferred = async (target: TargetItem) => {
+        if (!target.isActive) return;
+
+        setMarkingTargetId(target.id);
+        try {
+            const result = await markTargetAsTransferred(target.id);
+            await refetchTargets();
+            alert(`Setoran target dicatat sebesar ${formatCurrency(result.appliedAmount)}.`);
+        } catch (error) {
+            alert(getErrorMessage(error, 'Gagal menandai setoran target'));
+        } finally {
+            setMarkingTargetId(null);
+        }
+    };
+
     if (loading) return <Spinner message="Menganalisis Likuiditas..." />;
 
     const activeTargets = targets.filter(t => t.isActive);
@@ -228,6 +244,12 @@ const Targets = () => {
                     const monthsLeft = target.isActive
                         ? Math.max(0, diffInCalendarMonthsInclusive(now.toISOString(), target.dueDate) || 0)
                         : 0;
+                    const suggestedContribution = Math.max(1, Math.min(
+                        target.remainingAmount,
+                        Math.ceil(target.totalAmount / totalMonths)
+                    ));
+                    const paidAmount = Math.max(0, target.totalAmount - target.remainingAmount);
+                    const progressPercent = target.totalAmount <= 0 ? 100 : Math.min(100, (paidAmount / target.totalAmount) * 100);
 
                     return (
                         <div
@@ -289,6 +311,57 @@ const Targets = () => {
                                     <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
                                         {monthsLeft} bulan lagi
                                     </p>
+                                </div>
+                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Sudah Terkumpul
+                                    </p>
+                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-emerald-600 sm:text-[18px]">
+                                        {formatCurrency(paidAmount)}
+                                    </p>
+                                </div>
+                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Sisa Target
+                                    </p>
+                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-rose-600 sm:text-[18px]">
+                                        {formatCurrency(target.remainingAmount)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="mt-4 rounded-3xl border border-slate-100 bg-slate-50/80 p-4">
+                                <div className="flex items-center justify-between gap-3">
+                                    <div>
+                                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Setoran Bulanan</p>
+                                        <p className="mt-1 text-base font-bold text-slate-900">
+                                            {formatCurrency(suggestedContribution)}
+                                        </p>
+                                    </div>
+                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                                        {Math.round(progressPercent)}%
+                                    </span>
+                                </div>
+
+                                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                                    <div
+                                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-500 transition-all"
+                                        style={{ width: `${progressPercent}%` }}
+                                    />
+                                </div>
+
+                                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                    <p className="text-[11px] text-slate-500">
+                                        Tombol ini mengurangi sisa target sebesar cicilan rekomendasi untuk periode berjalan.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => void handleMarkTargetTransferred(target)}
+                                        disabled={!target.isActive || markingTargetId === target.id}
+                                        className="inline-flex h-10 items-center justify-center rounded-2xl bg-slate-900 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    >
+                                        {markingTargetId === target.id ? 'Memproses...' : 'Sudah TF'}
+                                    </button>
                                 </div>
                             </div>
                         </div>

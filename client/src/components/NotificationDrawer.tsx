@@ -2,7 +2,7 @@ import { X, Bell, PencilLine } from 'lucide-react';
 import { useState } from 'react';
 import type { NotificationItem } from '../services/notificationInbox';
 import type { Account } from '../services/masterData';
-import { normalizeTransactionType } from '../lib/transactionRules';
+import { inferNotificationCategoryLabel, normalizeTransactionType } from '../lib/transactionRules';
 
 interface NotificationDrawerProps {
     isOpen: boolean;
@@ -182,6 +182,12 @@ const NotificationDrawer = ({
                             const isSecurityAlert = item.parseStatus === 'FAILED' && !item.parsedAmount && (item.parseNotes?.includes('Peringatan Keamanan') ?? false);
                             const tone = notificationTone(item.parseStatus, isSecurityAlert);
                             const confidenceLabel = formatConfidenceLabel(item.confidenceScore);
+                            const suggestedCategory = inferNotificationCategoryLabel({
+                                title: item.title,
+                                messageText: item.messageText,
+                                sourceApp: item.sourceApp,
+                                parsedType: item.parsedType
+                            });
                             return (
                                 <div key={item.id} className={`border rounded-2xl p-4 shadow-sm ${tone.shell}`}>
                                     <div className="flex items-start justify-between gap-3">
@@ -219,6 +225,11 @@ const NotificationDrawer = ({
                                         {item.parsedType ? (
                                             <span className="text-[10px] px-2 py-1 rounded-full bg-white/80 border border-white font-bold uppercase tracking-wide text-slate-600">
                                                 {formatParsedTypeLabel(item.parsedType)}
+                                            </span>
+                                        ) : null}
+                                        {suggestedCategory ? (
+                                            <span className="text-[10px] px-2 py-1 rounded-full bg-white/80 border border-white font-bold uppercase tracking-wide text-slate-600">
+                                                Saran: {suggestedCategory}
                                             </span>
                                         ) : null}
                                         {item.parsedAccountHint ? (

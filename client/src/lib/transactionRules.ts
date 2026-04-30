@@ -87,3 +87,34 @@ export const getDefaultActivityName = (type: TransactionTypeValue) => {
     if (normalized === 'EXPENSE') return 'Pengeluaran';
     return 'Transfer';
 };
+
+export const inferNotificationCategoryLabel = ({
+    messageText,
+    title,
+    sourceApp,
+    parsedType
+}: {
+    messageText?: string;
+    title?: string;
+    sourceApp?: string;
+    parsedType?: string;
+}) => {
+    const text = `${title || ''} ${messageText || ''} ${sourceApp || ''}`.toLowerCase();
+    const normalizedType = normalizeTransactionType(parsedType);
+
+    if (text.includes('gaji') || text.includes('salary')) return 'Gaji';
+    if (text.includes('listrik') || text.includes('pln')) return 'Listrik';
+    if (text.includes('air') || text.includes('pdam')) return 'Air';
+    if (text.includes('internet') || text.includes('wifi') || text.includes('indihome')) return 'Internet';
+    if (text.includes('pulsa') || text.includes('paket data')) return 'Pulsa';
+    if (text.includes('top up') || text.includes('topup') || text.includes('flip')) return 'Top Up';
+    if (text.includes('sukuk')) return 'Pendapatan Sukuk';
+    if (text.includes('dividen') || text.includes('imbal hasil')) return 'Hasil Investasi';
+    if (text.includes('investasi') || text.includes('rdn') || text.includes('sekuritas')) return 'Investasi';
+
+    if (normalizedType === 'INCOME') return 'Pemasukan';
+    if (normalizedType === 'EXPENSE') return 'Pengeluaran';
+    if (normalizedType === 'TRANSFER') return 'Transfer';
+
+    return undefined;
+};

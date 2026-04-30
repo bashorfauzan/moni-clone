@@ -25,6 +25,26 @@ const dueDateFromMonthCount = (monthCount: number, baseDate = new Date()) => {
     return dueDate;
 };
 
+const diffInCalendarMonthsInclusive = (startValue?: Date | null, endValue?: Date | null) => {
+    if (!startValue || !endValue) return null;
+    const start = new Date(startValue);
+    const end = new Date(endValue);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    const months = ((end.getFullYear() - start.getFullYear()) * 12) + (end.getMonth() - start.getMonth()) + 1;
+    return Math.max(1, months);
+};
+
+const getSuggestedContributionAmount = (target: {
+    totalAmount: number;
+    remainingAmount: number;
+    createdAt?: Date | null;
+    dueDate?: Date | null;
+}) => {
+    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+    const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
+    return Math.max(1, Math.min(target.remainingAmount, rawInstallment));
+};
+
 router.get('/', async (_req, res) => {
     try {
         const targets = await prisma.target.findMany({
@@ -106,6 +126,35 @@ router.delete('/:id', async (req, res) => {
         res.json({ ok: true });
     } catch (error) {
         res.status(400).json({ error: 'Gagal menghapus target' });
+    }
+});
+
+router.post('/:id/mark-progress', async (req, res) => {
+    try {
+        const current = await prisma.target.findUnique({ where: { id: req.params.id } });
+        if (!current) {
+            return res.status(404).json({ error: 'Target tidak ditemukan' });
+        }
+
+        if (!current.isActive || current.remainingAmount <= 0) {
+            return res.status(400).json({ error: 'Target ini sudah selesai' });
+        }
+
+        const appliedAmount = getSuggestedContributionAmount(current);
+        const nextRemaining = Math.max(0, current.remainingAmount - appliedAmount);
+
+        const updated = await prisma.target.update({
+            where: { id: req.params.id },
+            data: {
+                remainingAmount: nextRemaining,
+                isActive: nextRemaining > 0
+            },
+            include: { owner: true }
+        });
+
+        res.json({ target: updated, appliedAmount });
+    } catch (error: any) {
+        res.status(400).json({ error: error?.message || 'Gagal menandai setoran target' });
     }
 });
 
