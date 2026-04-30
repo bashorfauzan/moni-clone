@@ -111,6 +111,7 @@ const NotificationDrawer = ({
     // State untuk inline-form "Lengkapi Transaksi" (untuk notif tanpa nominal)
     const [completingId, setCompletingId] = useState<string | null>(null);
     const [completeAmount, setCompleteAmount] = useState('');
+    const [activeFilter, setActiveFilter] = useState<'ALL' | 'REVIEW' | 'APPROVED' | 'IGNORED'>('ALL');
 
     const handleCompleteSubmit = (item: NotificationItem) => {
         const amount = Number(completeAmount.replace(/[^0-9]/g, ''));
@@ -132,6 +133,28 @@ const NotificationDrawer = ({
             acc.type.toLowerCase().includes(lower)
         );
     };
+
+    const getNotificationBucket = (item: NotificationItem): 'REVIEW' | 'APPROVED' | 'IGNORED' => {
+        if (item.parseStatus === 'IGNORED') return 'IGNORED';
+        if (item.transaction?.isValidated || item.parseStatus === 'PARSED') return 'APPROVED';
+        return 'REVIEW';
+    };
+
+    const filterCounts = notifications.reduce((acc, item) => {
+        const bucket = getNotificationBucket(item);
+        acc.ALL += 1;
+        acc[bucket] += 1;
+        return acc;
+    }, {
+        ALL: 0,
+        REVIEW: 0,
+        APPROVED: 0,
+        IGNORED: 0
+    });
+
+    const visibleNotifications = notifications.filter((item) =>
+        activeFilter === 'ALL' ? true : getNotificationBucket(item) === activeFilter
+    );
 
     if (!isOpen) return null;
 
@@ -177,8 +200,28 @@ const NotificationDrawer = ({
                         </button>
                     </div>
 
-                    {notifications.length > 0 ? (
-                        notifications.map((item) => {
+                    <div className="mb-4 flex flex-wrap gap-2">
+                        {[
+                            { key: 'ALL', label: 'Semua', tone: 'bg-slate-100 text-slate-600' },
+                            { key: 'REVIEW', label: 'Perlu Review', tone: 'bg-amber-100 text-amber-700' },
+                            { key: 'APPROVED', label: 'Siap / Valid', tone: 'bg-emerald-100 text-emerald-700' },
+                            { key: 'IGNORED', label: 'Diabaikan', tone: 'bg-slate-200 text-slate-600' }
+                        ].map((item) => (
+                            <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => setActiveFilter(item.key as typeof activeFilter)}
+                                className={`rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                                    activeFilter === item.key ? item.tone : 'bg-white text-slate-500 border border-slate-200'
+                                }`}
+                            >
+                                {item.label} ({filterCounts[item.key as keyof typeof filterCounts]})
+                            </button>
+                        ))}
+                    </div>
+
+                    {visibleNotifications.length > 0 ? (
+                        visibleNotifications.map((item) => {
                             const isSecurityAlert = item.parseStatus === 'FAILED' && !item.parsedAmount && (item.parseNotes?.includes('Peringatan Keamanan') ?? false);
                             const tone = notificationTone(item.parseStatus, isSecurityAlert);
                             const confidenceLabel = formatConfidenceLabel(item.confidenceScore);
@@ -368,8 +411,14 @@ const NotificationDrawer = ({
                             <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
                                 <Bell size={24} className="text-slate-300" />
                             </div>
-                            <p className="text-sm font-semibold text-slate-600">Inbox Kosong</p>
-                            <p className="text-xs max-w-[200px] mx-auto mt-1">Belum ada notifikasi otomatis yang masuk hari ini.</p>
+                            <p className="text-sm font-semibold text-slate-600">
+                                {notifications.length === 0 ? 'Inbox Kosong' : 'Tidak ada item di filter ini'}
+                            </p>
+                            <p className="text-xs max-w-[220px] mx-auto mt-1">
+                                {notifications.length === 0
+                                    ? 'Belum ada notifikasi otomatis yang masuk hari ini.'
+                                    : 'Coba ganti filter untuk melihat notifikasi pada status lain.'}
+                            </p>
                         </div>
                     )}
                 </div>
