@@ -57,6 +57,20 @@ const summarizeFlows = (transactions: any[], accountId: string) => {
     return { modal, currentValue, depositCount, withdrawalCount, incomeCount };
 };
 
+const getInvestmentFlowLabel = (tx: any, accountId: string) => {
+    if (isInvestmentTransfer(tx) && tx.destinationAccountId === accountId) return 'Setoran Modal';
+    if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === accountId) return 'Pencairan';
+    if (isInvestmentIncome(tx) && tx.destinationAccountId === accountId) return 'Hasil Investasi';
+    return 'Investasi';
+};
+
+const getInvestmentFlowTone = (tx: any, accountId: string) => {
+    if (isInvestmentTransfer(tx) && tx.destinationAccountId === accountId) return 'bg-blue-50 text-blue-600';
+    if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === accountId) return 'bg-amber-50 text-amber-600';
+    if (isInvestmentIncome(tx) && tx.destinationAccountId === accountId) return 'bg-emerald-50 text-emerald-600';
+    return 'bg-slate-100 text-slate-500';
+};
+
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
     const [investmentIncomeAccounts, setInvestmentIncomeAccounts] = useState<any[]>([]);
@@ -185,6 +199,16 @@ const Investment = () => {
     const detailAccountSummary = detailAccount
         ? summarizeFlows(scopedTransactions, detailAccount.id)
         : null;
+    const detailAccountTransactions = detailAccount
+        ? scopedTransactions
+            .filter((tx: any) =>
+                (isInvestmentTransfer(tx) && tx.destinationAccountId === detailAccount.id)
+                || (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === detailAccount.id)
+                || (isInvestmentIncome(tx) && tx.destinationAccountId === detailAccount.id)
+            )
+            .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            .slice(0, 6)
+        : [];
 
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -428,6 +452,42 @@ const Investment = () => {
                                     <p className="mt-2 text-[11px] text-slate-600">
                                         Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil investasi {detailAccountSummary.incomeCount} transaksi.
                                     </p>
+                                )}
+                            </div>
+                            <div className="overflow-hidden rounded-2xl border border-slate-200">
+                                <div className="bg-slate-50 px-4 py-3">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Transaksi Pembentuk Angka</p>
+                                    <p className="mt-1 text-[11px] text-slate-500">
+                                        Daftar terbaru yang membentuk modal, pencairan, dan hasil investasi pada rekening ini.
+                                    </p>
+                                </div>
+                                {detailAccountTransactions.length > 0 ? detailAccountTransactions.map((tx: any) => (
+                                    <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
+                                        <div className="min-w-0">
+                                            <div className="flex flex-wrap items-center gap-2">
+                                                <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
+                                                    {getInvestmentFlowLabel(tx, detailAccount.id)}
+                                                </span>
+                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                    {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                </span>
+                                            </div>
+                                            <p className="mt-2 truncate text-sm font-semibold text-slate-900">
+                                                {tx.description || tx.activity?.name || 'Transaksi investasi'}
+                                            </p>
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                {tx.owner?.name || 'Tanpa owner'}
+                                                {(tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
+                                            </p>
+                                        </div>
+                                        <span className="shrink-0 text-sm font-black text-slate-900">
+                                            {formatCurrency(tx.amount)}
+                                        </span>
+                                    </div>
+                                )) : (
+                                    <div className="px-4 py-4 text-sm text-slate-500">
+                                        Belum ada transaksi investasi yang bisa ditelusuri untuk rekening ini.
+                                    </div>
                                 )}
                             </div>
                             <div className="overflow-hidden rounded-2xl border border-slate-200">
