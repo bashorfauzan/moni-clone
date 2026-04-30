@@ -10,6 +10,7 @@ export type NotificationItem = {
     parseStatus: 'PENDING' | 'PARSED' | 'IGNORED' | 'FAILED';
     parsedType?: string;
     parsedAmount?: number;
+    parsedDescription?: string;
     parsedAccountHint?: string;
     parseNotes?: string;
     confidenceScore?: number;
@@ -26,6 +27,7 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
     parseStatus: row.parseStatus ?? row.parse_status,
     parsedType: row.parsedType ?? row.parsed_type ?? undefined,
     parsedAmount: row.parsedAmount ?? row.parsed_amount ?? undefined,
+    parsedDescription: row.parsedDescription ?? row.parsed_description ?? undefined,
     parsedAccountHint: row.parsedAccountHint ?? row.parsed_account_hint ?? undefined,
     parseNotes: row.parseNotes ?? row.parse_notes ?? undefined,
     confidenceScore: row.confidenceScore ?? row.confidence_score ?? undefined,

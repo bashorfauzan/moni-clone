@@ -2,6 +2,7 @@ import { X, Bell, PencilLine } from 'lucide-react';
 import { useState } from 'react';
 import type { NotificationItem } from '../services/notificationInbox';
 import type { Account } from '../services/masterData';
+import { normalizeTransactionType } from '../lib/transactionRules';
 
 interface NotificationDrawerProps {
     isOpen: boolean;
@@ -34,15 +35,29 @@ const formatCompactTime = (value: string) => new Date(value).toLocaleString('id-
 
 const formatParsedTypeLabel = (value?: string) => {
     if (!value) return '';
+    const normalized = normalizeTransactionType(value) || value;
     const labels: Record<string, string> = {
         INCOME: 'Pemasukan',
         EXPENSE: 'Pengeluaran',
-        TRANSFER: 'Transfer',
-        TOP_UP: 'Top Up',
-        INVESTMENT_IN: 'Investasi Masuk',
-        INVESTMENT_OUT: 'Investasi Keluar'
+        TRANSFER: 'Transfer'
     };
-    return labels[value] || value;
+    return labels[normalized] || normalized;
+};
+
+const formatConfidenceLabel = (value?: number) => {
+    if (typeof value !== 'number') return null;
+    if (value >= 0.8) return 'Tinggi';
+    if (value >= 0.6) return 'Sedang';
+    return 'Rendah';
+};
+
+const getParserSummary = (item: NotificationItem) => {
+    const normalizedType = normalizeTransactionType(item.parsedType) || item.parsedType;
+    if (normalizedType === 'INCOME') return 'Parser menduga ini dana masuk ke rekening tujuan.';
+    if (normalizedType === 'EXPENSE') return 'Parser menduga ini dana keluar dari rekening sumber.';
+    if (normalizedType === 'TRANSFER') return 'Parser menduga ini perpindahan dana antar rekening atau ke investasi.';
+    if (item.parseStatus === 'FAILED') return 'Parser belum berhasil mengklasifikasikan notifikasi ini.';
+    return 'Parser masih membutuhkan konfirmasi tambahan.';
 };
 
 const notificationTone = (status: NotificationItem['parseStatus'], isSecurityAlert?: boolean) => {
@@ -166,6 +181,7 @@ const NotificationDrawer = ({
                         notifications.map((item) => {
                             const isSecurityAlert = item.parseStatus === 'FAILED' && !item.parsedAmount && (item.parseNotes?.includes('Peringatan Keamanan') ?? false);
                             const tone = notificationTone(item.parseStatus, isSecurityAlert);
+                            const confidenceLabel = formatConfidenceLabel(item.confidenceScore);
                             return (
                                 <div key={item.id} className={`border rounded-2xl p-4 shadow-sm ${tone.shell}`}>
                                     <div className="flex items-start justify-between gap-3">
@@ -212,7 +228,7 @@ const NotificationDrawer = ({
                                         ) : null}
                                         {typeof item.confidenceScore === 'number' ? (
                                             <span className="text-[10px] px-2 py-1 rounded-full bg-white/80 border border-white font-bold uppercase tracking-wide text-slate-600">
-                                                Confidence: {Math.round(item.confidenceScore * 100)}%
+                                                Confidence: {Math.round(item.confidenceScore * 100)}%{confidenceLabel ? ` • ${confidenceLabel}` : ''}
                                             </span>
                                         ) : null}
                                         {item.transaction ? (
@@ -226,11 +242,22 @@ const NotificationDrawer = ({
                                         )}
                                     </div>
 
-                                    {item.parseNotes ? (
-                                        <p className="text-[11px] text-slate-500 mt-3 font-medium">
-                                            💡 {item.parseNotes}
+                                    <div className="mt-3 rounded-xl bg-white/70 border border-white px-3 py-2.5">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Ringkasan Parser</p>
+                                        <p className="mt-1 text-[11px] font-medium text-slate-600">
+                                            {getParserSummary(item)}
                                         </p>
-                                    ) : null}
+                                        {item.parsedDescription ? (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Catatan: {item.parsedDescription}
+                                            </p>
+                                        ) : null}
+                                        {item.parseNotes ? (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Alasan: {item.parseNotes}
+                                            </p>
+                                        ) : null}
+                                    </div>
 
                                     {/* === INLINE "Lengkapi Transaksi" untuk notif tanpa nominal === */}
                                     {!item.transaction && !item.parsedAmount && item.parsedType && !isSecurityAlert && (
@@ -317,7 +344,7 @@ const NotificationDrawer = ({
                                                     onClick={() => onMakeTransaction(item)}
                                                     className="h-8 px-3 rounded-lg bg-blue-600 text-[11px] font-bold uppercase tracking-wide text-white hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 transition-colors shadow-sm"
                                                 >
-                                                    {item.transaction ? 'Verifikasi' : 'Buat Transaksi'}
+                                                    {item.transaction ? 'Periksa' : item.parseStatus === 'PENDING' ? 'Tinjau & Buat' : 'Buat Transaksi'}
                                                 </button>
                                             )}
                                         </div>

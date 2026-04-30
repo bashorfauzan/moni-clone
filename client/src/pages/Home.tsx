@@ -21,6 +21,8 @@ import {
     isInvestmentTransfer,
     isTopUpLikeTransfer,
     normalizeTransactionType,
+    requiresDestinationAccount,
+    requiresSourceAccount,
     shouldHideLegacyInvestmentTransactionType
 } from '../lib/transactionRules';
 
@@ -86,15 +88,16 @@ const Home = () => {
         const combinedText = `${item.title || ''} ${item.messageText || ''} ${item.parsedAccountHint || ''}`;
         const matchedByNumber = findAccountByNumberHint(combinedText);
         const matchedBySource = findAccountBySourceApp(item.sourceApp);
+        const parsedType = normalizeTransactionType(item.parsedType);
 
         let sourceAccountId: string | undefined;
         let destinationAccountId: string | undefined;
 
-        if (item.parsedType === 'INCOME') {
+        if (parsedType === 'INCOME') {
             destinationAccountId = matchedByNumber?.id || matchedBySource?.id;
-        } else if (item.parsedType === 'EXPENSE' || item.parsedType === 'INVESTMENT_OUT') {
+        } else if (parsedType === 'EXPENSE') {
             sourceAccountId = matchedBySource?.id || matchedByNumber?.id;
-        } else if (item.parsedType === 'TRANSFER' || item.parsedType === 'TOP_UP') {
+        } else if (parsedType === 'TRANSFER') {
             sourceAccountId = matchedBySource?.id;
             destinationAccountId = matchedByNumber?.id;
 
@@ -806,17 +809,18 @@ const Home = () => {
                 onMakeTransaction={(item, overrideAmount) => {
                     setIsNotificationDrawerOpen(false); // Tutup drawer dulu
                     const prefill = buildNotificationPrefill(item);
+                    const normalizedType = normalizeTransactionType(item.parsedType);
 
                     openModal(
-                        (item.parsedType as any) || 'EXPENSE',
+                        (normalizedType as any) || 'EXPENSE',
                         {
                             amount: overrideAmount ?? item.parsedAmount ?? undefined,
-                            description: item.messageText?.slice(0, 100) || item.parseNotes || undefined,
-                            type: (item.parsedType as any) || undefined,
+                            description: item.parsedDescription || item.messageText?.slice(0, 100) || item.parseNotes || undefined,
+                            type: (normalizedType as any) || undefined,
                             notificationInboxId: item.id,
                             ownerId: prefill.ownerId,
-                            sourceAccountId: prefill.sourceAccountId,
-                            destinationAccountId: prefill.destinationAccountId
+                            sourceAccountId: requiresSourceAccount(normalizedType) ? prefill.sourceAccountId : undefined,
+                            destinationAccountId: requiresDestinationAccount(normalizedType) ? prefill.destinationAccountId : undefined
                         }
                     );
                 }}
