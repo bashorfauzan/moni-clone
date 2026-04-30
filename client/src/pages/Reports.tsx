@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
     PieChart, Pie, Cell, ResponsiveContainer,
-    BarChart, Bar, XAxis, Tooltip as ChartTooltip
+    BarChart, Bar, XAxis, Tooltip as ChartTooltip, AreaChart, Area
 } from 'recharts';
 import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
@@ -11,6 +11,7 @@ import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
+import { downloadBackupBlob } from '../services/backup';
 import {
     isInvestmentLiquidation,
     isInvestmentTransfer,
@@ -21,11 +22,94 @@ import {
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
 
+const toDateKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 const getReportTransactionKind = (tx: TransactionItem) => {
     if (isInvestmentTransfer(tx)) return 'INVESTMENT_TOP_UP';
     if (isInvestmentLiquidation(tx)) return 'INVESTMENT_LIQUIDATION';
     if (isTopUpLikeTransfer(tx)) return 'TOP_UP';
     return normalizeTransactionType(tx.type) || tx.type;
+};
+
+const getWealthDelta = (tx: TransactionItem) => {
+    const kind = getReportTransactionKind(tx);
+    if (kind === 'INCOME') return tx.amount;
+    if (kind === 'EXPENSE') return -tx.amount;
+    return 0;
+};
+
+const buildWealthHistoryData = ({
+    transactions,
+    totalWealth,
+    currentDate,
+    viewMode
+}: {
+    transactions: TransactionItem[];
+    totalWealth: number;
+    currentDate: Date;
+    viewMode: 'MONTHLY' | 'YEARLY';
+}) => {
+    const today = new Date();
+    const periodStart = viewMode === 'MONTHLY'
+        ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+        : new Date(currentDate.getFullYear(), 0, 1);
+    const periodEnd = viewMode === 'MONTHLY'
+        ? new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+        : new Date(currentDate.getFullYear(), 11, 31);
+    const cappedEnd = periodEnd > today ? today : periodEnd;
+
+    const deltaByDate = new Map<string, number>();
+    transactions.forEach((tx) => {
+        const delta = getWealthDelta(tx);
+        if (!delta) return;
+        const key = toDateKey(new Date(tx.date));
+        deltaByDate.set(key, (deltaByDate.get(key) || 0) + delta);
+    });
+
+    const dailySnapshot = new Map<string, number>();
+    let reverseWealth = totalWealth;
+    const cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    while (cursor >= periodStart) {
+        const key = toDateKey(cursor);
+        if (cursor <= cappedEnd) {
+            dailySnapshot.set(key, reverseWealth);
+        }
+        reverseWealth -= deltaByDate.get(key) || 0;
+        cursor.setDate(cursor.getDate() - 1);
+    }
+
+    if (viewMode === 'MONTHLY') {
+        const rows: Array<{ label: string; wealth: number }> = [];
+        const dayCursor = new Date(periodStart);
+        while (dayCursor <= cappedEnd) {
+            const key = toDateKey(dayCursor);
+            rows.push({
+                label: dayCursor.getDate().toString(),
+                wealth: dailySnapshot.get(key) ?? 0
+            });
+            dayCursor.setDate(dayCursor.getDate() + 1);
+        }
+        return rows;
+    }
+
+    const rows: Array<{ label: string; wealth: number }> = [];
+    const monthCursor = new Date(periodStart.getFullYear(), 0, 1);
+    while (monthCursor <= cappedEnd) {
+        const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
+        const snapshotDate = monthEnd > cappedEnd ? cappedEnd : monthEnd;
+        rows.push({
+            label: snapshotDate.toLocaleDateString('id-ID', { month: 'short' }),
+            wealth: dailySnapshot.get(toDateKey(snapshotDate)) ?? 0
+        });
+        monthCursor.setMonth(monthCursor.getMonth() + 1);
+    }
+    return rows;
 };
 
 const Reports = () => {
@@ -43,6 +127,7 @@ const Reports = () => {
         zakatAmount: 0,
         categoryData: [],
         trendData: [],
+        wealthHistoryData: [],
         transactionsData: [],
     });
     const [loading, setLoading] = useState(true);
@@ -121,19 +206,80 @@ const Reports = () => {
         setExporting(true);
         try {
             const res = await api.get('/master/export-excel', { responseType: 'blob' });
-            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
             const now = new Date();
             const dateStr = `${now.getFullYear()}-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
-            a.download = `Catatan Keuangan Pribadi ${dateStr}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            window.URL.revokeObjectURL(url);
+            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            downloadBackupBlob(blob, `Catatan Keuangan Pribadi ${dateStr}.xlsx`);
         } catch (error: any) {
-            alert(getErrorMessage(error, 'Gagal export data'));
+            try {
+                const XLSX = await import('xlsx');
+                const now = new Date();
+                const dateStr = `${now.getFullYear()}-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
+                const workbook = XLSX.utils.book_new();
+
+                const summaryRows = [
+                    { Metrik: 'Periode', Nilai: periodLabel },
+                    { Metrik: 'Pemasukan', Nilai: data.totalIncome },
+                    { Metrik: 'Pengeluaran', Nilai: data.totalExpense },
+                    { Metrik: 'Perputaran', Nilai: data.totalVolume },
+                    { Metrik: 'Total Kekayaan', Nilai: data.totalWealth },
+                    { Metrik: 'Estimasi Zakat', Nilai: data.zakatAmount }
+                ];
+
+                const wealthRows = (data.wealthHistoryData || []).map((row: any) => ({
+                    Periode: row.label,
+                    'Kekayaan Tercatat': row.wealth
+                }));
+
+                const categoryRows = (data.categoryData || []).map((row: any) => ({
+                    Kategori: row.name,
+                    Nilai: row.value
+                }));
+
+                const trendRows = (data.trendData || []).map((row: any) => ({
+                    Label: row.label,
+                    Pemasukan: row.Pemasukan,
+                    Pengeluaran: row.Pengeluaran
+                }));
+
+                const transactionRows = (data.transactionsData || []).map((tx: TransactionItem, index: number) => {
+                    const kind = getReportTransactionKind(tx);
+                    const typeLabel = kind === 'INCOME'
+                        ? 'Pemasukan'
+                        : kind === 'EXPENSE'
+                            ? 'Pengeluaran'
+                            : kind === 'TOP_UP'
+                                ? 'Top Up'
+                                : kind === 'INVESTMENT_TOP_UP'
+                                    ? 'Setoran Investasi'
+                                    : kind === 'INVESTMENT_LIQUIDATION'
+                                        ? 'Pencairan Investasi'
+                                        : 'Transfer';
+
+                    return {
+                        No: index + 1,
+                        Tanggal: new Date(tx.date).toLocaleDateString('id-ID'),
+                        Tipe: typeLabel,
+                        Pemilik: tx.owner?.name || '-',
+                        Kategori: tx.activity?.name || tx.description || '-',
+                        Nominal: tx.amount,
+                        Catatan: tx.description || '-'
+                    };
+                });
+
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Ringkasan');
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(wealthRows), 'Riwayat Saldo');
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(categoryRows), 'Komposisi');
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(trendRows), 'Tren');
+                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(transactionRows), 'Transaksi');
+
+                const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+                const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                downloadBackupBlob(blob, `Catatan Keuangan Pribadi ${dateStr}.xlsx`);
+                alert('Export backend gagal, jadi file Excel dibuat langsung dari data laporan yang sedang tampil.');
+            } catch (fallbackError: any) {
+                alert(getErrorMessage(fallbackError, getErrorMessage(error, 'Gagal export data')));
+            }
         } finally {
             setExporting(false);
         }
@@ -180,6 +326,12 @@ const Reports = () => {
             
             const totalWealth = liquidBalance + totalRdnAssets;
             const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
+            const wealthHistoryData = buildWealthHistoryData({
+                transactions,
+                totalWealth,
+                currentDate,
+                viewMode
+            });
 
             const catMap: any = {};
             filtered.forEach((tx: TransactionItem) => {
@@ -224,6 +376,7 @@ const Reports = () => {
                 zakatAmount,
                 categoryData,
                 trendData,
+                wealthHistoryData,
                 transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
             });
             setTxPage(1);
@@ -381,6 +534,50 @@ const Reports = () => {
                         ))}
                     </div>
                 </div>
+            </div>
+
+            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Riwayat Saldo</h2>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            Perkiraan total kekayaan tercatat pada akhir {viewMode === 'MONTHLY' ? 'setiap hari' : 'setiap bulan'}.
+                        </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
+                        {data.wealthHistoryData.length} titik
+                    </span>
+                </div>
+                {data.wealthHistoryData.length > 0 ? (
+                    <div className="h-48 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={data.wealthHistoryData}>
+                                <defs>
+                                    <linearGradient id="wealthFill" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.24} />
+                                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
+                                    </linearGradient>
+                                </defs>
+                                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="wealth"
+                                    stroke="#2563eb"
+                                    strokeWidth={3}
+                                    fill="url(#wealthFill)"
+                                />
+                                <ChartTooltip
+                                    formatter={(value) => formatCurrency(Number(value || 0))}
+                                    contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '11px' }}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
+                        <p className="text-sm font-bold text-slate-600">Belum ada riwayat saldo untuk periode ini</p>
+                    </div>
+                )}
             </div>
 
             {/* ─── Category Donut ─── */}
