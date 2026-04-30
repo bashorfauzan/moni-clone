@@ -320,9 +320,8 @@ const Investment = () => {
             <header className="flex flex-col gap-4">
                 <div>
                     <h1 className="text-2xl font-bold italic text-slate-900">Portofolio Investasi</h1>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[0.14em] sm:tracking-wider">Rekapitulasi Modal & Return Multi-Sekuritas</p>
                     <p className="mt-2 text-xs text-slate-500">
-                        Menampilkan portofolio untuk {selectedOwnerName}. Modal dihitung dari transfer ke rekening investasi, return berasal dari hasil investasi yang masuk.
+                        Menampilkan portofolio untuk {selectedOwnerName}.
                     </p>
                 </div>
                 <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-between">
@@ -495,9 +494,6 @@ const Investment = () => {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h3 className="font-bold text-slate-900">Detail Kepemilikan</h3>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                                    Rincian modal, hasil investasi, dan kontribusi per pemilik
-                                </p>
                             </div>
                             <button onClick={() => setDetailAccount(null)} className="p-2 text-slate-400"><X size={18} /></button>
                         </div>
@@ -514,35 +510,39 @@ const Investment = () => {
                             </div>
                             <div className="overflow-hidden rounded-2xl border border-slate-200">
                                 <div className="bg-slate-50 px-4 py-3">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Transaksi Pembentuk Angka</p>
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Transaksi</p>
                                     <p className="mt-1 text-[11px] text-slate-500">
-                                        Daftar terbaru yang membentuk modal, pencairan, dan hasil investasi pada rekening ini.
+                                        Menampilkan 6 transaksi terbaru yang membentuk angka rekening ini.
                                     </p>
                                 </div>
-                                {detailAccountTransactions.length > 0 ? detailAccountTransactions.map((tx: any) => (
-                                    <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
-                                        <div className="min-w-0">
-                                            <div className="flex flex-wrap items-center gap-2">
-                                                <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
-                                                    {getInvestmentFlowLabel(tx, detailAccount.id)}
-                                                </span>
-                                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                                    {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                {detailAccountTransactions.length > 0 ? (
+                                    <div className="max-h-80 overflow-y-auto overscroll-contain">
+                                        {detailAccountTransactions.map((tx: any) => (
+                                            <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
+                                                <div className="min-w-0">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
+                                                            {getInvestmentFlowLabel(tx, detailAccount.id)}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                            {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        </span>
+                                                    </div>
+                                                    <p className="mt-2 truncate text-sm font-semibold text-slate-900">
+                                                        {tx.description || tx.activity?.name || 'Transaksi investasi'}
+                                                    </p>
+                                                    <p className="mt-1 text-[11px] text-slate-500">
+                                                        {tx.owner?.name || 'Tanpa owner'}
+                                                        {(tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
+                                                    </p>
+                                                </div>
+                                                <span className="shrink-0 text-sm font-black text-slate-900">
+                                                    {formatCurrency(tx.amount)}
                                                 </span>
                                             </div>
-                                            <p className="mt-2 truncate text-sm font-semibold text-slate-900">
-                                                {tx.description || tx.activity?.name || 'Transaksi investasi'}
-                                            </p>
-                                            <p className="mt-1 text-[11px] text-slate-500">
-                                                {tx.owner?.name || 'Tanpa owner'}
-                                                {(tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
-                                            </p>
-                                        </div>
-                                        <span className="shrink-0 text-sm font-black text-slate-900">
-                                            {formatCurrency(tx.amount)}
-                                        </span>
+                                        ))}
                                     </div>
-                                )) : (
+                                ) : (
                                     <div className="px-4 py-4 text-sm text-slate-500">
                                         Belum ada transaksi investasi yang bisa ditelusuri untuk rekening ini.
                                     </div>
@@ -721,7 +721,7 @@ const Investment = () => {
                         <form onSubmit={handleTransfer} className="space-y-4">
                             <div>
                                 <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Kepemilikan</label>
-                                <select 
+                                <select
                                     className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
                                     value={transferForm.ownerId}
                                     onChange={e => setTransferForm({ ...transferForm, ownerId: e.target.value })}
