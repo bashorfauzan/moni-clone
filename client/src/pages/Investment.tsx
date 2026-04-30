@@ -484,11 +484,11 @@ const Investment = () => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        const preferredOwnerId = selectedOwnerId !== 'ALL'
+                                        const preferredOwnerId = rdn.ownerId || (selectedOwnerId !== 'ALL'
                                             ? selectedOwnerId
-                                            : owners[0]?.id || '';
-                                        if (selectedOwnerId === 'ALL') {
-                                            alert('Pilih kepemilikan tertentu dulu agar pertumbuhan investasi tercatat ke owner yang benar.');
+                                            : owners[0]?.id || '');
+                                        if (!preferredOwnerId) {
+                                            alert('Rekening investasi ini belum punya kepemilikan. Atur owner rekening dulu sebelum update pertumbuhan.');
                                             return;
                                         }
                                         setIncomeFormLock({

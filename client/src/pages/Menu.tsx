@@ -236,13 +236,13 @@ const MenuPage = () => {
             return;
         }
 
-        const saved = setupSecurity(securityPinInput);
-        if (!saved) {
-            setSecurityPinError('PIN gagal disimpan. Coba lagi.');
+        const result = setupSecurity(securityPinInput);
+        if (!result.success) {
+            setSecurityPinError(result.message || 'PIN gagal disimpan. Coba lagi.');
             return;
         }
 
-        setSecurityPinNotice('PIN berhasil diatur dan siap dipakai.');
+        setSecurityPinNotice(result.message || 'PIN berhasil diatur dan siap dipakai.');
         setSecurityPinStep('menu');
         setSecurityPinInput('');
         setSecurityPinConfirm('');

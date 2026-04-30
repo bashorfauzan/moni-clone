@@ -17,7 +17,7 @@ interface SecurityContextType {
     isBiometricEnabled: boolean;
     isBiometricSupported: boolean;
     biometricSupportMessage: string;
-    setupSecurity: (pin: string) => boolean;
+    setupSecurity: (pin: string) => { success: boolean; message?: string };
     removeSecurity: () => void;
     setupBiometric: () => Promise<boolean>;
     removeBiometric: () => void;
@@ -45,9 +45,17 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const [resolveAuth, setResolveAuth] = useState<((val: boolean) => void) | null>(null);
     const [pinInput, setPinInput] = useState('');
     const [pinError, setPinError] = useState(false);
+    const lowPriorityStorageKeys = ['app-bg-image', 'app-hero-card-image'];
 
     const isSecurityEnabled = !!pinHash;
     const getCurrentPinHash = () => pinHash || localStorage.getItem('app-pin-hash');
+    const markActivity = () => {
+        try {
+            sessionStorage.setItem('last-active', Date.now().toString());
+        } catch (error) {
+            console.warn('Tidak bisa menyimpan aktivitas sesi.', error);
+        }
+    };
 
     useEffect(() => {
         // App open lock check
@@ -64,7 +72,7 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
         }
 
         const updateActivity = () => {
-            sessionStorage.setItem('last-active', Date.now().toString());
+            markActivity();
         };
         
         window.addEventListener('click', updateActivity);
@@ -138,13 +146,40 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const setupSecurity = (pin: string) => {
         try {
             const hash = hashString(pin);
-            localStorage.setItem('app-pin-hash', hash);
+            try {
+                localStorage.setItem('app-pin-hash', hash);
+            } catch (error: any) {
+                const isQuotaIssue = error?.name === 'QuotaExceededError' || error?.code === 22;
+                if (!isQuotaIssue) throw error;
+
+                let recovered = false;
+                for (const key of lowPriorityStorageKeys) {
+                    if (localStorage.getItem(key)) {
+                        localStorage.removeItem(key);
+                        recovered = true;
+                    }
+                }
+
+                localStorage.setItem('app-pin-hash', hash);
+                setPinHash(hash);
+                markActivity();
+                return {
+                    success: true,
+                    message: recovered
+                        ? 'PIN berhasil diatur. Gambar tema besar dilepas dulu agar penyimpanan cukup.'
+                        : 'PIN berhasil diatur.'
+                };
+            }
+
             setPinHash(hash);
-            sessionStorage.setItem('last-active', Date.now().toString());
-            return true;
+            markActivity();
+            return { success: true, message: 'PIN berhasil diatur dan siap dipakai.' };
         } catch (error) {
             console.error('Gagal menyimpan PIN keamanan.', error);
-            return false;
+            return {
+                success: false,
+                message: 'PIN gagal disimpan. Coba kurangi gambar tema atau bersihkan data browser, lalu ulangi.'
+            };
         }
     };
 
@@ -303,7 +338,7 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                     setIsLocked(false);
                     if (resolveAuth) resolveAuth(true);
                     setResolveAuth(null);
-                    sessionStorage.setItem('last-active', Date.now().toString());
+                    markActivity();
                 } else {
                     // Fail
                     setPinError(true);
