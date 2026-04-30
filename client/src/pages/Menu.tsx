@@ -412,6 +412,8 @@ const MenuPage = () => {
     };
 
     const deleteAccount = async (id: string) => {
+        const authorized = await verifySecurity('Hapus Rekening');
+        if (!authorized) return;
         try {
             await removeAccount(id);
             setConfirmDeleteAccountId(null);
@@ -482,6 +484,8 @@ const MenuPage = () => {
     };
 
     const deleteActivity = async (id: string) => {
+        const authorized = await verifySecurity('Hapus Kategori');
+        if (!authorized) return;
         try {
             await removeActivity(id);
             setConfirmDeleteActivityId(null);
@@ -528,6 +532,8 @@ const MenuPage = () => {
     };
 
     const deleteOwner = async (id: string) => {
+        const authorized = await verifySecurity('Hapus Pemilik');
+        if (!authorized) return;
         try {
             await removeOwner(id);
             setConfirmDeleteOwnerId(null);
@@ -571,6 +577,11 @@ const MenuPage = () => {
         }
         if (resetConfirmationText.trim().toUpperCase() !== 'RESET') {
             setResetFeedback({ type: 'error', message: "Ketik 'RESET' pada kolom konfirmasi untuk mengeksekusi penghapusan." });
+            return;
+        }
+        const authorized = await verifySecurity('Reset Data');
+        if (!authorized) {
+            setResetFeedback({ type: 'error', message: 'Verifikasi keamanan dibatalkan.' });
             return;
         }
 

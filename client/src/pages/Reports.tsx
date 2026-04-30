@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
+import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
@@ -189,7 +189,9 @@ const Reports = () => {
     });
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [restoringDelete, setRestoringDelete] = useState(false);
     const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
+    const [lastDeletedTransactions, setLastDeletedTransactions] = useState<TransactionItem[]>([]);
     const longPressTimerRef = useRef<number | null>(null);
     const longPressTriggeredRef = useRef(false);
 
@@ -250,12 +252,47 @@ const Reports = () => {
         if (!authorized) return;
 
         try {
+            const deletedSnapshot = data.transactionsData.filter((tx: TransactionItem) => selectedTx.has(tx.id));
             await bulkDeleteTransactions(Array.from(selectedTx));
+            setLastDeletedTransactions(deletedSnapshot);
             setSelectedTx(new Set());
             await fetchReportData();
             window.dispatchEvent(new Event('nova:data-changed'));
         } catch (error: any) {
             alert(getErrorMessage(error, 'Gagal menghapus transaksi terpilih'));
+        }
+    };
+
+    const handleUndoLastDelete = async () => {
+        if (lastDeletedTransactions.length === 0 || restoringDelete) return;
+
+        setRestoringDelete(true);
+        try {
+            const sortedTransactions = [...lastDeletedTransactions].sort((a, b) =>
+                new Date(a.date).getTime() - new Date(b.date).getTime()
+            );
+
+            for (const tx of sortedTransactions) {
+                const restoredType = normalizeTransactionType(tx.type) || 'INCOME';
+                await createTransaction({
+                    amount: tx.amount,
+                    description: tx.description || tx.activity?.name,
+                    ownerId: tx.ownerId || '',
+                    type: restoredType,
+                    sourceAccountId: tx.sourceAccountId,
+                    destinationAccountId: tx.destinationAccountId,
+                    activityId: tx.activityId,
+                    date: tx.date
+                });
+            }
+
+            setLastDeletedTransactions([]);
+            await fetchReportData();
+            window.dispatchEvent(new Event('nova:data-changed'));
+        } catch (error: any) {
+            alert(getErrorMessage(error, 'Gagal membatalkan hapus transaksi terakhir'));
+        } finally {
+            setRestoringDelete(false);
         }
     };
 
@@ -798,6 +835,26 @@ const Reports = () => {
                         )}
                     </div>
                 </div>
+
+                {lastDeletedTransactions.length > 0 && (
+                    <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <p className="text-sm font-bold text-amber-900">
+                                {lastDeletedTransactions.length} transaksi terakhir siap dipulihkan
+                            </p>
+                            <p className="mt-1 text-[11px] text-amber-700">
+                                Undo akan membuat ulang transaksi yang baru saja dihapus, lengkap dengan tanggal dan rekeningnya.
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleUndoLastDelete}
+                            disabled={restoringDelete}
+                            className="rounded-full bg-amber-500 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {restoringDelete ? 'Memulihkan...' : 'Undo Hapus Terakhir'}
+                        </button>
+                    </div>
+                )}
 
                 {data.transactionsData.length === 0 ? (
                     <div className="py-10 text-center">

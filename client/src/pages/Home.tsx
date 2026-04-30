@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
+import { useSecurity } from '../context/SecurityContext';
 import {
     isInvestmentIncome,
     isInvestmentTransfer,
@@ -40,6 +41,7 @@ const Home = () => {
     const { openModal } = useTransaction();
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { verifySecurity } = useSecurity();
     const [meta, setMeta] = useState<{ owners: Owner[]; accounts: Account[] }>({ owners: [], accounts: [] });
     const [summaryData, setSummaryData] = useState({
         liquidBalance: 0,
@@ -454,6 +456,8 @@ const Home = () => {
     };
 
     const handleDeleteNotification = async (id: string) => {
+        const authorized = await verifySecurity('Hapus Notifikasi');
+        if (!authorized) return;
         setDeletingNotificationId(id);
         try {
             await deleteNotificationInboxItem(id);
@@ -468,6 +472,8 @@ const Home = () => {
     const handleClearNotifications = async () => {
         const confirmed = window.confirm('Kosongkan inbox notifikasi yang belum terkait transaksi?');
         if (!confirmed) return;
+        const authorized = await verifySecurity('Kosongkan Inbox Notifikasi');
+        if (!authorized) return;
 
         setClearingNotifications(true);
         try {

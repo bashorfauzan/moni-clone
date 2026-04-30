@@ -5,6 +5,7 @@ import { createTarget, deleteTarget, fetchTargets, type TargetItem, updateTarget
 import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
+import { useSecurity } from '../context/SecurityContext';
 
 const formatThousands = (raw: string) => {
     if (!raw) return '';
@@ -25,6 +26,7 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
 };
 
 const Targets = () => {
+    const { verifySecurity } = useSecurity();
     const [data, setData] = useState<any>({ accounts: [], owners: [] });
     const [targets, setTargets] = useState<TargetItem[]>([]);
     const [transactions, setTransactions] = useState<TransactionItem[]>([]);
@@ -123,6 +125,8 @@ const Targets = () => {
 
     const handleDeleteTarget = async (id: string) => {
         if (!window.confirm('Hapus target ini?')) return;
+        const authorized = await verifySecurity('Hapus Target');
+        if (!authorized) return;
         try {
             await deleteTarget(id);
             await refetchTargets();
