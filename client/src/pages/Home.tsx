@@ -361,6 +361,12 @@ const Home = () => {
         };
     };
 
+    const getTransactionOriginMeta = (tx: TransactionItem) => (
+        tx.notificationInboxId
+            ? { label: 'Notif', cls: 'bg-blue-50 text-blue-600' }
+            : { label: 'Manual', cls: 'bg-slate-100 text-slate-500' }
+    );
+
 
 
     const getRecentTransactionAccountInfo = (tx: TransactionItem) => {
@@ -763,6 +769,7 @@ const Home = () => {
                     {recentTransactions.length > 0 ? (
                         recentTransactions.map((tx) => {
                             const visual = getRecentTransactionVisual(tx);
+                            const origin = getTransactionOriginMeta(tx);
                             return (
                                 <button
                                     key={tx.id}
@@ -776,10 +783,11 @@ const Home = () => {
                                         </div>
                                         <div className="min-w-0">
                                             <p className="mb-0.5 truncate text-sm font-bold text-slate-800">{getRecentTransactionTitle(tx)}</p>
-                                            <div className="flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                            <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-slate-400">
                                                 <span>{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</span>
                                                 <span>•</span>
                                                 <span className="truncate">{getRecentTransactionAccountInfo(tx)}</span>
+                                                <span className={`rounded-full px-1.5 py-0.5 ${origin.cls}`}>{origin.label}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -855,6 +863,9 @@ const Home = () => {
                                 <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
                                     {getRecentTransactionVisual(selectedTransaction).badge}
                                 </p>
+                                <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${getTransactionOriginMeta(selectedTransaction).cls}`}>
+                                    {getTransactionOriginMeta(selectedTransaction).label}
+                                </span>
                                 <h3 className="mt-2 text-lg font-bold text-slate-900">
                                     {getRecentTransactionTitle(selectedTransaction)}
                                 </h3>

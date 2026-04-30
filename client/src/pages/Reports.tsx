@@ -557,6 +557,12 @@ const Reports = () => {
         return 'text-slate-900';
     };
 
+    const getOriginBadge = (tx: TransactionItem) => (
+        tx.notificationInboxId
+            ? { label: 'Notif', cls: 'bg-blue-50 text-blue-600' }
+            : { label: 'Manual', cls: 'bg-slate-100 text-slate-500' }
+    );
+
     const periodLabel = viewMode === 'MONTHLY'
         ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()
         : currentDate.getFullYear().toString();
@@ -871,6 +877,7 @@ const Reports = () => {
                             </div>
                             {visibleTx.map((tx: TransactionItem) => {
                                 const badge = getTypeBadge(tx);
+                                const origin = getOriginBadge(tx);
                                 return (
                                     <div
                                         key={tx.id}
@@ -893,7 +900,10 @@ const Reports = () => {
                                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
-                                            <p className="text-[11px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                                <p className="text-[11px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${origin.cls}`}>{origin.label}</span>
+                                            </div>
                                         </div>
                                         <p className={`shrink-0 text-sm font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</p>
                                         <div className="flex gap-1 shrink-0">
@@ -926,6 +936,7 @@ const Reports = () => {
                                 <tbody className="divide-y divide-slate-50">
                                     {visibleTx.map((tx: TransactionItem) => {
                                         const badge = getTypeBadge(tx);
+                                        const origin = getOriginBadge(tx);
                                         return (
                                             <tr
                                                 key={tx.id}
@@ -940,7 +951,10 @@ const Reports = () => {
                                                     <p className="text-[10px] text-slate-400">{new Date(tx.date).getFullYear()}</p>
                                                 </td>
                                                 <td className="px-5 py-4">
-                                                    <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
+                                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${origin.cls}`}>{origin.label}</span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-5 py-4 font-semibold text-slate-600">{tx.owner?.name || '-'}</td>
                                                 <td className="px-5 py-4">
