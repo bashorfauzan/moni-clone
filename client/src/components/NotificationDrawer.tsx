@@ -2,6 +2,7 @@ import { X, Bell, PencilLine } from 'lucide-react';
 import { useState } from 'react';
 import type { NotificationItem } from '../services/notificationInbox';
 import type { Account } from '../services/masterData';
+import { canonicalizeAccountAlias } from '../lib/accountAliases';
 import { inferNotificationCategoryLabel, normalizeTransactionType } from '../lib/transactionRules';
 
 interface NotificationDrawerProps {
@@ -138,20 +139,20 @@ const NotificationDrawer = ({
 
     // Cari account yang cocok berdasarkan sourceApp hint
     const resolveSourceAccount = (sourceApp: string): Account | undefined => {
-        const lower = sourceApp.toLowerCase();
+        const lower = canonicalizeAccountAlias(sourceApp);
         return accounts.find(acc =>
-            acc.name.toLowerCase().includes(lower) ||
-            (acc.appPackageName ?? '').toLowerCase().includes(lower) ||
-            acc.type.toLowerCase().includes(lower)
+            canonicalizeAccountAlias(acc.name).includes(lower) ||
+            canonicalizeAccountAlias(acc.appPackageName).includes(lower) ||
+            canonicalizeAccountAlias(acc.type).includes(lower)
         );
     };
 
     const resolveHintAccount = (hint?: string): Account | undefined => {
         if (!hint) return undefined;
-        const lower = hint.toLowerCase();
+        const lower = canonicalizeAccountAlias(hint);
         return accounts.find((acc) =>
-            acc.name.toLowerCase().includes(lower)
-            || acc.type.toLowerCase().includes(lower)
+            canonicalizeAccountAlias(acc.name).includes(lower)
+            || canonicalizeAccountAlias(acc.type).includes(lower)
             || (acc.accountNumber ?? '').toLowerCase().includes(lower)
         );
     };

@@ -17,6 +17,7 @@ import Spinner from '../components/Spinner';
 import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../context/SecurityContext';
+import { canonicalizeAccountAlias } from '../lib/accountAliases';
 import {
     inferNotificationCategoryLabel,
     isInvestmentIncome,
@@ -80,10 +81,10 @@ const Home = () => {
     };
 
     const findAccountBySourceApp = (sourceApp: string) => {
-        const lower = sourceApp.toLowerCase();
+        const lower = canonicalizeAccountAlias(sourceApp);
         return meta.accounts.find((account) =>
-            account.name.toLowerCase().includes(lower)
-            || (account.appPackageName ?? '').toLowerCase().includes(lower)
+            canonicalizeAccountAlias(account.name).includes(lower)
+            || canonicalizeAccountAlias(account.appPackageName).includes(lower)
         );
     };
 
