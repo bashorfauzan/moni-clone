@@ -362,6 +362,17 @@ const Home = () => {
         };
     };
 
+    const getPendingNotification = (tx: TransactionItem) =>
+        notifications.find((item) => item.transaction?.id === tx.id || item.id === tx.notificationInboxId);
+
+    const getPendingActionHint = (tx: TransactionItem) => {
+        const normalizedType = normalizeTransactionType(tx.type);
+        if (normalizedType === 'INCOME') return 'Cek rekening tujuan lalu setujui sebagai pemasukan.';
+        if (normalizedType === 'EXPENSE') return 'Cek rekening sumber lalu setujui sebagai pengeluaran.';
+        if (normalizedType === 'TRANSFER') return 'Pastikan rekening sumber dan tujuan sudah benar sebelum disetujui.';
+        return 'Periksa detail transaksi sebelum disetujui.';
+    };
+
     const getTransactionOriginMeta = (tx: TransactionItem) => (
         tx.notificationInboxId
             ? { label: 'Notif', cls: 'bg-blue-50 text-blue-600' }
@@ -710,8 +721,15 @@ const Home = () => {
                         </h3>
                     </div>
                     <div className="space-y-3">
-                        {pendingTransactions.map((tx) => (
-                            <div key={tx.id} className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between p-4 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-200/60 rounded-[20px] shadow-sm shadow-amber-100/50">
+                        {pendingTransactions.map((tx) => {
+                            const linkedNotification = getPendingNotification(tx);
+                            const detectedAccount = linkedNotification?.parsedAccountHint
+                                ? findAccountByNumberHint(linkedNotification.parsedAccountHint) || findAccountBySourceApp(linkedNotification.parsedAccountHint)
+                                : undefined;
+
+                            return (
+                            <div key={tx.id} className="flex flex-col gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-200/60 rounded-[20px] shadow-sm shadow-amber-100/50">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex items-center gap-4 min-w-0">
                                     <div className="w-10 h-10 rounded-full bg-amber-100/80 flex items-center justify-center text-lg text-amber-600 shrink-0">
                                         🔔
@@ -721,6 +739,11 @@ const Home = () => {
                                         <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-0.5">
                                             {tx.type} • {formatCurrency(tx.amount)}
                                         </p>
+                                        {linkedNotification?.sourceApp ? (
+                                            <p className="mt-1 text-[11px] text-slate-500">
+                                                Sumber notifikasi: <span className="font-semibold text-slate-700">{linkedNotification.sourceApp}</span>
+                                            </p>
+                                        ) : null}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 sm:ml-2 self-end sm:self-auto shrink-0">
@@ -749,8 +772,33 @@ const Home = () => {
                                         ✕
                                     </button>
                                 </div>
+                                </div>
+
+                                {(linkedNotification?.parseNotes || linkedNotification?.parsedAccountHint || detectedAccount) && (
+                                    <div className="rounded-2xl bg-white/70 border border-amber-100 px-4 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Catatan Review</p>
+                                        {linkedNotification?.parsedAccountHint ? (
+                                            <p className="mt-1 text-[11px] text-slate-600">
+                                                Hint rekening: <span className="font-semibold text-slate-700">{linkedNotification.parsedAccountHint}</span>
+                                            </p>
+                                        ) : null}
+                                        {detectedAccount ? (
+                                            <p className="mt-1 text-[11px] text-slate-600">
+                                                Cocok ke rekening: <span className="font-semibold text-slate-700">{detectedAccount.name}</span>
+                                            </p>
+                                        ) : null}
+                                        {linkedNotification?.parseNotes ? (
+                                            <p className="mt-1 text-[11px] text-slate-600">
+                                                Alasan parser: <span className="font-semibold text-slate-700">{linkedNotification.parseNotes}</span>
+                                            </p>
+                                        ) : null}
+                                        <p className="mt-1 text-[11px] text-slate-600">
+                                            Saran tindakan: <span className="font-semibold text-slate-700">{getPendingActionHint(tx)}</span>
+                                        </p>
+                                    </div>
+                                )}
                             </div>
-                        ))}
+                        )})}
                     </div>
                 </section>
             )}
