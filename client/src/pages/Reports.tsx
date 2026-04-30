@@ -428,7 +428,7 @@ const Reports = () => {
                 .filter((tx: TransactionItem) => getReportTransactionKind(tx) === 'INVESTMENT_LIQUIDATION')
                 .reduce((acc: number, tx: TransactionItem) => acc + tx.amount, 0);
             const zakatAmount = totalIncome * 0.025;
-            
+
             const totalWealth = liquidBalance + totalRdnAssets;
             const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
             const endingLiquidCash = estimateEndingBalanceForPeriod({
@@ -584,7 +584,7 @@ const Reports = () => {
                         Pantau arus kas dan aset pada periode aktif.
                     </p>
                 </div>
-                
+
                 <div className="text-left sm:text-right">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
                     <div className="mt-1 flex items-center sm:justify-end gap-3">
@@ -634,7 +634,7 @@ const Reports = () => {
                 <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.15 }}></div>
                 <div className="relative z-10">
                     <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-4">Ringkasan Arus Kas</p>
-                    
+
                     <div className="grid grid-cols-2 gap-3 sm:gap-4">
                         {[
                             { label: 'Pemasukan', value: data.totalIncome, icon: '↘', color: 'text-emerald-300', iconBg: 'bg-emerald-400/20 text-emerald-300' },
@@ -676,7 +676,7 @@ const Reports = () => {
                     <div>
                         <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Riwayat Saldo</h2>
                         <p className="mt-1 text-[11px] text-slate-500">
-                            Perkiraan total kekayaan tercatat pada akhir {viewMode === 'MONTHLY' ? 'setiap hari' : 'setiap bulan'}.
+                            {viewMode === 'MONTHLY' ? 'setiap hari' : 'setiap bulan'}.
                         </p>
                     </div>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">

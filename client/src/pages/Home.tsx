@@ -545,7 +545,7 @@ const Home = () => {
                             {isWealthHidden ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                     </div>
-                    
+
                     <h2 className="text-3xl font-black text-white tracking-tight drop-shadow-sm mb-5">
                         {displayCurrency(summaryData.liquidBalance)}
                     </h2>
@@ -568,26 +568,6 @@ const Home = () => {
                     </div>
                 </div>
             </section>
-
-            {/* Total Kekayaan Tercatat */}
-            {!isWealthHidden && (
-                <section className="mb-6">
-                    <div className="flex items-center justify-between gap-3 rounded-[24px] bg-white px-5 py-4 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] border border-slate-100">
-                        <div className="min-w-0">
-                            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
-                            <p className="mt-1 text-2xl font-black tracking-tight text-slate-900">
-                                {formatCurrency(summaryData.liquidBalance + summaryData.investmentValue)}
-                            </p>
-                        </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0 text-right">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Kas</span>
-                            <span className="text-xs font-bold text-slate-700">{formatCurrency(summaryData.liquidBalance)}</span>
-                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-wider mt-1">Investasi</span>
-                            <span className="text-xs font-bold text-emerald-600">{formatCurrency(summaryData.investmentValue)}</span>
-                        </div>
-                    </div>
-                </section>
-            )}
 
             {/* Kekayaan per Individu */}
             {meta.owners.length > 0 && wealthDistribution.length > 0 && !isWealthHidden && (
@@ -728,77 +708,78 @@ const Home = () => {
                                 : undefined;
 
                             return (
-                            <div key={tx.id} className="flex flex-col gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-200/60 rounded-[20px] shadow-sm shadow-amber-100/50">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex items-center gap-4 min-w-0">
-                                    <div className="w-10 h-10 rounded-full bg-amber-100/80 flex items-center justify-center text-lg text-amber-600 shrink-0">
-                                        🔔
+                                <div key={tx.id} className="flex flex-col gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50/30 border border-amber-200/60 rounded-[20px] shadow-sm shadow-amber-100/50">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="flex items-center gap-4 min-w-0">
+                                            <div className="w-10 h-10 rounded-full bg-amber-100/80 flex items-center justify-center text-lg text-amber-600 shrink-0">
+                                                🔔
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-sm text-slate-900 truncate">{getRecentTransactionTitle(tx)}</p>
+                                                <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-0.5">
+                                                    {tx.type} • {formatCurrency(tx.amount)}
+                                                </p>
+                                                {linkedNotification?.sourceApp ? (
+                                                    <p className="mt-1 text-[11px] text-slate-500">
+                                                        Sumber notifikasi: <span className="font-semibold text-slate-700">{linkedNotification.sourceApp}</span>
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 sm:ml-2 self-end sm:self-auto shrink-0">
+                                            <button
+                                                onClick={() => {
+                                                    openModal((tx.type as any) || 'EXPENSE', {
+                                                        amount: tx.amount,
+                                                        description: tx.description || tx.activity?.name,
+                                                        activityId: tx.activityId,
+                                                        type: (tx.type as any) || undefined,
+                                                        sourceAccountId: tx.sourceAccountId || undefined,
+                                                        destinationAccountId: tx.destinationAccountId || undefined,
+                                                        pendingTransactionId: tx.id
+                                                    });
+                                                }}
+                                                className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all border border-emerald-100 font-bold text-lg focus:outline-none"
+                                                title="Setujui dan Lengkapi"
+                                            >
+                                                ✓
+                                            </button>
+                                            <button
+                                                onClick={() => handleValidate(tx.id, 'REJECT', tx)}
+                                                className="w-10 h-10 flex items-center justify-center rounded-full bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100 font-bold text-lg focus:outline-none"
+                                                title="Tolak"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="min-w-0">
-                                        <p className="font-bold text-sm text-slate-900 truncate">{getRecentTransactionTitle(tx)}</p>
-                                        <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest mt-0.5">
-                                            {tx.type} • {formatCurrency(tx.amount)}
-                                        </p>
-                                        {linkedNotification?.sourceApp ? (
-                                            <p className="mt-1 text-[11px] text-slate-500">
-                                                Sumber notifikasi: <span className="font-semibold text-slate-700">{linkedNotification.sourceApp}</span>
-                                            </p>
-                                        ) : null}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 sm:ml-2 self-end sm:self-auto shrink-0">
-                                    <button
-                                        onClick={() => {
-                                            openModal((tx.type as any) || 'EXPENSE', {
-                                                amount: tx.amount,
-                                                description: tx.description || tx.activity?.name,
-                                                activityId: tx.activityId,
-                                                type: (tx.type as any) || undefined,
-                                                sourceAccountId: tx.sourceAccountId || undefined,
-                                                destinationAccountId: tx.destinationAccountId || undefined,
-                                                pendingTransactionId: tx.id
-                                            });
-                                        }}
-                                        className="w-10 h-10 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all border border-emerald-100 font-bold text-lg focus:outline-none"
-                                        title="Setujui dan Lengkapi"
-                                    >
-                                        ✓
-                                    </button>
-                                    <button
-                                        onClick={() => handleValidate(tx.id, 'REJECT', tx)}
-                                        className="w-10 h-10 flex items-center justify-center rounded-full bg-rose-50 text-rose-600 hover:bg-rose-500 hover:text-white transition-all border border-rose-100 font-bold text-lg focus:outline-none"
-                                        title="Tolak"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                                </div>
 
-                                {(linkedNotification?.parseNotes || linkedNotification?.parsedAccountHint || detectedAccount) && (
-                                    <div className="rounded-2xl bg-white/70 border border-amber-100 px-4 py-3">
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Catatan Review</p>
-                                        {linkedNotification?.parsedAccountHint ? (
+                                    {(linkedNotification?.parseNotes || linkedNotification?.parsedAccountHint || detectedAccount) && (
+                                        <div className="rounded-2xl bg-white/70 border border-amber-100 px-4 py-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Catatan Review</p>
+                                            {linkedNotification?.parsedAccountHint ? (
+                                                <p className="mt-1 text-[11px] text-slate-600">
+                                                    Hint rekening: <span className="font-semibold text-slate-700">{linkedNotification.parsedAccountHint}</span>
+                                                </p>
+                                            ) : null}
+                                            {detectedAccount ? (
+                                                <p className="mt-1 text-[11px] text-slate-600">
+                                                    Cocok ke rekening: <span className="font-semibold text-slate-700">{detectedAccount.name}</span>
+                                                </p>
+                                            ) : null}
+                                            {linkedNotification?.parseNotes ? (
+                                                <p className="mt-1 text-[11px] text-slate-600">
+                                                    Alasan parser: <span className="font-semibold text-slate-700">{linkedNotification.parseNotes}</span>
+                                                </p>
+                                            ) : null}
                                             <p className="mt-1 text-[11px] text-slate-600">
-                                                Hint rekening: <span className="font-semibold text-slate-700">{linkedNotification.parsedAccountHint}</span>
+                                                Saran tindakan: <span className="font-semibold text-slate-700">{getPendingActionHint(tx)}</span>
                                             </p>
-                                        ) : null}
-                                        {detectedAccount ? (
-                                            <p className="mt-1 text-[11px] text-slate-600">
-                                                Cocok ke rekening: <span className="font-semibold text-slate-700">{detectedAccount.name}</span>
-                                            </p>
-                                        ) : null}
-                                        {linkedNotification?.parseNotes ? (
-                                            <p className="mt-1 text-[11px] text-slate-600">
-                                                Alasan parser: <span className="font-semibold text-slate-700">{linkedNotification.parseNotes}</span>
-                                            </p>
-                                        ) : null}
-                                        <p className="mt-1 text-[11px] text-slate-600">
-                                            Saran tindakan: <span className="font-semibold text-slate-700">{getPendingActionHint(tx)}</span>
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        )})}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })}
                     </div>
                 </section>
             )}
