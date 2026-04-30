@@ -241,6 +241,7 @@ const Reports = () => {
             amount: tx.amount,
             description: tx.description || tx.activity?.name,
             ownerId: tx.ownerId,
+            activityId: tx.activityId,
             sourceAccountId: tx.sourceAccountId,
             destinationAccountId: tx.destinationAccountId
         });
@@ -910,7 +911,7 @@ const Reports = () => {
                                             <button
                                                 onClick={(event) => {
                                                     event.stopPropagation();
-                                                    openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
+                                                    openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
                                                 }}
                                                 className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                             ><Pencil size={13} /></button>
@@ -967,7 +968,7 @@ const Reports = () => {
                                                         <button
                                                             onClick={(event) => {
                                                                 event.stopPropagation();
-                                                                openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
+                                                                openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
                                                             }}
                                                             className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
                                                             title="Edit"

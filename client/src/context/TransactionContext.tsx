@@ -7,6 +7,7 @@ export interface TransactionModalPayload {
     description?: string;
     type?: TransactionType;
     ownerId?: string;
+    activityId?: string;
     sourceAccountId?: string;
     destinationAccountId?: string;
     notificationInboxId?: string;

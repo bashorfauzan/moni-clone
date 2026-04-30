@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, ChevronDown, Search } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchMasterMeta } from '../services/masterData';
+import { fetchMasterMeta, type Activity } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { createTransaction, fetchTransactions, updateTransaction, validateTransaction, type TransactionTypeValue } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
+import { inferNotificationCategoryLabel } from '../lib/transactionRules';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
 type PickerType = 'source' | 'destination' | null;
@@ -12,12 +13,14 @@ type PickerType = 'source' | 'destination' | null;
 interface ModalMeta {
     owners: Array<{ id: string; name: string }>;
     accounts: Array<{ id: string; name: string; type: string; balance: number; ownerId?: string }>;
+    activities: Activity[];
 }
 
 const initialForm = {
     amount: '',
     description: '',
     ownerId: '',
+    activityId: '',
     sourceAccountId: '',
     destinationAccountId: '',
 };
@@ -39,7 +42,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 
 const TransactionModal = () => {
     const { isModalOpen, modalType, modalPayload, editTransactionId, setModalType, closeModal } = useTransaction();
-    const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [] });
+    const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [], activities: [] });
     const [accountUsage, setAccountUsage] = useState<AccountUsageFrequency>({});
     const [form, setForm] = useState(initialForm);
     const [submitting, setSubmitting] = useState(false);
@@ -102,10 +105,20 @@ const TransactionModal = () => {
                 if (!isActive) return;
 
                 setMeta(payload);
+                const suggestedActivityLabel = modalPayload?.notificationInboxId
+                    ? inferNotificationCategoryLabel({
+                        messageText: modalPayload?.description,
+                        parsedType: modalPayload?.type
+                    })
+                    : undefined;
+                const matchedActivity = suggestedActivityLabel
+                    ? payload.activities.find((activity) => activity.name.toLowerCase() === suggestedActivityLabel.toLowerCase())
+                    : undefined;
                 setAccountUsage(buildAccountUsageFrequency(transactions));
                 setForm((prev) => ({
                     ...initialForm,
                     ownerId: modalPayload?.ownerId || payload.owners[0]?.id || prev.ownerId,
+                    activityId: modalPayload?.activityId || matchedActivity?.id || payload.activities[0]?.id || prev.activityId,
                     amount: modalPayload?.amount ? String(modalPayload.amount) : initialForm.amount,
                     description: modalPayload?.description || initialForm.description,
                     sourceAccountId: modalPayload?.sourceAccountId || initialForm.sourceAccountId,
@@ -241,6 +254,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
+                    activityId: form.activityId || undefined,
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
@@ -255,7 +269,7 @@ const TransactionModal = () => {
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
-                    categoryId: undefined, // categoryId optional/will be resolved by backend
+                    categoryId: form.activityId || undefined,
                 };
                 await validateTransaction(modalPayload.pendingTransactionId, payload);
             } else {
@@ -263,6 +277,7 @@ const TransactionModal = () => {
                     amount: Number(form.amount),
                     description: form.description,
                     ownerId: form.ownerId,
+                    activityId: form.activityId || undefined,
                     type: submissionType,
                     sourceAccountId: showSource ? form.sourceAccountId : undefined,
                     destinationAccountId: showDestination ? form.destinationAccountId : undefined,
@@ -338,6 +353,19 @@ const TransactionModal = () => {
                             </select>
                         </div>
                     )}
+
+                    <div>
+                        <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Kategori</label>
+                        <select
+                            className="w-full h-12 rounded-2xl border border-slate-700 bg-slate-800/60 px-4 text-sm text-slate-100"
+                            value={form.activityId}
+                            onChange={(e) => setForm((prev) => ({ ...prev, activityId: e.target.value }))}
+                        >
+                            {meta.activities.map((activity) => (
+                                <option key={activity.id} value={activity.id}>{activity.name}</option>
+                            ))}
+                        </select>
+                    </div>
 
                     <div>
                         <label className="block text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-2 px-1">Jumlah (Rp)</label>

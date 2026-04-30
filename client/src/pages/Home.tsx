@@ -728,6 +728,7 @@ const Home = () => {
                                             openModal((tx.type as any) || 'EXPENSE', {
                                                 amount: tx.amount,
                                                 description: tx.description || tx.activity?.name,
+                                                activityId: tx.activityId,
                                                 type: (tx.type as any) || undefined,
                                                 sourceAccountId: tx.sourceAccountId || undefined,
                                                 destinationAccountId: tx.destinationAccountId || undefined,
@@ -837,6 +838,7 @@ const Home = () => {
                         {
                             amount: overrideAmount ?? item.parsedAmount ?? undefined,
                             description: suggestedCategory || item.parsedDescription || item.messageText?.slice(0, 100) || item.parseNotes || undefined,
+                            activityId: undefined,
                             type: (normalizedType as any) || undefined,
                             notificationInboxId: item.id,
                             ownerId: prefill.ownerId,
