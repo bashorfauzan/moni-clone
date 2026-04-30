@@ -41,6 +41,7 @@ import {
     updateActivity,
     updateOwner
 } from '../services/masterData';
+import { fetchNotificationInbox, type NotificationItem } from '../services/notificationInbox';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useSecurity } from '../context/SecurityContext';
@@ -86,6 +87,12 @@ type DiagnosticsState = {
     apiMessage: string;
     notificationInboxCount: number | null;
     notificationStatus: string;
+    notificationReviewCount: number;
+    notificationApprovedCount: number;
+    notificationIgnoredCount: number;
+    notificationFailedCount: number;
+    notificationPrioritySummary: string;
+    notificationUpdatedAt: string | null;
 };
 
 const MenuPage = () => {
@@ -163,7 +170,13 @@ const MenuPage = () => {
         apiHealth: 'unknown',
         apiMessage: 'Belum diperiksa',
         notificationInboxCount: null,
-        notificationStatus: 'Belum diperiksa'
+        notificationStatus: 'Belum diperiksa',
+        notificationReviewCount: 0,
+        notificationApprovedCount: 0,
+        notificationIgnoredCount: 0,
+        notificationFailedCount: 0,
+        notificationPrioritySummary: 'Belum ada data review.',
+        notificationUpdatedAt: null
     });
     const [launchingAccountId, setLaunchingAccountId] = useState<string | null>(null);
     const [accountSettingsSaving, setAccountSettingsSaving] = useState(false);
@@ -685,11 +698,55 @@ const MenuPage = () => {
         let isActive = true;
         setDiagnostics((prev) => ({ ...prev, loading: true }));
 
+        const getNotificationBucket = (item: NotificationItem): 'REVIEW' | 'APPROVED' | 'IGNORED' => {
+            if (item.parseStatus === 'IGNORED') return 'IGNORED';
+            if (item.transaction?.isValidated || item.parseStatus === 'PARSED') return 'APPROVED';
+            return 'REVIEW';
+        };
+
+        const buildPrioritySummary = (items: NotificationItem[]) => {
+            if (!items.length) return 'Inbox kosong.';
+
+            const sorted = [...items].sort((a, b) => {
+                const priorityA = a.parseStatus === 'FAILED' ? 0 : getNotificationBucket(a) === 'REVIEW' ? 1 : getNotificationBucket(a) === 'APPROVED' ? 2 : 3;
+                const priorityB = b.parseStatus === 'FAILED' ? 0 : getNotificationBucket(b) === 'REVIEW' ? 1 : getNotificationBucket(b) === 'APPROVED' ? 2 : 3;
+                if (priorityA !== priorityB) return priorityA - priorityB;
+
+                const confidenceA = typeof a.confidenceScore === 'number' ? a.confidenceScore : -1;
+                const confidenceB = typeof b.confidenceScore === 'number' ? b.confidenceScore : -1;
+                if (confidenceA !== confidenceB) return confidenceA - confidenceB;
+
+                return new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime();
+            });
+
+            const topItem = sorted[0];
+            const sourceLabel = topItem.sourceApp || topItem.senderName || topItem.title || 'Notifikasi';
+            if (topItem.parseStatus === 'FAILED') {
+                return `Prioritas tertinggi: ${sourceLabel} gagal diparse dan perlu dicek manual.`;
+            }
+            if (getNotificationBucket(topItem) === 'REVIEW') {
+                return `Prioritas tertinggi: ${sourceLabel} masih perlu review sebelum jadi transaksi final.`;
+            }
+            if (getNotificationBucket(topItem) === 'APPROVED') {
+                return `Item teratas saat ini ${sourceLabel} sudah siap atau sudah tervalidasi.`;
+            }
+            return `Item teratas saat ini ${sourceLabel} sudah diabaikan.`;
+        };
+
         void Promise.allSettled([
             api.get('/health'),
-            api.get('/webhook/notifications?limit=50')
+            fetchNotificationInbox(100)
         ]).then(([healthRes, notificationsRes]) => {
             if (!isActive) return;
+
+            const notificationItems = notificationsRes.status === 'fulfilled' && Array.isArray(notificationsRes.value)
+                ? notificationsRes.value
+                : [];
+
+            const reviewCount = notificationItems.filter((item) => getNotificationBucket(item) === 'REVIEW').length;
+            const approvedCount = notificationItems.filter((item) => getNotificationBucket(item) === 'APPROVED').length;
+            const ignoredCount = notificationItems.filter((item) => getNotificationBucket(item) === 'IGNORED').length;
+            const failedCount = notificationItems.filter((item) => item.parseStatus === 'FAILED').length;
 
             setDiagnostics({
                 loading: false,
@@ -697,12 +754,22 @@ const MenuPage = () => {
                 apiMessage: healthRes.status === 'fulfilled'
                     ? 'API merespons normal'
                     : (healthRes.reason?.response?.data?.error || healthRes.reason?.message || 'API tidak merespons'),
-                notificationInboxCount: notificationsRes.status === 'fulfilled' && Array.isArray(notificationsRes.value.data)
-                    ? notificationsRes.value.data.length
+                notificationInboxCount: notificationsRes.status === 'fulfilled'
+                    ? notificationItems.length
                     : null,
                 notificationStatus: notificationsRes.status === 'fulfilled'
                     ? 'Inbox notifikasi dapat diambil'
-                    : (notificationsRes.reason?.response?.data?.error || notificationsRes.reason?.message || 'Inbox notifikasi gagal diambil')
+                    : (notificationsRes.reason?.response?.data?.error || notificationsRes.reason?.message || 'Inbox notifikasi gagal diambil'),
+                notificationReviewCount: reviewCount,
+                notificationApprovedCount: approvedCount,
+                notificationIgnoredCount: ignoredCount,
+                notificationFailedCount: failedCount,
+                notificationPrioritySummary: notificationsRes.status === 'fulfilled'
+                    ? buildPrioritySummary(notificationItems)
+                    : 'Prioritas review belum bisa dihitung karena inbox gagal diambil.',
+                notificationUpdatedAt: notificationsRes.status === 'fulfilled' && notificationItems.length > 0
+                    ? notificationItems[0]?.receivedAt ?? null
+                    : null
             });
         });
 
@@ -834,6 +901,11 @@ const MenuPage = () => {
             label: 'Inbox Notifikasi',
             value: diagnostics.notificationInboxCount != null ? `${diagnostics.notificationInboxCount} item` : 'Tidak diketahui',
             hint: diagnostics.notificationStatus
+        },
+        {
+            label: 'Status Review',
+            value: `${diagnostics.notificationReviewCount} review • ${diagnostics.notificationApprovedCount} valid`,
+            hint: `${diagnostics.notificationFailedCount} gagal parse • ${diagnostics.notificationIgnoredCount} diabaikan`
         },
         {
             label: 'Master Data',
@@ -1806,10 +1878,24 @@ const MenuPage = () => {
                                 </div>
                             ))}
 
+                            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                                <div className="flex items-center justify-between gap-4">
+                                    <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-amber-600">Prioritas Review</p>
+                                    <p className="text-[11px] font-bold text-amber-700">
+                                        {diagnostics.notificationUpdatedAt
+                                            ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(diagnostics.notificationUpdatedAt))
+                                            : 'Belum ada item'}
+                                    </p>
+                                </div>
+                                <p className="mt-1 text-[11px] leading-relaxed text-slate-600">
+                                    {diagnostics.notificationPrioritySummary}
+                                </p>
+                            </div>
+
                             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3">
                                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-blue-500">Cara Pakai</p>
                                 <p className="mt-1 text-[11px] text-slate-600">
-                                    Jika `API Health` bermasalah tapi `Supabase Env` tersedia, biasanya masalah ada di jalur backend production. Jika dua-duanya normal, cek lagi data transaksi atau notifikasi yang sedang diproses.
+                                    Jika `API Health` bermasalah tapi `Supabase Env` tersedia, biasanya masalah ada di jalur backend production. Jika review atau gagal parse tinggi, buka Inbox Notifikasi untuk periksa item prioritas lebih dulu.
                                 </p>
                             </div>
                         </div>
