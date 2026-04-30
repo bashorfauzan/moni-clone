@@ -17,7 +17,7 @@ interface SecurityContextType {
     isBiometricEnabled: boolean;
     isBiometricSupported: boolean;
     biometricSupportMessage: string;
-    setupSecurity: (pin: string) => void;
+    setupSecurity: (pin: string) => boolean;
     removeSecurity: () => void;
     setupBiometric: () => Promise<boolean>;
     removeBiometric: () => void;
@@ -136,9 +136,16 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     }, []);
 
     const setupSecurity = (pin: string) => {
-        const hash = hashString(pin);
-        localStorage.setItem('app-pin-hash', hash);
-        setPinHash(hash);
+        try {
+            const hash = hashString(pin);
+            localStorage.setItem('app-pin-hash', hash);
+            setPinHash(hash);
+            sessionStorage.setItem('last-active', Date.now().toString());
+            return true;
+        } catch (error) {
+            console.error('Gagal menyimpan PIN keamanan.', error);
+            return false;
+        }
     };
 
     const removeSecurity = () => {
@@ -255,7 +262,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
         return new Promise((resolve) => {
             const currentPinHash = getCurrentPinHash();
             if (!currentPinHash) {
-                resolve(true);
+                alert(`PIN keamanan belum aktif. Aktifkan PIN terlebih dulu untuk aksi "${reason}".`);
+                resolve(false);
                 return;
             }
 

@@ -252,6 +252,8 @@ const Home = () => {
         if (action === 'REJECT') {
             const confirmed = window.confirm('Apakah Anda yakin ingin menolak dan menghapus transaksi pending ini?');
             if (!confirmed) return;
+            const authorized = await verifySecurity('Hapus Transaksi Pending');
+            if (!authorized) return;
         }
 
         setLoading(true);

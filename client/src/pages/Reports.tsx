@@ -853,7 +853,7 @@ const Reports = () => {
                                 return (
                                     <div
                                         key={tx.id}
-                                        className={`flex items-center gap-3 px-4 py-3.5 transition-colors ${selectedTx.has(tx.id) ? 'bg-blue-50/60' : 'hover:bg-slate-50/60'}`}
+                                        className={`flex items-center gap-2.5 px-4 py-3.5 transition-colors ${selectedTx.has(tx.id) ? 'bg-blue-50/60' : 'hover:bg-slate-50/60'}`}
                                         onTouchStart={() => startLongPressSelection(tx.id)}
                                         onTouchEnd={cancelLongPressSelection}
                                         onTouchCancel={cancelLongPressSelection}
@@ -862,13 +862,6 @@ const Reports = () => {
                                         onMouseLeave={cancelLongPressSelection}
                                         onClick={() => handleTransactionPress(tx)}
                                     >
-                                        {selectedTx.has(tx.id) ? (
-                                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-black text-white">
-                                                {selectedTx.size > 1 ? Array.from(selectedTx).indexOf(tx.id) + 1 : '✓'}
-                                            </div>
-                                        ) : (
-                                            <div className="h-7 w-7 shrink-0 rounded-full border border-slate-200 bg-white" />
-                                        )}
                                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>

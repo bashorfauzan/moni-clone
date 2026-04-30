@@ -149,6 +149,7 @@ const MenuPage = () => {
     const [securityPinInput, setSecurityPinInput] = useState('');
     const [securityPinConfirm, setSecurityPinConfirm] = useState('');
     const [securityPinError, setSecurityPinError] = useState('');
+    const [securityPinNotice, setSecurityPinNotice] = useState('');
     const {
         isSecurityEnabled,
         isBiometricEnabled,
@@ -215,6 +216,7 @@ const MenuPage = () => {
         setSecurityPinInput('');
         setSecurityPinConfirm('');
         setSecurityPinError('');
+        setSecurityPinNotice('');
     };
 
     const closeSecurityModal = () => {
@@ -234,9 +236,17 @@ const MenuPage = () => {
             return;
         }
 
-        setupSecurity(securityPinInput);
-        closeSecurityModal();
-        alert('PIN berhasil diatur! Gunakan PIN ini saat membuka aplikasi dan menyimpan transaksi.');
+        const saved = setupSecurity(securityPinInput);
+        if (!saved) {
+            setSecurityPinError('PIN gagal disimpan. Coba lagi.');
+            return;
+        }
+
+        setSecurityPinNotice('PIN berhasil diatur dan siap dipakai.');
+        setSecurityPinStep('menu');
+        setSecurityPinInput('');
+        setSecurityPinConfirm('');
+        setSecurityPinError('');
     };
 
     const fetchMeta = async () => {
@@ -2781,10 +2791,15 @@ const MenuPage = () => {
                         {/* ─── Step: Menu ─────────────────────── */}
                         {securityPinStep === 'menu' && (
                             <div className="space-y-3">
+                                {securityPinNotice && (
+                                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-[12px] font-semibold text-emerald-700">
+                                        {securityPinNotice}
+                                    </div>
+                                )}
                                 {!isSecurityEnabled ? (
                                     <button
                                         className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-rose-50 hover:bg-rose-100 transition-colors text-left border border-rose-100"
-                                        onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('set-pin'); }}
+                                        onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinNotice(''); setSecurityPinStep('set-pin'); }}
                                     >
                                         <div className="flex items-center gap-3">
                                             <Shield size={18} className="text-rose-600 shrink-0" />
@@ -2800,7 +2815,7 @@ const MenuPage = () => {
                                         {/* Change PIN */}
                                         <button
                                             className="w-full flex items-center justify-between gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 transition-colors text-left border border-slate-200"
-                                            onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('change-pin'); }}
+                                            onClick={() => { setSecurityPinInput(''); setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinNotice(''); setSecurityPinStep('change-pin'); }}
                                         >
                                             <div className="flex items-center gap-3">
                                                 <Shield size={18} className="text-slate-600 shrink-0" />

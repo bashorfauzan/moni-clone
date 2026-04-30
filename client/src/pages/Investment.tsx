@@ -87,6 +87,11 @@ const Investment = () => {
     const [selectedRdn, setSelectedRdn] = useState<any>(null);
     const [detailAccount, setDetailAccount] = useState<any | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [incomeFormLock, setIncomeFormLock] = useState<{ ownerId: string; accountId: string; active: boolean }>({
+        ownerId: '',
+        accountId: '',
+        active: false
+    });
 
     // Forms
     const [transferForm, setTransferForm] = useState({
@@ -300,6 +305,7 @@ const Investment = () => {
             });
 
             setIsIncomeModalOpen(false);
+            setIncomeFormLock({ ownerId: '', accountId: '', active: false });
             setIncomeForm((prev) => ({
                 ...prev,
                 amount: '',
@@ -481,6 +487,15 @@ const Investment = () => {
                                         const preferredOwnerId = selectedOwnerId !== 'ALL'
                                             ? selectedOwnerId
                                             : owners[0]?.id || '';
+                                        if (selectedOwnerId === 'ALL') {
+                                            alert('Pilih kepemilikan tertentu dulu agar pertumbuhan investasi tercatat ke owner yang benar.');
+                                            return;
+                                        }
+                                        setIncomeFormLock({
+                                            ownerId: preferredOwnerId,
+                                            accountId: rdn.id,
+                                            active: true
+                                        });
                                         setIncomeForm((prev) => ({
                                             ...prev,
                                             kind: 'STOCK_GROWTH',
@@ -595,7 +610,7 @@ const Investment = () => {
             )}
 
             {isIncomeModalOpen && (
-                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => setIsIncomeModalOpen(false)}>
+                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => { setIsIncomeModalOpen(false); setIncomeFormLock({ ownerId: '', accountId: '', active: false }); }}>
                     <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <div>
@@ -604,7 +619,7 @@ const Investment = () => {
                                     Pemasukan akan langsung menambah saldo rekening investasi yang dipilih
                                 </p>
                             </div>
-                            <button onClick={() => setIsIncomeModalOpen(false)} className="p-2 text-slate-400"><X size={18} /></button>
+                            <button onClick={() => { setIsIncomeModalOpen(false); setIncomeFormLock({ ownerId: '', accountId: '', active: false }); }} className="p-2 text-slate-400"><X size={18} /></button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
@@ -631,6 +646,7 @@ const Investment = () => {
                                     className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
                                     value={incomeForm.ownerId}
                                     onChange={(e) => setIncomeForm((prev) => ({ ...prev, ownerId: e.target.value }))}
+                                    disabled={incomeFormLock.active}
                                 >
                                     {owners.map((owner) => (
                                         <option key={owner.id} value={owner.id}>{owner.name}</option>
@@ -670,7 +686,7 @@ const Investment = () => {
                                     value={incomeForm.accountId}
                                     onChange={(e) => setIncomeForm((prev) => ({ ...prev, accountId: e.target.value }))}
                                     required
-                                    disabled={investmentIncomeAccounts.length === 0}
+                                    disabled={investmentIncomeAccounts.length === 0 || incomeFormLock.active}
                                 >
                                     <option value="" disabled>Pilih rekening investasi...</option>
                                     {investmentIncomeAccounts.map((account) => (
