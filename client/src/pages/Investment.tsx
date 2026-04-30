@@ -147,6 +147,12 @@ const Investment = () => {
     const scopedTransactions = selectedOwnerId === 'ALL'
         ? validatedTransactions
         : validatedTransactions.filter((tx: any) => tx.ownerId === selectedOwnerId);
+    const currentMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const nextMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+    const monthlyInvestmentTransactions = scopedTransactions.filter((tx: any) => {
+        const txDate = new Date(tx.date);
+        return txDate >= currentMonthStart && txDate < nextMonthStart;
+    });
 
     const filteredRdns = rdnAccounts;
 
@@ -173,6 +179,26 @@ const Investment = () => {
     const totalReturnPercent = totalModal > 0 ? (totalReturnAmount / totalModal) * 100 : 0;
     const totalDepositCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.depositCount || 0), 0);
     const totalIncomeCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.incomeCount || 0), 0);
+    const monthlyInvestmentSnapshot = monthlyInvestmentTransactions.reduce((acc, tx: any) => {
+        if (isInvestmentTransfer(tx)) {
+            acc.deposit += tx.amount;
+            acc.depositCount += 1;
+        } else if (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccount?.type === 'RDN') {
+            acc.withdrawal += tx.amount;
+            acc.withdrawalCount += 1;
+        } else if (isInvestmentIncome(tx)) {
+            acc.income += tx.amount;
+            acc.incomeCount += 1;
+        }
+        return acc;
+    }, {
+        deposit: 0,
+        income: 0,
+        withdrawal: 0,
+        depositCount: 0,
+        incomeCount: 0,
+        withdrawalCount: 0
+    });
     const ownershipRows = detailAccount
         ? owners
             .map((owner) => {
@@ -357,6 +383,38 @@ const Investment = () => {
                             </p>
                             <p className="text-[8px] font-bold text-white/55">{totalIncomeCount} pemasukan investasi</p>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Snapshot Bulan Ini</p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                            Arus investasi untuk {selectedOwnerName} pada {currentMonthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}.
+                        </p>
+                    </div>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                        {monthlyInvestmentSnapshot.depositCount + monthlyInvestmentSnapshot.incomeCount + monthlyInvestmentSnapshot.withdrawalCount} transaksi
+                    </span>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-blue-50 px-4 py-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-500">Setoran Modal</p>
+                        <p className="mt-2 text-base font-black text-blue-700">{formatCurrency(monthlyInvestmentSnapshot.deposit)}</p>
+                        <p className="mt-1 text-[11px] text-blue-600">{monthlyInvestmentSnapshot.depositCount} transaksi</p>
+                    </div>
+                    <div className="rounded-2xl bg-emerald-50 px-4 py-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-500">Hasil Investasi</p>
+                        <p className="mt-2 text-base font-black text-emerald-700">{formatCurrency(monthlyInvestmentSnapshot.income)}</p>
+                        <p className="mt-1 text-[11px] text-emerald-600">{monthlyInvestmentSnapshot.incomeCount} transaksi</p>
+                    </div>
+                    <div className="rounded-2xl bg-amber-50 px-4 py-4">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Pencairan</p>
+                        <p className="mt-2 text-base font-black text-amber-700">{formatCurrency(monthlyInvestmentSnapshot.withdrawal)}</p>
+                        <p className="mt-1 text-[11px] text-amber-600">{monthlyInvestmentSnapshot.withdrawalCount} transaksi</p>
                     </div>
                 </div>
             </div>
