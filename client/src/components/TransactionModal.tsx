@@ -132,6 +132,22 @@ const TransactionModal = () => {
 
     const accountById = (id: string) => meta.accounts.find((acc) => acc.id === id);
     const selectedSourceAccount = accountById(form.sourceAccountId);
+    const selectedDestinationAccount = accountById(form.destinationAccountId);
+    const enteredAmount = Number(form.amount || 0);
+    const projectedSourceBalance = selectedSourceAccount
+        ? Math.max(0, selectedSourceAccount.balance - enteredAmount)
+        : null;
+    const projectedDestinationBalance = selectedDestinationAccount
+        ? selectedDestinationAccount.balance + enteredAmount
+        : null;
+    const impactSummary = (() => {
+        if (!enteredAmount) return null;
+        if (isIncome) return 'Dana akan menambah saldo rekening tujuan.';
+        if (isExpense) return 'Dana akan mengurangi saldo rekening sumber.';
+        if (isInvestment) return 'Dana akan berpindah dari rekening kas ke rekening investasi.';
+        if (isTransfer || isTopUp) return 'Dana akan dipindahkan dari rekening sumber ke rekening tujuan.';
+        return null;
+    })();
 
     const filteredAccounts = useMemo(() => {
         const accounts = meta.accounts.filter((acc) => {
@@ -392,6 +408,58 @@ const TransactionModal = () => {
                                     </button>
                                 </div>
                             )}
+                        </div>
+                    )}
+
+                    {(selectedSourceAccount || selectedDestinationAccount) && (
+                        <div className="rounded-2xl border border-slate-800 bg-slate-800/70 p-4">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">Dampak Transaksi</p>
+                                    {impactSummary ? (
+                                        <p className="mt-1 text-[11px] text-slate-300">{impactSummary}</p>
+                                    ) : (
+                                        <p className="mt-1 text-[11px] text-slate-400">Pilih rekening dan isi nominal untuk melihat perubahan saldo.</p>
+                                    )}
+                                </div>
+                                {enteredAmount > 0 && (
+                                    <span className="rounded-full bg-slate-700 px-2.5 py-1 text-[10px] font-bold text-slate-200">
+                                        {formatCurrency(enteredAmount)}
+                                    </span>
+                                )}
+                            </div>
+
+                            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                {selectedSourceAccount && (
+                                    <div className="rounded-xl bg-slate-900/70 px-3 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Sumber</p>
+                                        <p className="mt-1 text-sm font-bold text-slate-100">{selectedSourceAccount.name}</p>
+                                        <p className="mt-2 text-[11px] text-slate-400">
+                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(selectedSourceAccount.balance)}</span>
+                                        </p>
+                                        {projectedSourceBalance !== null && enteredAmount > 0 ? (
+                                            <p className="mt-1 text-[11px] text-rose-300">
+                                                Setelah transaksi: <span className="font-semibold">{formatCurrency(projectedSourceBalance)}</span>
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                )}
+
+                                {selectedDestinationAccount && (
+                                    <div className="rounded-xl bg-slate-900/70 px-3 py-3">
+                                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Tujuan</p>
+                                        <p className="mt-1 text-sm font-bold text-slate-100">{selectedDestinationAccount.name}</p>
+                                        <p className="mt-2 text-[11px] text-slate-400">
+                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(selectedDestinationAccount.balance)}</span>
+                                        </p>
+                                        {projectedDestinationBalance !== null && enteredAmount > 0 ? (
+                                            <p className="mt-1 text-[11px] text-emerald-300">
+                                                Setelah transaksi: <span className="font-semibold">{formatCurrency(projectedDestinationBalance)}</span>
+                                            </p>
+                                        ) : null}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
