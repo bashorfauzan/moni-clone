@@ -477,6 +477,26 @@ const Investment = () => {
                                     <ArrowRightLeft size={14} /> Transfer / Cairkan
                                 </button>
                                 <button
+                                    onClick={() => {
+                                        const preferredOwnerId = selectedOwnerId !== 'ALL'
+                                            ? selectedOwnerId
+                                            : owners[0]?.id || '';
+                                        setIncomeForm((prev) => ({
+                                            ...prev,
+                                            kind: 'STOCK_GROWTH',
+                                            ownerId: preferredOwnerId,
+                                            accountId: rdn.id,
+                                            amount: '',
+                                            description: 'Pertumbuhan saham',
+                                            date: new Date().toISOString().slice(0, 10)
+                                        }));
+                                        setIsIncomeModalOpen(true);
+                                    }}
+                                    className="flex items-center justify-center gap-2 h-11 w-full rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs hover:bg-emerald-100 transition-colors"
+                                >
+                                    <TrendingUp size={14} /> Update Pertumbuhan
+                                </button>
+                                <button
                                     onClick={() => setDetailAccount(rdn)}
                                     className="flex items-center justify-center h-11 w-full rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition-colors"
                                 >
