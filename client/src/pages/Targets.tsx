@@ -25,6 +25,9 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
     return Math.max(1, months);
 };
 
+const isSameCalendarMonth = (left: Date, right: Date) =>
+    left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
+
 const Targets = () => {
     const { verifySecurity } = useSecurity();
     const [data, setData] = useState<any>({ accounts: [], owners: [] });
@@ -172,6 +175,7 @@ const Targets = () => {
     const isSafe = bankIncomeMonth >= totalTargetAmount;
     const progressBase = totalTargetAmount <= 0 ? 100 : Math.min(100, (bankIncomeMonth / totalTargetAmount) * 100);
     const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
@@ -180,7 +184,7 @@ const Targets = () => {
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
             </header>
 
-            <div className="rounded-[32px] border border-slate-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
+            <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
                 <div className="flex items-center justify-between gap-3">
                     <div>
                         <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Budget Alert Bulan Ini</p>
@@ -216,7 +220,7 @@ const Targets = () => {
             </div>
 
             <section className="space-y-4">
-                <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-widest text-slate-600">
+                <div className="app-section-header rounded-2xl px-4 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-600">
                     <h3>Target Tagihan</h3>
                     <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
                         <span className="text-[11px] sm:text-xs">Total target aktif: {formatCurrency(totalTargetAmount)}</span>
@@ -242,52 +246,66 @@ const Targets = () => {
                 {targets.map((target) => {
                     const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
                     const monthsLeft = target.isActive
-                        ? Math.max(0, diffInCalendarMonthsInclusive(now.toISOString(), target.dueDate) || 0)
+                        ? Math.max(0, diffInCalendarMonthsInclusive(startOfCurrentMonth.toISOString(), target.dueDate) || 0)
                         : 0;
-                    const suggestedContribution = Math.max(1, Math.min(
+                    const suggestedContribution = Math.max(0, Math.min(
                         target.remainingAmount,
                         Math.ceil(target.totalAmount / totalMonths)
                     ));
                     const paidAmount = Math.max(0, target.totalAmount - target.remainingAmount);
                     const progressPercent = target.totalAmount <= 0 ? 100 : Math.min(100, (paidAmount / target.totalAmount) * 100);
+                    const lastContributionAt = target.lastContributionAt ? new Date(target.lastContributionAt) : null;
+                    const alreadyMarkedThisMonth = Boolean(
+                        lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
+                    );
+                    const isTransferButtonDisabled = !target.isActive || alreadyMarkedThisMonth || markingTargetId === target.id;
+                    const transferButtonLabel = markingTargetId === target.id
+                        ? 'Memproses...'
+                        : !target.isActive
+                            ? 'Target Selesai'
+                            : alreadyMarkedThisMonth
+                                ? 'Sudah TF Bulan Ini'
+                                : 'Tandai Sudah TF';
+                    const remainingTimeLabel = target.isActive ? `${monthsLeft} bulan lagi` : 'Selesai';
+                    const remainingTargetLabel = target.remainingAmount > 0 ? formatCurrency(target.remainingAmount) : 'Lunas';
+                    const recommendationLabel = suggestedContribution > 0 ? formatCurrency(suggestedContribution) : 'Tidak ada setoran';
 
                     return (
                         <div
                             key={target.id}
-                            className="rounded-[30px] border border-slate-100 bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
+                            className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <h4 className="text-[18px] font-bold tracking-tight text-slate-950 sm:text-[20px]">
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <h4 className="text-[20px] font-bold tracking-tight text-slate-950 sm:text-[22px]">
                                             {target.title}
                                         </h4>
                                         <span
-                                            className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.22em] ${
+                                            className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${
                                                 target.isActive
                                                     ? 'bg-blue-50 text-blue-600'
                                                     : 'bg-emerald-50 text-emerald-600'
                                             }`}
                                         >
-                                            {target.isActive ? 'Aktif' : 'Selesai'}
+                                            {target.isActive ? 'AKTIF' : 'SELESAI'}
                                         </span>
                                     </div>
-                                    <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.26em] text-slate-400">
-                                        {totalMonths} Bulan
-                                        {target.isActive && ` • ${monthsLeft} Setoran Lagi`}
+                                    <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                                        {totalMonths} BULAN
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={() => openEditTargetModal(target)}
-                                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-600"
+                                        className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-600"
                                         title="Edit"
                                     >
                                         <Pencil size={16} />
                                     </button>
                                     <button
                                         onClick={() => handleDeleteTarget(target.id)}
-                                        className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-50 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
+                                        className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-rose-50 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
                                         title="Hapus"
                                     >
                                         <Trash2 size={16} />
@@ -295,72 +313,74 @@ const Targets = () => {
                                 </div>
                             </div>
 
-                            <div className="mt-5 grid grid-cols-2 gap-3">
-                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Nominal Tagihan
+                            <div className="mt-6 grid grid-cols-2 gap-3">
+                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Nominal<br/>Tagihan
                                     </p>
-                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
+                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-slate-950 sm:text-[17px]">
                                         {formatCurrency(target.totalAmount)}
                                     </p>
                                 </div>
-                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
                                         Sisa Waktu
                                     </p>
-                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
-                                        {monthsLeft} bulan lagi
+                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-slate-950 sm:text-[17px]">
+                                        {remainingTimeLabel}
                                     </p>
                                 </div>
-                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Sudah Terkumpul
+                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                        Sudah<br/>Terkumpul
                                     </p>
-                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-emerald-600 sm:text-[18px]">
+                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-emerald-600 sm:text-[17px]">
                                         {formatCurrency(paidAmount)}
                                     </p>
                                 </div>
-                                <div className="rounded-3xl bg-slate-50 px-4 py-4">
-                                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
                                         Sisa Target
                                     </p>
-                                    <p className="mt-2 text-[17px] font-bold tracking-tight text-rose-600 sm:text-[18px]">
-                                        {formatCurrency(target.remainingAmount)}
+                                    <p className={`mt-3 text-[16px] font-bold tracking-tight sm:text-[17px] ${target.remainingAmount > 0 ? 'text-rose-600' : 'text-slate-950'}`}>
+                                        {remainingTargetLabel}
                                     </p>
                                 </div>
                             </div>
 
-                            <div className="mt-4 rounded-3xl border border-slate-100 bg-slate-50/80 p-4">
+                            <div className="mt-4 rounded-[24px] bg-slate-50 p-5">
                                 <div className="flex items-center justify-between gap-3">
-                                    <div>
-                                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Setoran Bulanan</p>
-                                        <p className="mt-1 text-base font-bold text-slate-900">
-                                            {formatCurrency(suggestedContribution)}
-                                        </p>
-                                    </div>
-                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Setoran Bulanan</p>
+                                    <span className="text-[10px] font-bold tracking-widest text-slate-500">
                                         {Math.round(progressPercent)}%
                                     </span>
                                 </div>
+                                <p className="mt-1 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">
+                                    {recommendationLabel}
+                                </p>
 
-                                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-200">
+                                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
                                     <div
-                                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-500 transition-all"
+                                        className="h-full rounded-full bg-gradient-to-r from-teal-400 to-sky-500 transition-all"
                                         style={{ width: `${progressPercent}%` }}
                                     />
                                 </div>
 
-                                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <p className="text-[11px] text-slate-500">
-                                        Tombol ini mengurangi sisa target sebesar cicilan rekomendasi untuk periode berjalan.
+                                <div className="mt-5">
+                                    <p className="text-[10px] text-slate-500 leading-relaxed">
+                                        {!target.isActive
+                                            ? 'Target ini sudah lunas, jadi tidak perlu setoran tambahan.'
+                                            : alreadyMarkedThisMonth
+                                                ? 'Setoran bulan ini sudah ditandai. Tombol akan aktif lagi di bulan berikutnya.'
+                                                : `Tombol ini mengurangi sisa target sebesar cicilan rekomendasi untuk periode berjalan.`}
                                     </p>
                                     <button
                                         type="button"
                                         onClick={() => void handleMarkTargetTransferred(target)}
-                                        disabled={!target.isActive || markingTargetId === target.id}
-                                        className="inline-flex h-10 items-center justify-center rounded-2xl bg-slate-900 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                        disabled={isTransferButtonDisabled}
+                                        className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-[16px] bg-slate-900 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white"
                                     >
-                                        {markingTargetId === target.id ? 'Memproses...' : 'Sudah TF'}
+                                        {transferButtonLabel}
                                     </button>
                                 </div>
                             </div>

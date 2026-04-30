@@ -10,6 +10,7 @@ export type TargetItem = {
     remainingAmount: number;
     period: 'YEARLY' | 'FIVE_YEAR';
     isActive: boolean;
+    lastContributionAt?: string | null;
     dueDate?: string | null;
     createdAt?: string;
     ownerId: string;
@@ -72,9 +73,10 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
 };
 
 const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' | 'remainingAmount' | 'createdAt' | 'dueDate'>) => {
+    if (target.remainingAmount <= 0) return 0;
     const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
     const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
-    return Math.max(1, Math.min(target.remainingAmount, rawInstallment));
+    return Math.max(0, Math.min(target.remainingAmount, rawInstallment));
 };
 
 const normalizeTarget = (row: any): TargetItem => ({
@@ -84,6 +86,7 @@ const normalizeTarget = (row: any): TargetItem => ({
     remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0),
     period: row.period,
     isActive: Boolean(row.isActive ?? row.is_active),
+    lastContributionAt: row.lastContributionAt ?? row.last_contribution_at ?? null,
     dueDate: row.dueDate ?? row.due_date ?? null,
     createdAt: row.createdAt ?? row.created_at ?? undefined,
     ownerId: row.ownerId ?? row.owner_id,
@@ -103,6 +106,7 @@ export const fetchTargets = async (): Promise<TargetsResponse> => {
                 remainingAmount,
                 period,
                 isActive,
+                lastContributionAt,
                 dueDate,
                 createdAt,
                 ownerId,
@@ -165,6 +169,7 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
                 remainingAmount,
                 period,
                 isActive,
+                lastContributionAt,
                 dueDate,
                 createdAt,
                 ownerId,
@@ -220,6 +225,7 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
                 remainingAmount,
                 period,
                 isActive,
+                lastContributionAt,
                 dueDate,
                 createdAt,
                 ownerId,
@@ -261,6 +267,7 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
                 remainingAmount,
                 period,
                 isActive,
+                lastContributionAt,
                 dueDate,
                 createdAt,
                 ownerId,
@@ -278,6 +285,16 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
             throw new Error('Target ini sudah selesai');
         }
 
+        const now = new Date();
+        const lastContributionAt = normalizedCurrent.lastContributionAt ? new Date(normalizedCurrent.lastContributionAt) : null;
+        const alreadyMarkedThisMonth = lastContributionAt
+            && lastContributionAt.getFullYear() === now.getFullYear()
+            && lastContributionAt.getMonth() === now.getMonth();
+
+        if (alreadyMarkedThisMonth) {
+            throw new Error('Setoran target bulan ini sudah ditandai');
+        }
+
         const appliedAmount = getSuggestedContributionAmount(normalizedCurrent);
         const nextRemaining = Math.max(0, normalizedCurrent.remainingAmount - appliedAmount);
 
@@ -286,7 +303,8 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
             .update({
                 remainingAmount: nextRemaining,
                 isActive: nextRemaining > 0,
-                updatedAt: new Date().toISOString()
+                lastContributionAt: now.toISOString(),
+                updatedAt: now.toISOString()
             })
             .eq('id', id)
             .select(`
@@ -296,6 +314,7 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
                 remainingAmount,
                 period,
                 isActive,
+                lastContributionAt,
                 dueDate,
                 createdAt,
                 ownerId,

@@ -143,6 +143,7 @@ model Target {
   remainingAmount Float
   period          TargetPeriod
   isActive        Boolean      @default(true)
+  lastContributionAt DateTime?
   dueDate         DateTime?
   owner           Owner        @relation(fields: [ownerId], references: [id])
   ownerId         String

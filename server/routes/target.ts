@@ -40,10 +40,14 @@ const getSuggestedContributionAmount = (target: {
     createdAt?: Date | null;
     dueDate?: Date | null;
 }) => {
+    if (target.remainingAmount <= 0) return 0;
     const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
     const rawInstallment = Math.ceil(target.totalAmount / totalMonths);
-    return Math.max(1, Math.min(target.remainingAmount, rawInstallment));
+    return Math.max(0, Math.min(target.remainingAmount, rawInstallment));
 };
+
+const isSameCalendarMonth = (left: Date, right: Date) =>
+    left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 
 router.get('/', async (_req, res) => {
     try {
@@ -140,6 +144,10 @@ router.post('/:id/mark-progress', async (req, res) => {
             return res.status(400).json({ error: 'Target ini sudah selesai' });
         }
 
+        if (current.lastContributionAt && isSameCalendarMonth(new Date(current.lastContributionAt), new Date())) {
+            return res.status(400).json({ error: 'Setoran target bulan ini sudah ditandai' });
+        }
+
         const appliedAmount = getSuggestedContributionAmount(current);
         const nextRemaining = Math.max(0, current.remainingAmount - appliedAmount);
 
@@ -147,7 +155,8 @@ router.post('/:id/mark-progress', async (req, res) => {
             where: { id: req.params.id },
             data: {
                 remainingAmount: nextRemaining,
-                isActive: nextRemaining > 0
+                isActive: nextRemaining > 0,
+                lastContributionAt: new Date()
             },
             include: { owner: true }
         });

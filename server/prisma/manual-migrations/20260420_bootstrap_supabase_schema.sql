@@ -100,6 +100,7 @@ CREATE TABLE "Target" (
     "remainingAmount" DOUBLE PRECISION NOT NULL,
     "period" "TargetPeriod" NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
+    "lastContributionAt" TIMESTAMP(3),
     "dueDate" TIMESTAMP(3),
     "ownerId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
