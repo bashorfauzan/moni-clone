@@ -159,7 +159,6 @@ const Targets = () => {
 
     if (loading) return <Spinner message="Menganalisis Likuiditas..." />;
 
-    const activeTargets = targets.filter(t => t.isActive);
     const now = new Date();
     const isMarkedThisMonth = (target: TargetItem) => {
         if (!target.lastContributionAt) return false;
