@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createTarget, deleteTarget, fetchTargets, markTargetAsTransferred, type TargetItem, updateTarget } from '../services/targets';
-import { fetchTransactions, type TransactionItem } from '../services/transactions';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
 import { useSecurity } from '../context/SecurityContext';
@@ -32,7 +31,6 @@ const Targets = () => {
     const { verifySecurity } = useSecurity();
     const [data, setData] = useState<any>({ accounts: [], owners: [] });
     const [targets, setTargets] = useState<TargetItem[]>([]);
-    const [transactions, setTransactions] = useState<TransactionItem[]>([]);
     const [submitting, setSubmitting] = useState(false);
     const [markingTargetId, setMarkingTargetId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -40,17 +38,19 @@ const Targets = () => {
     const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
     const [form, setForm] = useState({ title: '', totalAmount: '', monthCount: '' });
 
+    const loadPageData = async () => {
+        const [metaRes, targetRes] = await Promise.all([
+            fetchMasterMeta(),
+            fetchTargets()
+        ]);
+        setData({ accounts: metaRes.accounts, owners: metaRes.owners });
+        setTargets(targetRes.targets || []);
+    };
+
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [metaRes, targetRes, transactionRes] = await Promise.all([
-                    fetchMasterMeta(),
-                    fetchTargets(),
-                    fetchTransactions({ validated: true })
-                ]);
-                setData({ accounts: metaRes.accounts, owners: metaRes.owners });
-                setTargets(targetRes.targets || []);
-                setTransactions(transactionRes);
+                await loadPageData();
             } catch (error) {
                 console.error('Error fetching liquidity data:', error);
             } finally {
@@ -160,24 +160,21 @@ const Targets = () => {
     if (loading) return <Spinner message="Menganalisis Likuiditas..." />;
 
     const activeTargets = targets.filter(t => t.isActive);
-    const totalTargetAmount = activeTargets.reduce((sum, t) => sum + t.totalAmount, 0);
-    const currentDate = new Date();
-    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-    const bankIncomeMonth = transactions
-        .filter((tx) => {
-            const txDate = new Date(tx.date);
-            return tx.type === 'INCOME'
-                && txDate >= startOfMonth
-                && txDate < endOfMonth
-                && (tx.destinationAccount?.type === 'Bank' || tx.destinationAccount?.type === 'E-Wallet');
-        })
-        .reduce((sum, tx) => sum + tx.amount, 0);
-    const activeRemaining = Math.max(0, totalTargetAmount - bankIncomeMonth);
-    const surplusIncome = Math.max(0, bankIncomeMonth - totalTargetAmount);
-    const isSafe = bankIncomeMonth >= totalTargetAmount;
-    const progressBase = totalTargetAmount <= 0 ? 100 : Math.min(100, (bankIncomeMonth / totalTargetAmount) * 100);
     const now = new Date();
+    const isMarkedThisMonth = (target: TargetItem) => {
+        if (!target.lastContributionAt) return false;
+        return isSameCalendarMonth(new Date(target.lastContributionAt), now);
+    };
+    const monthlyWorkflowTargets = targets.filter((target) => target.isActive || isMarkedThisMonth(target));
+    const monthlyTargetAmount = monthlyWorkflowTargets.reduce((sum, target) => sum + target.totalAmount, 0);
+    const transferredThisMonth = monthlyWorkflowTargets
+        .filter((target) => isMarkedThisMonth(target))
+        .reduce((sum, target) => sum + target.totalAmount, 0);
+    const remainingThisMonth = Math.max(0, monthlyTargetAmount - transferredThisMonth);
+    const surplusThisMonth = Math.max(0, transferredThisMonth - monthlyTargetAmount);
+    const isSafe = monthlyTargetAmount > 0 && remainingThisMonth === 0;
+    const progressBase = monthlyTargetAmount <= 0 ? 100 : Math.min(100, (transferredThisMonth / monthlyTargetAmount) * 100);
+    const totalTargetAmount = activeTargets.reduce((sum, t) => sum + t.totalAmount, 0);
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
@@ -186,57 +183,57 @@ const Targets = () => {
                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
             </header>
 
-            <div className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Budget Alert Bulan Ini</p>
-                        <h2 className="mt-2 text-lg font-bold tracking-tight text-slate-950">Ringkasan Likuiditas</h2>
+            <div className="app-hero-card rounded-[32px] p-5 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
+                <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-20 -mt-20" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.25 }}></div>
+                <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.15 }}></div>
+                <div className="relative z-10">
+                    <div className="flex items-start justify-between gap-3 mb-6">
+                        <div className="flex flex-col gap-3 min-w-0">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Budget Bulan Ini</p>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    type="button"
+                                    onClick={openAddTargetModal}
+                                    className="h-10 w-10 shrink-0 rounded-xl bg-blue-500 text-white flex items-center justify-center shadow-lg shadow-blue-500/30 hover:bg-blue-400 transition-transform active:scale-95"
+                                    aria-label="Tambah target"
+                                    title="Tambah target"
+                                >
+                                    <Plus size={20} />
+                                </button>
+                                <h2 className="text-base sm:text-lg font-bold text-white truncate">Ringkasan Likuiditas</h2>
+                            </div>
+                        </div>
+                        <div className={`mt-0.5 shrink-0 rounded-full px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.18em] ${isSafe ? 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30' : 'bg-rose-400/20 text-rose-300 border border-rose-400/30'}`}>
+                            {isSafe ? 'Aman' : 'Kurang'}
+                        </div>
                     </div>
-                    <div className={`rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] ${isSafe ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                        {isSafe ? 'Aman' : 'Kurang'}
-                    </div>
-                </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Pendapatan</p>
-                        <p className="mt-2 text-[17px] font-bold tracking-tight text-emerald-600 sm:text-[18px]">{formatCurrency(bankIncomeMonth)}</p>
-                    </div>
-                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Target Aktif</p>
-                        <p className="mt-2 text-[17px] font-bold tracking-tight text-slate-950 sm:text-[18px]">{formatCurrency(totalTargetAmount)}</p>
-                    </div>
-                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                            {isSafe ? 'Kelebihan Dana' : 'Sisa Kebutuhan'}
-                        </p>
-                        <p className={`mt-2 text-[17px] font-bold tracking-tight sm:text-[18px] ${isSafe ? 'text-sky-600' : 'text-rose-600'}`}>
-                            {formatCurrency(isSafe ? surplusIncome : activeRemaining)}
-                        </p>
-                    </div>
-                    <div className="rounded-[24px] border border-slate-100 bg-white px-4 py-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]">
-                        <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">Progress</p>
-                        <p className="mt-2 text-[17px] font-bold tracking-tight text-amber-600 sm:text-[18px]">{Math.round(progressBase)}%</p>
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Sudah TF</p>
+                            <p className="mt-1 text-sm font-bold text-emerald-300">{formatCurrency(transferredThisMonth)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Tagihan</p>
+                            <p className="mt-1 text-sm font-bold text-white">{formatCurrency(monthlyTargetAmount)}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
+                                {isSafe ? 'Kelebihan Dana' : 'Sisa Kebutuhan'}
+                            </p>
+                            <p className={`mt-1 text-sm font-bold ${isSafe ? 'text-sky-300' : 'text-rose-300'}`}>
+                                {formatCurrency(isSafe ? surplusThisMonth : remainingThisMonth)}
+                            </p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Progress</p>
+                            <p className="mt-1 text-sm font-bold text-amber-300">{Math.round(progressBase)}%</p>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <section className="space-y-4">
-                <div className="app-section-header rounded-2xl px-4 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 text-xs font-bold uppercase tracking-widest text-slate-600">
-                    <h3>Target Tagihan</h3>
-                    <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
-                        <span className="text-[11px] sm:text-xs">Total target aktif: {formatCurrency(totalTargetAmount)}</span>
-                        <button
-                            type="button"
-                            onClick={openAddTargetModal}
-                            className="h-8 w-8 rounded-lg bg-blue-600 text-white flex items-center justify-center"
-                            aria-label="Tambah target"
-                            title="Tambah target"
-                        >
-                            <Plus size={14} />
-                        </button>
-                    </div>
-                </div>
 
                 {targets.length === 0 && (
                     <div className="rounded-[30px] border border-slate-100 bg-white p-8 text-center text-sm text-slate-500 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
@@ -245,143 +242,102 @@ const Targets = () => {
                 )}
 
                 <div className="space-y-4">
-                {targets.map((target) => {
-                    const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
-                    const monthsLeft = Math.max(0, target.remainingMonths);
-                    const paidAmount = Math.max(0, (totalMonths - monthsLeft) * target.totalAmount);
-                    const progressPercent = totalMonths <= 0 ? 100 : Math.min(100, ((totalMonths - monthsLeft) / totalMonths) * 100);
-                    const lastContributionAt = target.lastContributionAt ? new Date(target.lastContributionAt) : null;
-                    const alreadyMarkedThisMonth = Boolean(
-                        lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
-                    );
-                    const isTransferButtonDisabled = !target.isActive || alreadyMarkedThisMonth || markingTargetId === target.id;
-                    const transferButtonLabel = markingTargetId === target.id
-                        ? 'Memproses...'
-                        : !target.isActive
-                            ? 'Target Selesai'
-                            : alreadyMarkedThisMonth
-                                ? 'Sudah TF Bulan Ini'
-                                : 'Tandai Sudah TF';
-                    const remainingTimeLabel = `${monthsLeft} bulan lagi`;
-                    const remainingTargetLabel = formatCurrency(target.remainingAmount);
+                    {targets.map((target) => {
+                        const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+                        const monthsLeft = Math.max(0, target.remainingMonths);
+                        const paidAmount = Math.max(0, (totalMonths - monthsLeft) * target.totalAmount);
+                        const progressPercent = totalMonths <= 0 ? 100 : Math.min(100, ((totalMonths - monthsLeft) / totalMonths) * 100);
+                        const lastContributionAt = target.lastContributionAt ? new Date(target.lastContributionAt) : null;
+                        const alreadyMarkedThisMonth = Boolean(
+                            lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
+                        );
+                        const isTransferButtonDisabled = !target.isActive || alreadyMarkedThisMonth || markingTargetId === target.id;
+                        const transferButtonLabel = markingTargetId === target.id
+                            ? 'Memproses...'
+                            : !target.isActive
+                                ? 'Target Selesai'
+                                : alreadyMarkedThisMonth
+                                    ? 'Sudah TF Bulan Ini'
+                                    : 'Tandai Sudah TF';
+                        const remainingTimeLabel = `${monthsLeft} bulan lagi`;
+                        const remainingTargetLabel = formatCurrency(target.remainingAmount);
 
-                    return (
-                        <div
-                            key={target.id}
-                            className="rounded-[32px] border border-slate-100 bg-white p-6 shadow-[0_10px_30px_rgba(15,23,42,0.06)]"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0">
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        <h4 className="text-[20px] font-bold tracking-tight text-slate-950 sm:text-[22px]">
-                                            {target.title}
-                                        </h4>
-                                        <span
-                                            className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] ${
-                                                target.isActive
-                                                    ? 'bg-blue-50 text-blue-600'
-                                                    : 'bg-emerald-50 text-emerald-600'
-                                            }`}
-                                        >
-                                            {target.isActive ? 'AKTIF' : 'SELESAI'}
-                                        </span>
+                        return (
+                            <div
+                                key={target.id}
+                                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm flex flex-col gap-3"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
+                                            <h4 className="text-sm font-bold text-slate-900 truncate">
+                                                {target.title}
+                                            </h4>
+                                            {!target.isActive && (
+                                                <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-600">
+                                                    Selesai
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-500 truncate">
+                                            {formatCurrency(target.totalAmount)} / bln <span className="text-slate-300 mx-1">•</span> {monthsLeft} bln tersisa
+                                        </p>
                                     </div>
-                                    <p className="mt-3 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                                        {totalMonths} BULAN
-                                    </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => openEditTargetModal(target)}
-                                        className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100 hover:text-blue-600"
-                                        title="Edit"
-                                    >
-                                        <Pencil size={16} />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteTarget(target.id)}
-                                        className="flex h-10 w-10 items-center justify-center rounded-[16px] bg-rose-50 text-rose-500 transition-colors hover:bg-rose-100 hover:text-rose-600"
-                                        title="Hapus"
-                                    >
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 grid grid-cols-2 gap-3">
-                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Nominal<br/>Tagihan
-                                    </p>
-                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-slate-950 sm:text-[17px]">
-                                        {formatCurrency(target.totalAmount)}
-                                    </p>
-                                </div>
-                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Sisa Waktu
-                                    </p>
-                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-slate-950 sm:text-[17px]">
-                                        {remainingTimeLabel}
-                                    </p>
-                                </div>
-                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Sudah<br/>Terkumpul
-                                    </p>
-                                    <p className="mt-3 text-[16px] font-bold tracking-tight text-emerald-600 sm:text-[17px]">
-                                        {formatCurrency(paidAmount)}
-                                    </p>
-                                </div>
-                                <div className="rounded-[24px] bg-slate-50 px-5 py-5">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">
-                                        Sisa Target
-                                    </p>
-                                    <p className={`mt-3 text-[16px] font-bold tracking-tight sm:text-[17px] ${target.remainingAmount > 0 ? 'text-rose-600' : 'text-slate-950'}`}>
-                                        {remainingTargetLabel}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="mt-4 rounded-[24px] bg-slate-50 p-5">
-                                <div className="flex items-center justify-between gap-3">
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-slate-400">Progress Target</p>
-                                    <span className="text-[10px] font-bold tracking-widest text-slate-500">
-                                        {Math.round(progressPercent)}%
-                                    </span>
-                                </div>
-                                <p className="mt-1 text-[13px] font-semibold tracking-tight text-slate-500 sm:text-[14px]">
-                                    1 klik = 1 bulan tagihan selesai
-                                </p>
-
-                                <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
-                                    <div
-                                        className="h-full rounded-full bg-gradient-to-r from-teal-400 to-sky-500 transition-all"
-                                        style={{ width: `${progressPercent}%` }}
-                                    />
+                                    <div className="flex items-center gap-1 shrink-0 -mt-1 -mr-1">
+                                        <button
+                                            onClick={() => openEditTargetModal(target)}
+                                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-slate-50 rounded-lg transition-colors"
+                                            title="Edit"
+                                        >
+                                            <Pencil size={14} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteTarget(target.id)}
+                                            className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                            title="Hapus"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
+                                    </div>
                                 </div>
 
-                                <div className="mt-5">
-                                    <p className="text-[10px] text-slate-500 leading-relaxed">
-                                        {!target.isActive
-                                            ? 'Target ini sudah selesai karena semua bulan tagihan sudah ditandai.'
-                                            : alreadyMarkedThisMonth
-                                                ? 'Setoran bulan ini sudah ditandai. Tombol akan aktif lagi di bulan berikutnya.'
-                                                : 'Tombol ini mengurangi sisa waktu 1 bulan dan mengurangi sisa target sebesar nominal tagihan.'}
-                                    </p>
+                                <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-3">
+                                    <div>
+                                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Terkumpul</p>
+                                        <p className="mt-0.5 text-sm font-bold text-emerald-600 truncate">{formatCurrency(paidAmount)}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Sisa Target</p>
+                                        <p className={`mt-0.5 text-sm font-bold truncate ${target.remainingAmount > 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                                            {remainingTargetLabel}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                                        <p className="text-[10px] font-semibold text-slate-500">Progress</p>
+                                        <p className="text-[10px] font-bold text-slate-700">{Math.round(progressPercent)}%</p>
+                                    </div>
+                                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100 mb-3">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-teal-400 to-sky-500"
+                                            style={{ width: `${progressPercent}%` }}
+                                        />
+                                    </div>
+
                                     <button
                                         type="button"
                                         onClick={() => void handleMarkTargetTransferred(target)}
                                         disabled={isTransferButtonDisabled}
-                                        className="mt-3 inline-flex h-12 w-full items-center justify-center rounded-[16px] bg-slate-900 px-4 text-[11px] font-bold uppercase tracking-[0.18em] text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-white"
+                                        className="h-9 w-full rounded-xl bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-white transition-colors hover:bg-slate-800 disabled:bg-slate-100 disabled:text-slate-400 disabled:cursor-not-allowed"
                                     >
                                         {transferButtonLabel}
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    );
-                })}
+                        );
+                    })}
                 </div>
             </section>
 

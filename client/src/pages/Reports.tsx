@@ -576,66 +576,58 @@ const Reports = () => {
     return (
         <div className="mx-auto w-full max-w-4xl space-y-6 px-5 pb-32 pt-6">
 
-            {/* ─── Header ─── */}
-            <header className="flex flex-col gap-6 sm:flex-row sm:items-end justify-between">
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight text-slate-900">Laporan Keuangan</h1>
-                    <p className="mt-1 text-sm text-slate-500 max-w-sm">
-                        Pantau arus kas dan aset pada periode aktif.
-                    </p>
+            {/* ─── Header & Controls ─── */}
+            <header className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Laporan</h1>
+                        <div className="mt-1 flex items-center gap-2">
+                            <p className="text-sm font-bold text-slate-500">{formatCurrency(data.totalWealth)}</p>
+                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-400">Total Aset</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={exportExcel}
+                        disabled={exporting}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                        title="Download XLS"
+                    >
+                        {exporting ? <span className="text-xs font-bold">...</span> : <Download size={16} />}
+                    </button>
                 </div>
 
-                <div className="text-left sm:text-right">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Total Kekayaan Tercatat</p>
-                    <div className="mt-1 flex items-center sm:justify-end gap-3">
-                        <p className="text-2xl font-black text-slate-900">{formatCurrency(data.totalWealth)}</p>
-                        <button
-                            onClick={exportExcel}
-                            disabled={exporting}
-                            className="flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-                        >
-                            <Download size={12} /> {exporting ? '...' : 'XLS'}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-1.5 rounded-[20px] border border-slate-200 shadow-sm">
+                    <div className="flex w-full sm:w-auto bg-slate-100 rounded-2xl p-1">
+                        {(['MONTHLY', 'YEARLY'] as const).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => setViewMode(mode)}
+                                className={`flex-1 sm:flex-none rounded-xl px-5 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                {mode === 'MONTHLY' ? 'Bulan' : 'Tahun'}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center justify-between w-full sm:w-auto px-2">
+                        <button onClick={() => changeDate(-1)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-colors">
+                            <ChevronLeft size={18} />
+                        </button>
+                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-800 min-w-[100px] text-center">{periodLabel}</span>
+                        <button onClick={() => changeDate(1)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-colors">
+                            <ChevronRight size={18} />
                         </button>
                     </div>
                 </div>
             </header>
 
-            {/* ─── Period Control Bar ─── */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-[0_2px_10px_-3px_rgba(0,0,0,0.03)]">
-                <div className="flex bg-slate-50 rounded-xl p-1 w-full sm:w-auto">
-                    {(['MONTHLY', 'YEARLY'] as const).map(mode => (
-                        <button
-                            key={mode}
-                            onClick={() => setViewMode(mode)}
-                            className={`flex-1 sm:flex-none rounded-lg px-5 py-2.5 text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                        >
-                            {mode === 'MONTHLY' ? 'Bulanan' : 'Tahunan'}
-                        </button>
-                    ))}
-                </div>
-
-                <div className="flex items-center justify-between w-full sm:w-auto gap-1 px-1">
-                    <button onClick={() => changeDate(-1)} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors">
-                        <ChevronLeft size={18} />
-                    </button>
-                    <div className="flex items-center gap-2 px-3">
-                        <Calendar size={14} className="text-blue-600 shrink-0" />
-                        <span className="text-xs font-bold uppercase tracking-widest text-slate-800">{periodLabel}</span>
-                    </div>
-                    <button onClick={() => changeDate(1)} className="flex h-10 w-10 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-600 transition-colors">
-                        <ChevronRight size={18} />
-                    </button>
-                </div>
-            </div>
-
             {/* ─── Summary Card ─── */}
-            <div className="app-hero-card rounded-[32px] p-5 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
+            <div className="app-hero-card rounded-3xl p-4 sm:p-5 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
                 <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-20 -mt-20" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.25 }}></div>
                 <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.15 }}></div>
                 <div className="relative z-10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-4">Ringkasan Arus Kas</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-3">Ringkasan Arus Kas</p>
 
-                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
                         {[
                             { label: 'Pemasukan', value: data.totalIncome, icon: '↘', color: 'text-emerald-300', iconBg: 'bg-emerald-400/20 text-emerald-300' },
                             { label: 'Pengeluaran', value: data.totalExpense, icon: '↗', color: 'text-rose-300', iconBg: 'bg-rose-400/20 text-rose-300' },
@@ -646,27 +638,29 @@ const Reports = () => {
                         ].map(stat => (
                             <div
                                 key={stat.label}
-                                className="rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md px-4 py-3 flex flex-col justify-center min-w-0"
+                                className="rounded-2xl border border-white/10 bg-white/8 backdrop-blur-md px-3 py-2.5 flex flex-col justify-center min-w-0"
                             >
-                                <div className="flex items-center gap-1.5 mb-1.5">
-                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center ${stat.iconBg}`}>
-                                        <span className="text-[8px]">{stat.icon}</span>
+                                <div className="flex items-center gap-1.5 mb-1">
+                                    <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${stat.iconBg}`}>
+                                        <span className="text-[7px]">{stat.icon}</span>
                                     </div>
-                                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/70 truncate">{stat.label}</p>
+                                    <p className="text-[9px] font-bold uppercase tracking-wider text-white/70 truncate">{stat.label}</p>
                                 </div>
-                                <p className={`text-sm sm:text-base font-bold truncate ${stat.color}`}>
+                                <p className={`text-sm font-bold truncate ${stat.color}`}>
                                     {formatCurrency(stat.value).replace('Rp', 'Rp ')}
                                 </p>
                             </div>
                         ))}
                     </div>
-                    <div className="mt-4 flex flex-col gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-[11px] text-white/75 sm:flex-row sm:items-center sm:justify-between">
-                        <p>
-                            Dana kembali dari investasi pada periode ini: <span className="font-bold text-white">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
-                        </p>
-                        <p>
-                            Arus kas bersih periode ini: <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
-                        </p>
+                    <div className="mt-3 flex flex-col gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] text-white/75">
+                        <div className="flex justify-between items-center">
+                            <span>Dana investasi kembali:</span>
+                            <span className="font-bold text-white">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                            <span>Arus kas bersih:</span>
+                            <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
+                        </div>
                     </div>
                 </div>
             </div>
