@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { ShieldAlert, X } from 'lucide-react';
+import { readStorage, removeStorage, writeStorage } from '../lib/storage';
 
 // Basic string hashing function (Not cryptographically secure but sufficient for local PWA PIN MVP)
 function hashString(str: string): string {
@@ -30,37 +31,6 @@ const PIN_SESSION_KEY = 'app-pin-hash-session';
 const BIOMETRIC_ENABLED_KEY = 'app-biometric';
 const BIOMETRIC_CREDENTIAL_KEY = 'app-bio-cred-id';
 
-const safeReadStorage = (storage: Storage | undefined, key: string): string | null => {
-    if (!storage) return null;
-
-    try {
-        return storage.getItem(key);
-    } catch {
-        return null;
-    }
-};
-
-const safeWriteStorage = (storage: Storage | undefined, key: string, value: string): boolean => {
-    if (!storage) return false;
-
-    try {
-        storage.setItem(key, value);
-        return storage.getItem(key) === value;
-    } catch {
-        return false;
-    }
-};
-
-const safeRemoveStorage = (storage: Storage | undefined, key: string) => {
-    if (!storage) return;
-
-    try {
-        storage.removeItem(key);
-    } catch {
-        // Abaikan agar alur utama tidak ikut gagal.
-    }
-};
-
 export const useSecurity = () => {
     const context = useContext(SecurityContext);
     if (!context) throw new Error('useSecurity must be used within SecurityProvider');
@@ -69,14 +39,14 @@ export const useSecurity = () => {
 
 export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const [pinHash, setPinHash] = useState<string | null>(() =>
-        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY)
-        || safeReadStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY)
+        readStorage(PIN_STORAGE_KEY, null, 'local')
+        || readStorage(PIN_SESSION_KEY, null, 'session')
     );
     const [biometricEnabled, setBiometricEnabled] = useState<boolean>(() =>
-        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY) === 'true'
+        readStorage(BIOMETRIC_ENABLED_KEY, null, 'local') === 'true'
     );
     const [bioCredentialId, setBioCredentialId] = useState<string | null>(() =>
-        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY)
+        readStorage(BIOMETRIC_CREDENTIAL_KEY, null, 'local')
     );
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [biometricSupportMessage, setBiometricSupportMessage] = useState('Perangkat ini belum siap untuk biometrik.');
@@ -92,8 +62,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const isSecurityEnabled = !!pinHash;
     const getCurrentPinHash = () =>
         pinHash
-        || safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY)
-        || safeReadStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY);
+        || readStorage(PIN_STORAGE_KEY, null, 'local')
+        || readStorage(PIN_SESSION_KEY, null, 'session');
     const markActivity = () => {
         try {
             sessionStorage.setItem('last-active', Date.now().toString());
@@ -191,24 +161,21 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const setupSecurity = (pin: string) => {
         try {
             const hash = hashString(pin);
-            const localStorageRef = typeof window !== 'undefined' ? window.localStorage : undefined;
-            const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : undefined;
-
-            let persistedToLocal = safeWriteStorage(localStorageRef, PIN_STORAGE_KEY, hash);
+            let persistedToLocal = writeStorage(PIN_STORAGE_KEY, hash, 'local');
             let recovered = false;
 
-            if (!persistedToLocal && localStorageRef) {
+            if (!persistedToLocal) {
                 for (const key of lowPriorityStorageKeys) {
-                    if (safeReadStorage(localStorageRef, key)) {
-                        safeRemoveStorage(localStorageRef, key);
+                    if (readStorage(key, null, 'local')) {
+                        removeStorage(key, 'local');
                         recovered = true;
                     }
                 }
-                persistedToLocal = safeWriteStorage(localStorageRef, PIN_STORAGE_KEY, hash);
+                persistedToLocal = writeStorage(PIN_STORAGE_KEY, hash, 'local');
             }
 
             if (persistedToLocal) {
-                safeRemoveStorage(sessionStorageRef, PIN_SESSION_KEY);
+                removeStorage(PIN_SESSION_KEY, 'session');
                 setPinHash(hash);
                 markActivity();
                 return {
@@ -219,7 +186,7 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                 };
             }
 
-            const persistedToSession = safeWriteStorage(sessionStorageRef, PIN_SESSION_KEY, hash);
+            const persistedToSession = writeStorage(PIN_SESSION_KEY, hash, 'session');
             if (persistedToSession) {
                 setPinHash(hash);
                 markActivity();
@@ -243,10 +210,10 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const removeSecurity = () => {
-        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY);
-        safeRemoveStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY);
-        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY);
-        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY);
+        removeStorage(PIN_STORAGE_KEY, 'local');
+        removeStorage(PIN_SESSION_KEY, 'session');
+        removeStorage(BIOMETRIC_ENABLED_KEY, 'local');
+        removeStorage(BIOMETRIC_CREDENTIAL_KEY, 'local');
         setPinHash(null);
         setBiometricEnabled(false);
         setBioCredentialId(null);
@@ -299,8 +266,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                 }
                 const b64 = window.btoa(credentialIdBase64);
                 
-                safeWriteStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY, b64);
-                safeWriteStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY, 'true');
+                writeStorage(BIOMETRIC_CREDENTIAL_KEY, b64, 'local');
+                writeStorage(BIOMETRIC_ENABLED_KEY, 'true', 'local');
                 setBioCredentialId(b64);
                 setBiometricEnabled(true);
                 return true;
@@ -314,8 +281,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const removeBiometric = () => {
-        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY);
-        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY);
+        removeStorage(BIOMETRIC_ENABLED_KEY, 'local');
+        removeStorage(BIOMETRIC_CREDENTIAL_KEY, 'local');
         setBiometricEnabled(false);
         setBioCredentialId(null);
     };

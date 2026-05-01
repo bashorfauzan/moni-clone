@@ -18,6 +18,7 @@ import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../context/SecurityContext';
 import { canonicalizeAccountAlias } from '../lib/accountAliases';
+import { readStorage, writeStorage } from '../lib/storage';
 import {
     inferNotificationCategoryLabel,
     isInvestmentIncome,
@@ -57,9 +58,9 @@ const Home = () => {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [notificationLoadError, setNotificationLoadError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const isBalanceHidden = localStorage.getItem('hideBalance') === 'true';
-    const [isWealthHidden, setIsWealthHidden] = useState(() => localStorage.getItem('hideWealth') === 'true');
-    const [isMemberFundsOpen, setIsMemberFundsOpen] = useState(() => localStorage.getItem('showMemberFunds') === 'true');
+    const isBalanceHidden = readStorage('hideBalance') === 'true';
+    const [isWealthHidden, setIsWealthHidden] = useState(() => readStorage('hideWealth') === 'true');
+    const [isMemberFundsOpen, setIsMemberFundsOpen] = useState(() => readStorage('showMemberFunds') === 'true');
     const [expandedOwnerId, setExpandedOwnerId] = useState<string | null>(null);
     const [deletingNotificationId, setDeletingNotificationId] = useState<string | null>(null);
     const [clearingNotifications, setClearingNotifications] = useState(false);
@@ -129,7 +130,7 @@ const Home = () => {
     const toggleHideWealth = () => {
         setIsWealthHidden(prev => {
             const val = !prev;
-            localStorage.setItem('hideWealth', String(val));
+            writeStorage('hideWealth', String(val));
             return val;
         });
     };
@@ -137,7 +138,7 @@ const Home = () => {
     const toggleMemberFunds = () => {
         setIsMemberFundsOpen(prev => {
             const next = !prev;
-            localStorage.setItem('showMemberFunds', String(next));
+            writeStorage('showMemberFunds', String(next));
             if (!next) {
                 setExpandedOwnerId(null);
             }
@@ -245,12 +246,28 @@ const Home = () => {
         const handleDataChanged = () => {
             scheduleRefresh();
         };
+        const handleAppVisible = () => {
+            if (document.visibilityState === 'visible') {
+                scheduleRefresh();
+            }
+        };
+        const handlePageShow = () => {
+            scheduleRefresh();
+        };
         window.addEventListener('nova:data-changed', handleDataChanged);
+        window.addEventListener('focus', handlePageShow);
+        window.addEventListener('pageshow', handlePageShow);
+        window.addEventListener('online', handlePageShow);
+        document.addEventListener('visibilitychange', handleAppVisible);
 
         return () => {
             unsubscribeNotifications();
             unsubscribeTransactions();
             window.removeEventListener('nova:data-changed', handleDataChanged);
+            window.removeEventListener('focus', handlePageShow);
+            window.removeEventListener('pageshow', handlePageShow);
+            window.removeEventListener('online', handlePageShow);
+            document.removeEventListener('visibilitychange', handleAppVisible);
             if (refreshTimeoutRef.current) {
                 window.clearTimeout(refreshTimeoutRef.current);
             }

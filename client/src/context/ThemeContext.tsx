@@ -1,4 +1,5 @@
 import { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
+import { readNumberStorage, readStorage, removeStorage, writeStorage } from '../lib/storage';
 
 // Preset colors for the UI
 export const THEME_PRESETS = [
@@ -41,32 +42,22 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export const ThemeProvider = ({ children }: { children: ReactNode }) => {
-    const [bgColor, setBgColorState] = useState(() => {
-        const saved = localStorage.getItem('app-bg-color');
-        return saved || '#ffffff';
-    });
-    const [bgImage, setBgImageState] = useState<string | null>(() => {
-        const saved = localStorage.getItem('app-bg-image');
-        return saved || null;
-    });
-    const [heroColor, setHeroColorState] = useState(() => {
-        const saved = localStorage.getItem('app-hero-color');
-        return saved || '#16213e';
-    });
-    const [heroCardImage, setHeroCardImageState] = useState<string | null>(() => {
-        const saved = localStorage.getItem('app-hero-card-image');
-        return saved || null;
-    });
-    const [bgOverlay, setBgOverlayState] = useState(() => Number(localStorage.getItem('app-bg-overlay') || 0.24));
-    const [bgBlur, setBgBlurState] = useState(() => Number(localStorage.getItem('app-bg-blur') || 0));
-    const [appScale, setAppScaleState] = useState(() => Number(localStorage.getItem('app-scale') || 1.0));
+    const [bgColor, setBgColorState] = useState(() => readStorage('app-bg-color', '#ffffff') || '#ffffff');
+    const [bgImage, setBgImageState] = useState<string | null>(() => readStorage('app-bg-image'));
+    const [heroColor, setHeroColorState] = useState(() => readStorage('app-hero-color', '#16213e') || '#16213e');
+    const [heroCardImage, setHeroCardImageState] = useState<string | null>(() => readStorage('app-hero-card-image'));
+    const [bgOverlay, setBgOverlayState] = useState(() => readNumberStorage('app-bg-overlay', 0.24));
+    const [bgBlur, setBgBlurState] = useState(() => readNumberStorage('app-bg-blur', 0));
+    const [appScale, setAppScaleState] = useState(() => readNumberStorage('app-scale', 1.0));
     const [heroImageMode, setHeroImageModeState] = useState<'app-only' | 'app-and-hero'>(() => {
-        const saved = localStorage.getItem('app-hero-image-mode');
+        const saved = readStorage('app-hero-image-mode');
         return saved === 'app-and-hero' ? 'app-and-hero' : 'app-only';
     });
     const safeSetItem = (key: string, value: string) => {
         try {
-            localStorage.setItem(key, value);
+            const saved = writeStorage(key, value);
+            if (saved) return;
+            throw new Error('Storage write blocked');
         } catch (e: any) {
             console.error('Storage limit reached or blocked', e);
             if (e.name === 'QuotaExceededError') {
@@ -85,7 +76,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         if (image) {
             safeSetItem('app-bg-image', image);
         } else {
-            localStorage.removeItem('app-bg-image');
+            removeStorage('app-bg-image');
         }
     };
 
@@ -99,7 +90,7 @@ export const ThemeProvider = ({ children }: { children: ReactNode }) => {
         if (image) {
             safeSetItem('app-hero-card-image', image);
         } else {
-            localStorage.removeItem('app-hero-card-image');
+            removeStorage('app-hero-card-image');
         }
     };
 

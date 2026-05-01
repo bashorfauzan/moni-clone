@@ -62,6 +62,7 @@ import {
 } from '../services/accountLauncher';
 import { getAllDataAccessSnapshots } from '../services/dataAccessMode';
 import { hasSupabaseEnv, supabase } from '../lib/supabase';
+import { readStorage, writeStorage } from '../lib/storage';
 import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
@@ -194,7 +195,7 @@ const MenuPage = () => {
         phone: ''
     });
     const [themeCropMode, setThemeCropMode] = useState<'fit' | 'crop-portrait'>(() => {
-        const saved = localStorage.getItem('app-bg-crop-mode');
+        const saved = readStorage('app-bg-crop-mode');
         return saved === 'crop-portrait' ? 'crop-portrait' : 'fit';
     });
 
@@ -375,7 +376,7 @@ const MenuPage = () => {
         setBgOverlay(0.24);
         setHeroImageMode('app-only');
         setThemeCropMode('fit');
-        localStorage.setItem('app-bg-crop-mode', 'fit');
+        writeStorage('app-bg-crop-mode', 'fit');
         setThemeImageError('');
         setHeroThemeImageError('');
     };
@@ -1464,14 +1465,14 @@ const MenuPage = () => {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={() => { setThemeCropMode('fit'); localStorage.setItem('app-bg-crop-mode', 'fit'); }}
+                                                onClick={() => { setThemeCropMode('fit'); writeStorage('app-bg-crop-mode', 'fit'); }}
                                                 className={`h-10 rounded-xl border text-[11px] font-bold uppercase tracking-wider ${themeCropMode === 'fit' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                             >
                                                 Mode Asli
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => { setThemeCropMode('crop-portrait'); localStorage.setItem('app-bg-crop-mode', 'crop-portrait'); }}
+                                                onClick={() => { setThemeCropMode('crop-portrait'); writeStorage('app-bg-crop-mode', 'crop-portrait'); }}
                                                 className={`h-10 rounded-xl border text-[11px] font-bold uppercase tracking-wider ${themeCropMode === 'crop-portrait' ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                                             >
                                                 Crop Portrait

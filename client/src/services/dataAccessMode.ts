@@ -1,3 +1,5 @@
+import { readStorage, writeStorage } from '../lib/storage';
+
 export type DataAccessModule = 'master' | 'transactions' | 'targets' | 'notifications';
 export type DataAccessMode = 'backend-api' | 'direct-supabase' | 'supabase-fallback-to-api';
 
@@ -12,13 +14,13 @@ const STORAGE_KEY = 'moni-data-access-snapshots';
 
 const runtimeSnapshots = new Map<DataAccessModule, DataAccessSnapshot>();
 
-const canUseStorage = () => typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+const canUseStorage = () => typeof window !== 'undefined';
 
 const readStoredSnapshots = (): Partial<Record<DataAccessModule, DataAccessSnapshot>> => {
     if (!canUseStorage()) return {};
 
     try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
+        const raw = readStorage(STORAGE_KEY);
         if (!raw) return {};
         const parsed = JSON.parse(raw) as Partial<Record<DataAccessModule, DataAccessSnapshot>>;
         return parsed && typeof parsed === 'object' ? parsed : {};
@@ -32,7 +34,7 @@ const persistSnapshots = () => {
 
     try {
         const payload = Object.fromEntries(runtimeSnapshots.entries());
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        writeStorage(STORAGE_KEY, JSON.stringify(payload));
     } catch {
         // Abaikan kegagalan penyimpanan lokal agar alur data utama tidak terganggu.
     }

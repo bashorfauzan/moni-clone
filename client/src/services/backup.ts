@@ -1,4 +1,5 @@
 import api from './api';
+import { readStorage, writeStorage } from '../lib/storage';
 
 export type BackupFrequency = 'manual' | 'daily' | 'weekly';
 
@@ -22,7 +23,7 @@ export const loadBackupSettings = (): BackupSettings => {
     if (typeof window === 'undefined') return DEFAULT_BACKUP_SETTINGS;
 
     try {
-        const raw = window.localStorage.getItem(BACKUP_SETTINGS_KEY);
+        const raw = readStorage(BACKUP_SETTINGS_KEY);
         if (!raw) return DEFAULT_BACKUP_SETTINGS;
 
         const parsed = JSON.parse(raw) as Partial<BackupSettings>;
@@ -39,7 +40,7 @@ export const loadBackupSettings = (): BackupSettings => {
 
 export const saveBackupSettings = (settings: BackupSettings) => {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(BACKUP_SETTINGS_KEY, JSON.stringify(settings));
+    writeStorage(BACKUP_SETTINGS_KEY, JSON.stringify(settings));
 };
 
 export const shouldRunAutoBackup = (settings: BackupSettings, now = new Date()) => {
