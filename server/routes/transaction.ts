@@ -349,8 +349,14 @@ const createInvestmentIncomeTransaction = async ({
 }) => {
     const parsedAmount = Number(amount);
 
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-        throw new Error('Jumlah pemasukan investasi harus lebih dari 0');
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+        throw new Error(kind === 'STOCK_GROWTH'
+            ? 'Perubahan nilai investasi tidak boleh 0'
+            : 'Jumlah pemasukan investasi harus lebih dari 0');
+    }
+
+    if (kind !== 'STOCK_GROWTH' && parsedAmount < 0) {
+        throw new Error('Pendapatan sukuk tidak boleh bernilai negatif');
     }
 
     if (!ownerId || !destinationAccountId) {
@@ -405,6 +411,117 @@ const createInvestmentIncomeTransaction = async ({
     });
 };
 
+const updateInvestmentIncomeTransaction = async ({
+    id,
+    amount,
+    ownerId,
+    destinationAccountId,
+    description,
+    date,
+    kind
+}: {
+    id: string;
+    amount: unknown;
+    ownerId: unknown;
+    destinationAccountId: unknown;
+    description?: unknown;
+    date?: unknown;
+    kind: keyof typeof INVESTMENT_INCOME_ACTIVITY;
+}) => {
+    const parsedAmount = Number(amount);
+
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+        throw new Error(kind === 'STOCK_GROWTH'
+            ? 'Perubahan nilai investasi tidak boleh 0'
+            : 'Jumlah pemasukan investasi harus lebih dari 0');
+    }
+
+    if (kind !== 'STOCK_GROWTH' && parsedAmount < 0) {
+        throw new Error('Pendapatan sukuk tidak boleh bernilai negatif');
+    }
+
+    if (!ownerId || !destinationAccountId) {
+        throw new Error('Pemilik dan rekening investasi wajib dipilih');
+    }
+
+    const destinationAccount = await prisma.account.findUnique({
+        where: { id: String(destinationAccountId) }
+    });
+
+    if (!destinationAccount) {
+        throw new Error('Rekening tujuan tidak ditemukan');
+    }
+
+    if (!['RDN', 'Sekuritas'].includes(destinationAccount.type)) {
+        throw new Error('Pemasukan investasi hanya bisa dicatat ke rekening RDN atau Sekuritas');
+    }
+
+    const activityName = INVESTMENT_INCOME_ACTIVITY[kind];
+
+    return prisma.$transaction(async (trx) => {
+        const oldTx = await trx.transaction.findUnique({
+            where: { id }
+        });
+
+        if (!oldTx) {
+            throw new Error('Transaksi tidak ditemukan');
+        }
+
+        if (oldTx.type === TransactionType.INCOME && oldTx.destinationAccountId) {
+            await trx.account.update({
+                where: { id: oldTx.destinationAccountId },
+                data: { balance: { decrement: oldTx.amount } }
+            });
+        } else if (isSourceOnlyTransactionType(oldTx.type) && oldTx.sourceAccountId) {
+            await trx.account.update({
+                where: { id: oldTx.sourceAccountId },
+                data: { balance: { increment: oldTx.amount } }
+            });
+        } else if (isDualAccountTransactionType(oldTx.type) && oldTx.sourceAccountId && oldTx.destinationAccountId) {
+            await trx.account.update({
+                where: { id: oldTx.sourceAccountId },
+                data: { balance: { increment: oldTx.amount } }
+            });
+            await trx.account.update({
+                where: { id: oldTx.destinationAccountId },
+                data: { balance: { decrement: oldTx.amount } }
+            });
+        }
+
+        const activity = await ensureActivityByName(trx, activityName);
+        const updatedTransaction = await trx.transaction.update({
+            where: { id },
+            data: {
+                type: TransactionType.INCOME,
+                amount: parsedAmount,
+                description: (description ? String(description) : activityName).slice(0, 190),
+                ownerId: String(ownerId),
+                activityId: activity.id,
+                sourceAccountId: null,
+                destinationAccountId: String(destinationAccountId),
+                date: date ? new Date(String(date)) : oldTx.date
+            },
+            include: {
+                owner: true,
+                activity: true,
+                destinationAccount: true
+            }
+        });
+
+        await applyAccountBalanceChanges(
+            trx,
+            TransactionType.INCOME,
+            parsedAmount,
+            undefined,
+            String(destinationAccountId)
+        );
+
+        await syncAccountBalances(trx);
+
+        return updatedTransaction;
+    });
+};
+
 router.post('/investment-income', async (req, res) => {
     const { amount, ownerId, destinationAccountId, description, date, kind } = req.body;
 
@@ -423,6 +540,30 @@ router.post('/investment-income', async (req, res) => {
     } catch (error) {
         console.error('Create investment income error:', error);
         const message = error instanceof Error ? error.message : 'Gagal mencatat pemasukan investasi';
+        res.status(400).json({ error: message });
+    }
+});
+
+router.put('/:id/investment-income', async (req, res) => {
+    const { id } = req.params;
+    const { amount, ownerId, destinationAccountId, description, date, kind } = req.body;
+
+    try {
+        const normalizedKind = kind === 'STOCK_GROWTH' ? 'STOCK_GROWTH' : 'SUKUK';
+        const transaction = await updateInvestmentIncomeTransaction({
+            id,
+            amount,
+            ownerId,
+            destinationAccountId,
+            description,
+            date,
+            kind: normalizedKind
+        });
+
+        res.json(transaction);
+    } catch (error) {
+        console.error('Update investment income error:', error);
+        const message = error instanceof Error ? error.message : 'Gagal mengubah pemasukan investasi';
         res.status(400).json({ error: message });
     }
 });

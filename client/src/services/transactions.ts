@@ -605,8 +605,15 @@ const bulkDeleteTransactionsDirect = async (ids: string[]): Promise<void> => {
 };
 
 const createInvestmentIncomeDirect = async (payload: InvestmentIncomePayload): Promise<TransactionItem> => {
-    if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
-        throw new Error('Jumlah pemasukan investasi harus lebih dari 0');
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount === 0) {
+        throw new Error(payload.kind === 'STOCK_GROWTH'
+            ? 'Perubahan nilai investasi tidak boleh 0'
+            : 'Jumlah pemasukan investasi harus lebih dari 0');
+    }
+
+    if (payload.kind !== 'STOCK_GROWTH' && amount < 0) {
+        throw new Error('Pendapatan sukuk tidak boleh bernilai negatif');
     }
 
     if (!payload.ownerId || !payload.destinationAccountId) {
@@ -634,7 +641,7 @@ const createInvestmentIncomeDirect = async (payload: InvestmentIncomePayload): P
         .insert({
             id: crypto.randomUUID(),
             type: 'INCOME',
-            amount: payload.amount,
+            amount,
             description: (payload.description?.trim() || activityName).slice(0, 190),
             ownerId: payload.ownerId,
             activityId,
@@ -663,6 +670,84 @@ const createInvestmentIncomeDirect = async (payload: InvestmentIncomePayload): P
 
     await syncDerivedDataDirect();
     recordTransactionsMode('direct-supabase', 'Pemasukan investasi berhasil dicatat langsung di Supabase.');
+    return normalizeTransaction(data);
+};
+
+const updateInvestmentIncomeDirect = async (id: string, payload: InvestmentIncomePayload): Promise<TransactionItem> => {
+    const amount = Number(payload.amount);
+    if (!Number.isFinite(amount) || amount === 0) {
+        throw new Error(payload.kind === 'STOCK_GROWTH'
+            ? 'Perubahan nilai investasi tidak boleh 0'
+            : 'Jumlah pemasukan investasi harus lebih dari 0');
+    }
+
+    if (payload.kind !== 'STOCK_GROWTH' && amount < 0) {
+        throw new Error('Pendapatan sukuk tidak boleh bernilai negatif');
+    }
+
+    if (!payload.ownerId || !payload.destinationAccountId) {
+        throw new Error('Pemilik dan rekening investasi wajib dipilih');
+    }
+
+    const sb = ensureSupabase();
+    const { data: existingTx, error: existingTxError } = await sb
+        .from('Transaction')
+        .select('id')
+        .eq('id', id)
+        .limit(1)
+        .maybeSingle();
+
+    if (existingTxError) throw existingTxError;
+    if (!existingTx?.id) throw new Error('Transaksi tidak ditemukan');
+
+    const { data: destinationAccount, error: accountError } = await sb
+        .from('Account')
+        .select('id, name, type')
+        .eq('id', payload.destinationAccountId)
+        .limit(1)
+        .maybeSingle();
+
+    if (accountError) throw accountError;
+    if (!destinationAccount?.id) throw new Error('Rekening tujuan tidak ditemukan');
+    if (!['RDN', 'Sekuritas'].includes(destinationAccount.type)) {
+        throw new Error('Pemasukan investasi hanya bisa dicatat ke rekening RDN atau Sekuritas');
+    }
+
+    const activityName = INVESTMENT_INCOME_ACTIVITY[payload.kind];
+    const activityId = await ensureNamedActivity(activityName);
+    const { data, error } = await sb
+        .from('Transaction')
+        .update({
+            type: 'INCOME',
+            amount,
+            description: (payload.description?.trim() || activityName).slice(0, 190),
+            ownerId: payload.ownerId,
+            activityId,
+            sourceAccountId: null,
+            destinationAccountId: payload.destinationAccountId,
+            date: payload.date || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select(`
+            id,
+            type,
+            amount,
+            description,
+            date,
+            isValidated,
+            notificationInboxId,
+            ownerId,
+            activityId,
+            sourceAccountId,
+            destinationAccountId
+        `)
+        .single();
+
+    if (error) throw error;
+
+    await syncDerivedDataDirect();
+    recordTransactionsMode('direct-supabase', 'Pemasukan investasi berhasil diperbarui langsung di Supabase.');
     return normalizeTransaction(data);
 };
 
@@ -764,5 +849,20 @@ export const createInvestmentIncome = async (payload: InvestmentIncomePayload): 
 
     const response = await api.post('/transactions/investment-income', payload);
     recordTransactionsMode('backend-api', 'Pemasukan investasi berhasil dicatat lewat backend API.');
+    return normalizeTransaction(response.data);
+};
+
+export const updateInvestmentIncome = async (id: string, payload: InvestmentIncomePayload): Promise<TransactionItem> => {
+    if (useDirectSupabaseData && supabase) {
+        try {
+            return await updateInvestmentIncomeDirect(id, payload);
+        } catch (error) {
+            console.warn('Supabase investment income update failed, falling back to backend API.', error);
+            recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Update pemasukan investasi fallback ke backend API.'));
+        }
+    }
+
+    const response = await api.put(`/transactions/${id}/investment-income`, payload);
+    recordTransactionsMode('backend-api', 'Pemasukan investasi berhasil diperbarui lewat backend API.');
     return normalizeTransaction(response.data);
 };

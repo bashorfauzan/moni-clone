@@ -212,11 +212,11 @@ const NotificationDrawer = ({
 
     return (
         <div 
-            className="fixed inset-0 z-[100] flex justify-end bg-slate-950/70 backdrop-blur-sm transition-opacity sm:items-center p-0 sm:p-4"
+            className="fixed inset-0 z-[100] flex items-end justify-end bg-slate-950/70 backdrop-blur-sm transition-opacity p-0 sm:items-center sm:p-4"
             onMouseDown={onClose}
         >
             <div 
-                className="w-full h-[90vh] mt-[10vh] sm:mt-0 sm:h-full max-h-screen bg-slate-50 rounded-t-[28px] sm:rounded-3xl sm:max-w-md shadow-2xl flex flex-col animate-in slide-in-from-bottom sm:slide-in-from-right duration-300"
+                className="w-full self-end bg-slate-50 rounded-t-[28px] sm:rounded-3xl sm:max-w-md shadow-2xl flex flex-col overflow-hidden max-h-[calc(100dvh-1rem)] sm:max-h-[88dvh] animate-in slide-in-from-bottom sm:slide-in-from-right duration-300"
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* Header Drawer */}
@@ -240,7 +240,7 @@ const NotificationDrawer = ({
                 </div>
 
                 {/* Body Content */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 space-y-3">
                     {/* Action Bar */}
                     <div className="flex justify-end mb-4">
                         <button

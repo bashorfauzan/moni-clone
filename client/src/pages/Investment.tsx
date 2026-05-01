@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2 } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
-import { createInvestmentIncome, createTransaction, fetchTransactions } from '../services/transactions';
+import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
 import { Link } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 import {
@@ -92,6 +92,7 @@ const Investment = () => {
         accountId: '',
         active: false
     });
+    const [editingIncomeId, setEditingIncomeId] = useState<string | null>(null);
 
     // Forms
     const [transferForm, setTransferForm] = useState({
@@ -109,6 +110,8 @@ const Investment = () => {
         description: 'Pendapatan sukuk triwulan',
         date: new Date().toISOString().slice(0, 10)
     });
+    const [stockGrowthDirection, setStockGrowthDirection] = useState<'UP' | 'DOWN'>('UP');
+    const [activeAmountField, setActiveAmountField] = useState<'income' | 'transfer' | null>(null);
 
     const loadData = async () => {
         try {
@@ -183,7 +186,6 @@ const Investment = () => {
     const totalReturnAmount = totalValue - totalModal;
     const totalReturnPercent = totalModal > 0 ? (totalReturnAmount / totalModal) * 100 : 0;
     const totalDepositCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.depositCount || 0), 0);
-    const totalIncomeCount = portfolioData.reduce((sum, rdn) => sum + Number(rdn.incomeCount || 0), 0);
     const monthlyInvestmentSnapshot = monthlyInvestmentTransactions.reduce((acc, tx: any) => {
         if (isInvestmentTransfer(tx)) {
             acc.deposit += tx.amount;
@@ -238,7 +240,7 @@ const Investment = () => {
                 || (isInvestmentIncome(tx) && tx.destinationAccountId === detailAccount.id)
             )
             .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 6)
+            .slice(0, 10)
         : [];
 
     const handleTransfer = async (e: React.FormEvent) => {
@@ -278,7 +280,9 @@ const Investment = () => {
     const handleCreateInvestmentIncome = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!incomeForm.amount || Number(incomeForm.amount) <= 0) {
-            alert('Nominal pemasukan investasi harus lebih dari 0');
+            alert(incomeForm.kind === 'STOCK_GROWTH'
+                ? 'Nominal perubahan investasi harus lebih dari 0'
+                : 'Nominal pemasukan investasi harus lebih dari 0');
             return;
         }
 
@@ -295,17 +299,35 @@ const Investment = () => {
 
         setSubmitting(true);
         try {
-            await createInvestmentIncome({
+            const baseAmount = Number(incomeForm.amount);
+            const signedAmount = incomeForm.kind === 'STOCK_GROWTH' && stockGrowthDirection === 'DOWN'
+                ? -baseAmount
+                : baseAmount;
+            const fallbackDescription = incomeForm.kind === 'SUKUK'
+                ? 'Pendapatan sukuk triwulan'
+                : stockGrowthDirection === 'DOWN'
+                    ? 'Penurunan saham'
+                    : 'Pertumbuhan saham';
+
+            const payload = {
                 kind: incomeForm.kind as 'SUKUK' | 'STOCK_GROWTH',
-                amount: Number(incomeForm.amount),
+                amount: signedAmount,
                 ownerId: incomeForm.ownerId || owners[0]?.id,
                 destinationAccountId: incomeForm.accountId,
-                description: incomeForm.description.trim() || (incomeForm.kind === 'SUKUK' ? 'Pendapatan sukuk triwulan' : 'Pertumbuhan saham'),
+                description: incomeForm.description.trim() || fallbackDescription,
                 date: incomeForm.date
-            });
+            };
+
+            if (editingIncomeId) {
+                await updateInvestmentIncome(editingIncomeId, payload);
+            } else {
+                await createInvestmentIncome(payload);
+            }
 
             setIsIncomeModalOpen(false);
             setIncomeFormLock({ ownerId: '', accountId: '', active: false });
+            setEditingIncomeId(null);
+            setStockGrowthDirection('UP');
             setIncomeForm((prev) => ({
                 ...prev,
                 amount: '',
@@ -314,6 +336,51 @@ const Investment = () => {
             await loadData();
         } catch (error: any) {
             alert(error.response?.data?.error || 'Gagal mencatat pemasukan investasi');
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const resetIncomeModalState = () => {
+        setIsIncomeModalOpen(false);
+        setIncomeFormLock({ ownerId: '', accountId: '', active: false });
+        setEditingIncomeId(null);
+        setStockGrowthDirection('UP');
+    };
+
+    const handleEditInvestmentIncome = (tx: any) => {
+        const isStockGrowth = tx.activity?.name === 'Pertumbuhan Saham';
+        const amount = Math.abs(Number(tx.amount || 0));
+
+        setEditingIncomeId(tx.id);
+        setIncomeFormLock({
+            ownerId: tx.ownerId || '',
+            accountId: tx.destinationAccountId || '',
+            active: false
+        });
+        setStockGrowthDirection(isStockGrowth && Number(tx.amount) < 0 ? 'DOWN' : 'UP');
+        setIncomeForm({
+            kind: isStockGrowth ? 'STOCK_GROWTH' : 'SUKUK',
+            ownerId: tx.ownerId || owners[0]?.id || '',
+            accountId: tx.destinationAccountId || '',
+            amount: amount > 0 ? String(amount) : '',
+            description: tx.description || (isStockGrowth ? 'Pertumbuhan saham' : 'Pendapatan sukuk triwulan'),
+            date: String(tx.date).slice(0, 10)
+        });
+        setIsIncomeModalOpen(true);
+    };
+
+    const handleDeleteInvestmentIncome = async (tx: any) => {
+        const label = tx.description || tx.activity?.name || 'transaksi investasi';
+        const confirmed = window.confirm(`Hapus ${label}? Nilai portofolio akan disesuaikan kembali.`);
+        if (!confirmed) return;
+
+        setSubmitting(true);
+        try {
+            await deleteTransaction(tx.id);
+            await loadData();
+        } catch (error: any) {
+            alert(error.response?.data?.error || 'Gagal menghapus transaksi investasi');
         } finally {
             setSubmitting(false);
         }
@@ -363,66 +430,64 @@ const Investment = () => {
             )}
 
             {/* Summary Card */}
-            <div className="app-hero-card rounded-3xl p-4 mb-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 h-32 w-32 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
-                <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full blur-3xl -ml-14 -mb-14" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
-                <div className="relative z-10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Portofolio Saya</p>
-                    <div className="mt-3 grid grid-cols-3 gap-2">
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Nilai Aset</p>
-                            <p className="mt-1 text-xs font-bold text-sky-300 break-all leading-snug">{formatCurrency(totalValue)}</p>
+            <div className="app-hero-card rounded-[28px] p-5 mb-6 relative overflow-hidden shadow-sm">
+                <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
+                <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
+                <div className="relative z-10 flex flex-col h-full">
+                    
+                    <div className="mb-5">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60 mb-1.5">Nilai Portofolio</p>
+                        <p className="text-3xl font-black text-white tracking-tight">{formatCurrency(totalValue)}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 mb-5">
+                        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/50 mb-1">Total Modal</p>
+                            <p className="text-sm font-bold text-white leading-none">{formatCurrency(totalModal)}</p>
+                            <p className="mt-1.5 text-[9px] text-white/40">{totalDepositCount} setoran masuk</p>
                         </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Modal</p>
-                            <p className="mt-1 text-xs font-bold text-white break-all leading-snug">{formatCurrency(totalModal)}</p>
-                            <p className="mt-1 text-[8px] font-bold text-white/55">{totalDepositCount} transfer masuk</p>
-                        </div>
-                        <div className="rounded-2xl border border-white/10 bg-white/8 px-3 py-2.5">
-                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/60">Return</p>
-                            <p className={`mt-1 text-xs font-bold break-all leading-snug ${totalReturnAmount >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
-                                {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)}
+                        <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/50 mb-1">Total Return</p>
+                            <div className="flex items-baseline gap-1.5 leading-none">
+                                <p className={`text-sm font-bold ${totalReturnAmount >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                    {totalReturnAmount >= 0 ? '+' : ''}{formatCurrency(totalReturnAmount)}
+                                </p>
+                            </div>
+                            <p className={`mt-1.5 text-[9px] font-semibold ${totalReturnAmount >= 0 ? 'text-emerald-500/80' : 'text-rose-500/80'}`}>
+                                {totalReturnAmount >= 0 ? 'Naik' : 'Turun'} {totalReturnPercent.toFixed(2)}% dari modal
                             </p>
-                            <p className={`text-[8px] font-bold mt-0.5 ${totalReturnAmount >= 0 ? 'text-emerald-400/80' : 'text-rose-400/80'}`}>
-                                {totalReturnPercent.toFixed(2)}%
-                            </p>
-                            <p className="text-[8px] font-bold text-white/55">{totalIncomeCount} pemasukan investasi</p>
                         </div>
                     </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 mt-auto">
+                        <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
+                                Arus Bulan Ini ({currentMonthStart.toLocaleDateString('id-ID', { month: 'short' })})
+                            </p>
+                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white/70">
+                                {monthlyInvestmentSnapshot.depositCount + monthlyInvestmentSnapshot.incomeCount + monthlyInvestmentSnapshot.withdrawalCount} trx
+                            </span>
+                        </div>
+                        
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Setoran</p>
+                                <p className="text-xs font-bold text-blue-300">{formatCurrency(monthlyInvestmentSnapshot.deposit)}</p>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Hasil / Return</p>
+                                <p className="text-xs font-bold text-emerald-300">{formatCurrency(monthlyInvestmentSnapshot.income)}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Pencairan</p>
+                                <p className="text-xs font-bold text-amber-300">{formatCurrency(monthlyInvestmentSnapshot.withdrawal)}</p>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
-                    <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Snapshot Bulan Ini</p>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            Arus investasi untuk {selectedOwnerName} pada {currentMonthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}.
-                        </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                        {monthlyInvestmentSnapshot.depositCount + monthlyInvestmentSnapshot.incomeCount + monthlyInvestmentSnapshot.withdrawalCount} transaksi
-                    </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <div className="rounded-2xl bg-blue-50 px-4 py-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-blue-500">Setoran Modal</p>
-                        <p className="mt-2 text-base font-black text-blue-700">{formatCurrency(monthlyInvestmentSnapshot.deposit)}</p>
-                        <p className="mt-1 text-[11px] text-blue-600">{monthlyInvestmentSnapshot.depositCount} transaksi</p>
-                    </div>
-                    <div className="rounded-2xl bg-emerald-50 px-4 py-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-500">Hasil Investasi</p>
-                        <p className="mt-2 text-base font-black text-emerald-700">{formatCurrency(monthlyInvestmentSnapshot.income)}</p>
-                        <p className="mt-1 text-[11px] text-emerald-600">{monthlyInvestmentSnapshot.incomeCount} transaksi</p>
-                    </div>
-                    <div className="rounded-2xl bg-amber-50 px-4 py-4">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-amber-500">Pencairan</p>
-                        <p className="mt-2 text-base font-black text-amber-700">{formatCurrency(monthlyInvestmentSnapshot.withdrawal)}</p>
-                        <p className="mt-1 text-[11px] text-amber-600">{monthlyInvestmentSnapshot.withdrawalCount} transaksi</p>
-                    </div>
-                </div>
-            </div>
             {/* RDN List */}
             <section className="space-y-4">
                 <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest text-slate-600">
@@ -437,33 +502,32 @@ const Investment = () => {
                     )}
 
                     {portfolioData.map((rdn) => (
-                        <div key={rdn.id} className="bg-white border border-slate-200 rounded-[24px] p-4 sm:p-5 space-y-4 shadow-sm">
-                            <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+                        <div key={rdn.id} className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
+                            <div className="flex justify-between items-start gap-2">
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-lg text-slate-900">{rdn.name}</h3>
-                                    <p className="text-[10px] font-bold uppercase text-slate-400">Nilai Tercatat</p>
-                                    <p className="text-xl font-bold text-blue-600 break-words">{formatCurrency(rdn.balance)}</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">
-                                        Modal dari {rdn.depositCount} transfer, hasil investasi {rdn.incomeCount} transaksi
+                                    <h3 className="font-bold text-base text-slate-900 truncate leading-tight">{rdn.name}</h3>
+                                    <p className="text-[10px] text-slate-500 mt-1 line-clamp-1">
+                                        {rdn.depositCount} msk, {rdn.incomeCount} hasil{rdn.withdrawalCount > 0 ? `, ${rdn.withdrawalCount} cair` : ''}
                                     </p>
                                 </div>
-                                <div className="min-w-0 sm:text-right">
-                                    <p className="text-[10px] font-bold uppercase text-slate-400">Modal</p>
-                                    <p className="text-sm font-semibold text-slate-700 break-words">{formatCurrency(rdn.modal)}</p>
-
-                                    <div className={`mt-2 flex flex-wrap items-center sm:justify-end gap-1 text-xs font-bold break-words ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                        {rdn.returnAmount >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                        {formatCurrency(Math.abs(rdn.returnAmount))} ({rdn.returnPercent.toFixed(2)}%)
-                                    </div>
-                                    {rdn.withdrawalCount > 0 && (
-                                        <p className="mt-1 text-[11px] text-slate-500">
-                                            Termasuk {rdn.withdrawalCount} pencairan ke rekening lain
-                                        </p>
-                                    )}
+                                <div className="text-right shrink-0">
+                                    <p className="text-base font-bold text-blue-600 leading-tight">{formatCurrency(rdn.balance)}</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mt-1">Nilai Tercatat</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 gap-3 pt-3 border-t border-slate-100 sm:grid-cols-2">
+                            <div className="flex justify-between items-end gap-2">
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Modal</p>
+                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.modal)}</p>
+                                </div>
+                                <div className={`shrink-0 flex items-center gap-1 text-[11px] font-bold ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                    {rdn.returnAmount >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                                    {formatCurrency(Math.abs(rdn.returnAmount))} ({rdn.returnPercent.toFixed(2)}%)
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
                                 <button
                                     onClick={() => {
                                         const preferredOwnerId = selectedOwnerId !== 'ALL'
@@ -478,9 +542,9 @@ const Investment = () => {
                                         }));
                                         setIsTransferModalOpen(true);
                                     }}
-                                    className="flex items-center justify-center gap-2 h-11 w-full rounded-xl bg-slate-100 text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors"
+                                    className="flex items-center justify-center gap-1.5 h-9 w-full rounded-xl bg-slate-100 text-slate-600 font-bold text-[10px] uppercase hover:bg-slate-200 transition-colors"
                                 >
-                                    <ArrowRightLeft size={14} /> Transfer / Cairkan
+                                    <ArrowRightLeft size={12} /> Transfer
                                 </button>
                                 <button
                                     onClick={() => {
@@ -505,15 +569,16 @@ const Investment = () => {
                                             description: 'Pertumbuhan saham',
                                             date: new Date().toISOString().slice(0, 10)
                                         }));
+                                        setEditingIncomeId(null);
                                         setIsIncomeModalOpen(true);
                                     }}
-                                    className="flex items-center justify-center gap-2 h-11 w-full rounded-xl bg-emerald-50 text-emerald-700 font-bold text-xs hover:bg-emerald-100 transition-colors"
+                                    className="flex items-center justify-center gap-1.5 h-9 w-full rounded-xl bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase hover:bg-emerald-100 transition-colors"
                                 >
-                                    <TrendingUp size={14} /> Update Pertumbuhan
+                                    <TrendingUp size={12} /> Update
                                 </button>
                                 <button
                                     onClick={() => setDetailAccount(rdn)}
-                                    className="flex items-center justify-center h-11 w-full rounded-xl bg-blue-50 text-blue-600 font-bold text-xs hover:bg-blue-100 transition-colors"
+                                    className="col-span-2 flex items-center justify-center h-9 w-full rounded-xl bg-blue-50 text-blue-600 font-bold text-[10px] uppercase hover:bg-blue-100 transition-colors"
                                 >
                                     Detail Kepemilikan
                                 </button>
@@ -539,53 +604,14 @@ const Investment = () => {
                                 <p className="text-lg font-bold text-slate-900">{detailAccount.name}</p>
                                 {detailAccountSummary && (
                                     <p className="mt-2 text-[11px] text-slate-600">
-                                        Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil investasi {detailAccountSummary.incomeCount} transaksi.
+                                        Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.
                                     </p>
                                 )}
                             </div>
-                            <div className="overflow-hidden rounded-2xl border border-slate-200">
-                                <div className="bg-slate-50 px-4 py-3">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Transaksi</p>
-                                    <p className="mt-1 text-[11px] text-slate-500">
-                                        Menampilkan 6 transaksi terbaru yang membentuk angka rekening ini.
-                                    </p>
-                                </div>
-                                {detailAccountTransactions.length > 0 ? (
-                                    <div className="max-h-80 overflow-y-auto overscroll-contain">
-                                        {detailAccountTransactions.map((tx: any) => (
-                                            <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
-                                                <div className="min-w-0">
-                                                    <div className="flex flex-wrap items-center gap-2">
-                                                        <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
-                                                            {getInvestmentFlowLabel(tx, detailAccount.id)}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                                            {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                                                        </span>
-                                                    </div>
-                                                    <p className="mt-2 truncate text-sm font-semibold text-slate-900">
-                                                        {tx.description || tx.activity?.name || 'Transaksi investasi'}
-                                                    </p>
-                                                    <p className="mt-1 text-[11px] text-slate-500">
-                                                        {tx.owner?.name || 'Tanpa owner'}
-                                                        {(tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
-                                                    </p>
-                                                </div>
-                                                <span className="shrink-0 text-sm font-black text-slate-900">
-                                                    {formatCurrency(tx.amount)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="px-4 py-4 text-sm text-slate-500">
-                                        Belum ada transaksi investasi yang bisa ditelusuri untuk rekening ini.
-                                    </div>
-                                )}
-                            </div>
+
                             <div className="overflow-hidden rounded-2xl border border-slate-200">
                                 <div className="grid grid-cols-[1fr_auto] gap-3 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                                    <span>Nama</span>
+                                    <span>Kepemilikan</span>
                                     <span>Nilai Tercatat</span>
                                 </div>
                                 {ownershipRows.length > 0 ? ownershipRows.map((row) => (
@@ -593,14 +619,115 @@ const Investment = () => {
                                         <div>
                                             <span className="font-semibold text-slate-900">{row.name}</span>
                                             <p className="mt-1 text-[11px] text-slate-500">
-                                                {row.depositCount} setoran, {row.incomeCount} hasil investasi
+                                                {row.depositCount} msk, {row.incomeCount} hasil
                                             </p>
                                         </div>
                                         <span className="font-bold text-slate-900">{formatCurrency(row.amount)}</span>
                                     </div>
                                 )) : (
                                     <div className="px-4 py-4 text-sm text-slate-500">
-                                        Belum ada rincian kepemilikan yang tercatat untuk rekening ini.
+                                        Belum ada rincian kepemilikan.
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="overflow-hidden rounded-2xl border border-slate-200">
+                                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Riwayat Transaksi Terakhir</p>
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            10 mutasi terbaru (setoran, penarikan, hasil).
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const preferredOwnerId = detailAccount.ownerId || (selectedOwnerId !== 'ALL'
+                                                ? selectedOwnerId
+                                                : owners[0]?.id || '');
+                                            if (!preferredOwnerId) {
+                                                alert('Rekening investasi ini belum punya kepemilikan. Atur owner rekening dulu.');
+                                                return;
+                                            }
+                                            setIncomeFormLock({
+                                                ownerId: preferredOwnerId,
+                                                accountId: detailAccount.id,
+                                                active: true
+                                            });
+                                            setIncomeForm((prev) => ({
+                                                ...prev,
+                                                kind: 'STOCK_GROWTH',
+                                                ownerId: preferredOwnerId,
+                                                accountId: detailAccount.id,
+                                                amount: '',
+                                                description: 'Pertumbuhan saham',
+                                                date: new Date().toISOString().slice(0, 10)
+                                            }));
+                                            setEditingIncomeId(null);
+                                            setIsIncomeModalOpen(true);
+                                        }}
+                                        className="shrink-0 flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                        title="Tambah Pertumbuhan"
+                                    >
+                                        <TrendingUp size={14} />
+                                    </button>
+                                </div>
+                                {detailAccountTransactions.length > 0 ? (
+                                    <div className="max-h-72 overflow-y-auto overscroll-contain">
+                                        {detailAccountTransactions.map((tx: any) => {
+                                            const txIsIncome = isInvestmentIncome(tx);
+                                            return (
+                                                <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
+                                                    <div className="min-w-0">
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
+                                                                {txIsIncome && tx.amount < 0 ? 'Penurunan Nilai' : getInvestmentFlowLabel(tx, detailAccount.id)}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                                                {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            </span>
+                                                        </div>
+                                                        <p className="mt-2 text-sm font-semibold text-slate-900 break-words">
+                                                            {tx.description || tx.activity?.name || 'Transaksi investasi'}
+                                                        </p>
+                                                        <p className="mt-1 text-[11px] text-slate-500">
+                                                            {tx.owner?.name || 'Tanpa owner'}
+                                                            {!txIsIncome && (tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-2 shrink-0">
+                                                        <span className={`text-sm font-black ${(txIsIncome && Number(tx.amount) < 0) ? 'text-rose-600' : 'text-slate-900'}`}>
+                                                            {txIsIncome && Number(tx.amount) > 0 ? '+' : ''}{formatCurrency(tx.amount)}
+                                                        </span>
+                                                        {txIsIncome && (
+                                                            <div className="flex items-center gap-1">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleEditInvestmentIncome(tx)}
+                                                                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
+                                                                    title="Edit transaksi"
+                                                                >
+                                                                    <Pencil size={14} />
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleDeleteInvestmentIncome(tx)}
+                                                                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:opacity-50"
+                                                                    title="Hapus transaksi"
+                                                                    disabled={submitting}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="px-4 py-4 text-sm text-slate-500">
+                                        Belum ada riwayat transaksi.
                                     </div>
                                 )}
                             </div>
@@ -610,34 +737,59 @@ const Investment = () => {
             )}
 
             {isIncomeModalOpen && (
-                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => { setIsIncomeModalOpen(false); setIncomeFormLock({ ownerId: '', accountId: '', active: false }); }}>
+                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={resetIncomeModalState}>
                     <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-between">
                             <div>
-                                <h3 className="font-bold text-slate-900">Pemasukan Investasi</h3>
+                                <h3 className="font-bold text-slate-900">
+                                    {editingIncomeId
+                                        ? (incomeForm.kind === 'STOCK_GROWTH' ? 'Edit Pertumbuhan Investasi' : 'Edit Pemasukan Investasi')
+                                        : (incomeForm.kind === 'STOCK_GROWTH' ? 'Update Nilai Investasi' : 'Pemasukan Investasi')}
+                                </h3>
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">
-                                    Pemasukan akan langsung menambah saldo rekening investasi yang dipilih
+                                    {incomeForm.kind === 'STOCK_GROWTH'
+                                        ? 'Catat kenaikan atau penurunan nilai pada rekening investasi yang dipilih'
+                                        : 'Pemasukan akan langsung menambah saldo rekening investasi yang dipilih'}
                                 </p>
                             </div>
-                            <button onClick={() => { setIsIncomeModalOpen(false); setIncomeFormLock({ ownerId: '', accountId: '', active: false }); }} className="p-2 text-slate-400"><X size={18} /></button>
+                            <button onClick={resetIncomeModalState} className="p-2 text-slate-400"><X size={18} /></button>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                             <button
                                 type="button"
-                                onClick={() => setIncomeForm((prev) => ({ ...prev, kind: 'SUKUK', description: 'Pendapatan sukuk triwulan' }))}
+                                onClick={() => { setStockGrowthDirection('UP'); setIncomeForm((prev) => ({ ...prev, kind: 'SUKUK', description: 'Pendapatan sukuk triwulan' })); }}
                                 className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${incomeForm.kind === 'SUKUK' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}
                             >
                                 Pendapatan Sukuk
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setIncomeForm((prev) => ({ ...prev, kind: 'STOCK_GROWTH', description: 'Pertumbuhan saham' }))}
+                                onClick={() => { setIncomeForm((prev) => ({ ...prev, kind: 'STOCK_GROWTH', description: 'Pertumbuhan saham' })); }}
                                 className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${incomeForm.kind === 'STOCK_GROWTH' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}
                             >
                                 Pertumbuhan Saham
                             </button>
                         </div>
+
+                        {incomeForm.kind === 'STOCK_GROWTH' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => { setStockGrowthDirection('UP'); setIncomeForm((prev) => ({ ...prev, description: prev.description === 'Penurunan saham' ? 'Pertumbuhan saham' : prev.description })); }}
+                                    className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${stockGrowthDirection === 'UP' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                >
+                                    Nilai Naik
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setStockGrowthDirection('DOWN'); setIncomeForm((prev) => ({ ...prev, description: prev.description === 'Pertumbuhan saham' ? 'Penurunan saham' : prev.description })); }}
+                                    className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${stockGrowthDirection === 'DOWN' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                >
+                                    Nilai Turun
+                                </button>
+                            </div>
+                        )}
 
                         <form onSubmit={handleCreateInvestmentIncome} className="space-y-4">
                             <div>
@@ -663,9 +815,18 @@ const Investment = () => {
                                         inputMode="numeric"
                                         placeholder="0"
                                         className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm font-semibold"
-                                        value={formatThousands(incomeForm.amount)}
+                                        value={activeAmountField === 'income' ? incomeForm.amount : formatThousands(incomeForm.amount)}
                                         onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: sanitizeAmount(e.target.value) }))}
+                                        onFocus={() => setActiveAmountField('income')}
+                                        onBlur={() => setActiveAmountField((current) => current === 'income' ? null : current)}
                                     />
+                                    {incomeForm.kind === 'STOCK_GROWTH' && (
+                                        <p className={`mt-1 text-[11px] font-semibold ${stockGrowthDirection === 'DOWN' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                            {stockGrowthDirection === 'DOWN'
+                                                ? 'Akan dicatat sebagai penurunan nilai portofolio.'
+                                                : 'Akan dicatat sebagai kenaikan nilai portofolio.'}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Tanggal</label>
@@ -709,7 +870,7 @@ const Investment = () => {
                                 disabled={submitting || investmentIncomeAccounts.length === 0}
                                 className="w-full h-12 rounded-xl bg-slate-900 text-white text-xs font-bold uppercase tracking-wider disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
                             >
-                                <Save size={16} /> {submitting ? 'Menyimpan...' : 'Catat Pemasukan'}
+                                <Save size={16} /> {submitting ? 'Menyimpan...' : editingIncomeId ? 'Simpan Perubahan' : 'Catat Pemasukan'}
                             </button>
 
                             {investmentIncomeAccounts.length === 0 ? (
@@ -803,8 +964,10 @@ const Investment = () => {
                                     inputMode="numeric"
                                     placeholder="0"
                                     className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm font-semibold"
-                                    value={formatThousands(transferForm.amount)}
+                                    value={activeAmountField === 'transfer' ? transferForm.amount : formatThousands(transferForm.amount)}
                                     onChange={(e) => setTransferForm((f) => ({ ...f, amount: sanitizeAmount(e.target.value) }))}
+                                    onFocus={() => setActiveAmountField('transfer')}
+                                    onBlur={() => setActiveAmountField((current) => current === 'transfer' ? null : current)}
                                 />
                             </div>
 

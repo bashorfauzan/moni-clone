@@ -25,6 +25,41 @@ interface SecurityContextType {
 }
 
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
+const PIN_STORAGE_KEY = 'app-pin-hash';
+const PIN_SESSION_KEY = 'app-pin-hash-session';
+const BIOMETRIC_ENABLED_KEY = 'app-biometric';
+const BIOMETRIC_CREDENTIAL_KEY = 'app-bio-cred-id';
+
+const safeReadStorage = (storage: Storage | undefined, key: string): string | null => {
+    if (!storage) return null;
+
+    try {
+        return storage.getItem(key);
+    } catch {
+        return null;
+    }
+};
+
+const safeWriteStorage = (storage: Storage | undefined, key: string, value: string): boolean => {
+    if (!storage) return false;
+
+    try {
+        storage.setItem(key, value);
+        return storage.getItem(key) === value;
+    } catch {
+        return false;
+    }
+};
+
+const safeRemoveStorage = (storage: Storage | undefined, key: string) => {
+    if (!storage) return;
+
+    try {
+        storage.removeItem(key);
+    } catch {
+        // Abaikan agar alur utama tidak ikut gagal.
+    }
+};
 
 export const useSecurity = () => {
     const context = useContext(SecurityContext);
@@ -33,9 +68,16 @@ export const useSecurity = () => {
 };
 
 export const SecurityProvider = ({ children }: { children: ReactNode }) => {
-    const [pinHash, setPinHash] = useState<string | null>(() => localStorage.getItem('app-pin-hash'));
-    const [biometricEnabled, setBiometricEnabled] = useState<boolean>(() => localStorage.getItem('app-biometric') === 'true');
-    const [bioCredentialId, setBioCredentialId] = useState<string | null>(() => localStorage.getItem('app-bio-cred-id'));
+    const [pinHash, setPinHash] = useState<string | null>(() =>
+        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY)
+        || safeReadStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY)
+    );
+    const [biometricEnabled, setBiometricEnabled] = useState<boolean>(() =>
+        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY) === 'true'
+    );
+    const [bioCredentialId, setBioCredentialId] = useState<string | null>(() =>
+        safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY)
+    );
     const [isBiometricSupported, setIsBiometricSupported] = useState(false);
     const [biometricSupportMessage, setBiometricSupportMessage] = useState('Perangkat ini belum siap untuk biometrik.');
     
@@ -48,7 +90,10 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const lowPriorityStorageKeys = ['app-bg-image', 'app-hero-card-image'];
 
     const isSecurityEnabled = !!pinHash;
-    const getCurrentPinHash = () => pinHash || localStorage.getItem('app-pin-hash');
+    const getCurrentPinHash = () =>
+        pinHash
+        || safeReadStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY)
+        || safeReadStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY);
     const markActivity = () => {
         try {
             sessionStorage.setItem('last-active', Date.now().toString());
@@ -146,34 +191,48 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const setupSecurity = (pin: string) => {
         try {
             const hash = hashString(pin);
-            try {
-                localStorage.setItem('app-pin-hash', hash);
-            } catch (error: any) {
-                const isQuotaIssue = error?.name === 'QuotaExceededError' || error?.code === 22;
-                if (!isQuotaIssue) throw error;
+            const localStorageRef = typeof window !== 'undefined' ? window.localStorage : undefined;
+            const sessionStorageRef = typeof window !== 'undefined' ? window.sessionStorage : undefined;
 
-                let recovered = false;
+            let persistedToLocal = safeWriteStorage(localStorageRef, PIN_STORAGE_KEY, hash);
+            let recovered = false;
+
+            if (!persistedToLocal && localStorageRef) {
                 for (const key of lowPriorityStorageKeys) {
-                    if (localStorage.getItem(key)) {
-                        localStorage.removeItem(key);
+                    if (safeReadStorage(localStorageRef, key)) {
+                        safeRemoveStorage(localStorageRef, key);
                         recovered = true;
                     }
                 }
+                persistedToLocal = safeWriteStorage(localStorageRef, PIN_STORAGE_KEY, hash);
+            }
 
-                localStorage.setItem('app-pin-hash', hash);
+            if (persistedToLocal) {
+                safeRemoveStorage(sessionStorageRef, PIN_SESSION_KEY);
                 setPinHash(hash);
                 markActivity();
                 return {
                     success: true,
                     message: recovered
                         ? 'PIN berhasil diatur. Gambar tema besar dilepas dulu agar penyimpanan cukup.'
-                        : 'PIN berhasil diatur.'
+                        : 'PIN berhasil diatur dan siap dipakai.'
                 };
             }
 
-            setPinHash(hash);
-            markActivity();
-            return { success: true, message: 'PIN berhasil diatur dan siap dipakai.' };
+            const persistedToSession = safeWriteStorage(sessionStorageRef, PIN_SESSION_KEY, hash);
+            if (persistedToSession) {
+                setPinHash(hash);
+                markActivity();
+                return {
+                    success: true,
+                    message: 'PIN aktif untuk sesi ini. Penyimpanan permanen di perangkat sedang penuh atau dibatasi.'
+                };
+            }
+
+            return {
+                success: false,
+                message: 'PIN gagal disimpan. Penyimpanan browser di perangkat ini sedang bermasalah.'
+            };
         } catch (error) {
             console.error('Gagal menyimpan PIN keamanan.', error);
             return {
@@ -184,9 +243,10 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const removeSecurity = () => {
-        localStorage.removeItem('app-pin-hash');
-        localStorage.removeItem('app-biometric');
-        localStorage.removeItem('app-bio-cred-id');
+        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, PIN_STORAGE_KEY);
+        safeRemoveStorage(typeof window !== 'undefined' ? window.sessionStorage : undefined, PIN_SESSION_KEY);
+        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY);
+        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY);
         setPinHash(null);
         setBiometricEnabled(false);
         setBioCredentialId(null);
@@ -239,8 +299,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                 }
                 const b64 = window.btoa(credentialIdBase64);
                 
-                localStorage.setItem('app-bio-cred-id', b64);
-                localStorage.setItem('app-biometric', 'true');
+                safeWriteStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY, b64);
+                safeWriteStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY, 'true');
                 setBioCredentialId(b64);
                 setBiometricEnabled(true);
                 return true;
@@ -254,8 +314,8 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const removeBiometric = () => {
-        localStorage.removeItem('app-biometric');
-        localStorage.removeItem('app-bio-cred-id');
+        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_ENABLED_KEY);
+        safeRemoveStorage(typeof window !== 'undefined' ? window.localStorage : undefined, BIOMETRIC_CREDENTIAL_KEY);
         setBiometricEnabled(false);
         setBioCredentialId(null);
     };

@@ -21,7 +21,7 @@ type ParsedNotification = {
     parseNotes: string | null;
 };
 
-const ACCOUNT_HINTS = ['bca', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'rhb', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
+const ACCOUNT_HINTS = ['bca', 'bsya', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'rhb', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
@@ -33,6 +33,7 @@ const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account'
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
 const CHAT_APP_HINTS = ['whatsapp', 'wa business', 'telegram', 'line', 'discord', 'messenger', 'instagram', 'facebook', 'signal'];
+const EMAIL_PACKAGE_HINTS = ['com.google.android.gm', 'com.microsoft.office.outlook'];
 const PROMO_KEYWORDS = [
     'promo', 'promosi', 'diskon', 'voucher', 'cashback spesial', 'cashback hingga',
     'kesempatan terbatas', 'penawaran', 'pakai', 'pertama kali', 'khusus hari ini',
@@ -63,7 +64,8 @@ const ACCOUNT_HINT_ALIASES: Record<string, string> = {
     brimo: 'bri',
     mybca: 'bca',
     livin: 'mandiri',
-    wondr: 'bni'
+    wondr: 'bni',
+    bsya: 'bca'
 };
 
 const canonicalizeAccountHint = (hint?: string | null) => {
@@ -161,6 +163,38 @@ const detectFeeCharge = (text: string) => {
         || text.includes('admin');
 };
 
+const detectFailedOrCancelledNotification = (text: string) => {
+    return containsAny(text, [
+        'dibatalkan',
+        'dibatalkan.',
+        'transaksi dibatalkan',
+        'top up dibatalkan',
+        'gagal',
+        'tidak berhasil',
+        'belum berhasil',
+        'expired',
+        'kedaluwarsa',
+        'dibatalkan otomatis'
+    ]);
+};
+
+const detectConfirmedSuccessNotification = (text: string) => {
+    return containsAny(text, [
+        'sukses',
+        'berhasil',
+        'transaksi berhasil',
+        'transfer berhasil',
+        'top up berhasil',
+        'berhasil ditransfer',
+        'telah dikirim',
+        'dikirim ke',
+        'diterima',
+        'masuk ke rekening',
+        'kredit',
+        'debit'
+    ]);
+};
+
 const shouldIgnoreRdnFinancialNote = (sourceApp: string, title: string, text: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
     const lowerTitle = normalizeText(title);
@@ -200,7 +234,13 @@ const isChatAppSource = (sourceApp: string) => {
     return CHAT_APP_HINTS.some((hint) => lowerSourceApp.includes(hint));
 };
 
+const isWhatsAppSource = (sourceApp: string) => {
+    const lowerSourceApp = normalizeText(sourceApp);
+    return lowerSourceApp.includes('whatsapp') || lowerSourceApp.includes('wa business');
+};
+
 const shouldIgnoreLikelyChatMessage = (sourceApp: string, title: string, text: string) => {
+    if (isWhatsAppSource(sourceApp)) return true;
     if (!isChatAppSource(sourceApp)) return false;
 
     const combined = `${title} ${text}`.trim();
@@ -210,6 +250,35 @@ const shouldIgnoreLikelyChatMessage = (sourceApp: string, title: string, text: s
     if (detectSecurityAlert(combined)) return false;
 
     return true;
+};
+
+const isEmailPackage = (packageName: string) => {
+    const normalized = normalizeText(packageName || '');
+    return EMAIL_PACKAGE_HINTS.includes(normalized);
+};
+
+const shouldProcessEmailNotification = (sourceApp: string, senderName: string, title: string, text: string) => {
+    const combined = normalizeText(`${sourceApp} ${senderName} ${title} ${text}`.trim());
+
+    if (detectSecurityAlert(combined)) return true;
+    if (detectAccountHint(combined)) return true;
+    if (hasExplicitMoneyMarker(combined)) return true;
+
+    return [
+        'rekening',
+        'saldo',
+        'mutasi',
+        'transaksi',
+        'berhasil',
+        'transfer',
+        'debit',
+        'kredit',
+        'briva',
+        'virtual account',
+        'va ',
+        'notification',
+        'notifikasi'
+    ].some((keyword) => combined.includes(keyword));
 };
 
 const detectSourceAppHint = (sourceApp: string) => {
@@ -234,6 +303,16 @@ const detectTransferDirection = (text: string) => {
     if (containsAny(text, TRANSFER_OUT_KEYWORDS)) return 'OUT';
     if (containsAny(text, TRANSFER_IN_KEYWORDS)) return 'IN';
     return 'UNKNOWN';
+};
+
+const needsDestinationReview = (text: string) => {
+    return containsAny(text, [
+        'sesama bca',
+        'sesama bca syariah',
+        'ke rekening sesama',
+        'antar rekening',
+        'transfer dana ke rekening sesama'
+    ]);
 };
 
 const resolveAccountHints = (
@@ -330,6 +409,20 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         };
     }
 
+    if (detectFailedOrCancelledNotification(lowerText)) {
+        return {
+            amount: null,
+            type: null,
+            description: text.trim().slice(0, 160),
+            accountHint: null,
+            sourceAccountHint: null,
+            destinationAccountHint: null,
+            confidenceScore: 0,
+            parseStatus: 'IGNORED',
+            parseNotes: 'Notifikasi dibatalkan/gagal, tidak dibuat transaksi otomatis'
+        };
+    }
+
     const amount = extractAmount(combined);
     const accountHint = detectAccountHint(combined);
     let type: TransactionType | null = null;
@@ -402,6 +495,23 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
             parseStatus = 'PENDING';
             parseNotes = 'Notifikasi berhasil, tetapi arah dana belum jelas. Konfirmasi jenis dan rekening dulu.';
             confidenceScore = Math.min(confidenceScore, 0.55);
+        }
+
+        if (
+            type === TransactionType.TRANSFER
+            && detectTransferDirection(lowerText) === 'OUT'
+            && !detectAccountNumberHint(lowerText)
+            && needsDestinationReview(lowerText)
+        ) {
+            parseStatus = 'PENDING';
+            parseNotes = 'Transfer sesama bank terdeteksi. Konfirmasi rekening tujuan dulu, bisa jadi ke rekening sendiri atau orang lain.';
+            confidenceScore = Math.min(confidenceScore, 0.7);
+        }
+
+        if (parseStatus === 'PARSED' && !detectConfirmedSuccessNotification(lowerText)) {
+            parseStatus = 'PENDING';
+            parseNotes = 'Nominal terdeteksi, tetapi status sukses transaksi belum jelas. Tinjau dulu sebelum dicatat.';
+            confidenceScore = Math.min(confidenceScore, 0.7);
         }
     }
 
@@ -607,14 +717,32 @@ router.post('/notification', async (req, res) => {
             return res.status(400).json({ error: 'appName dan text wajib diisi' });
         }
 
+        const packageName = rawPayload?.packageName || '';
+        const isEmailNotification = isEmailPackage(String(packageName));
+
+        if (
+            isEmailNotification
+            && !shouldProcessEmailNotification(
+                String(appName),
+                String(senderName || ''),
+                String(title || ''),
+                String(text || '')
+            )
+        ) {
+            return res.status(200).json({
+                message: `Notifikasi email dari ${packageName} diabaikan karena tidak terindikasi transaksi`,
+                skipped: true
+            });
+        }
+
         const parsed = parseNotificationText(
             String(appName),
-            String(title || senderName || ''),
+            `${String(title || '')} ${String(senderName || '')}`.trim(),
             String(text)
         );
 
         // Cek apakah ini adalah peringatan keamanan (login gagal, aktivitas mencurigakan, dll)
-        const isSecurityAlert = detectSecurityAlert(`${title || ''} ${text}`);
+        const isSecurityAlert = detectSecurityAlert(`${title || ''} ${senderName || ''} ${text}`);
 
         // Jangan simpan notifikasi ke database jika tidak ada nominal dan bukan peringatan keamanan
         if (parsed.parseStatus === 'IGNORED' && !isSecurityAlert) {
@@ -736,9 +864,32 @@ router.post('/notification', async (req, res) => {
             const isTransferLikeTopUp = detectTransferLikeTopUp(String(appName), normalizedNotificationText);
 
             if (isTransferLikeTopUp) {
-                effectiveType = TransactionType.TRANSFER;
-                sourceAccountId = sourceAccount?.id ?? account?.id ?? null;
-                destinationAccountId = destinationAccount?.id ?? account?.id ?? null;
+                const sourceAppHint = detectSourceAppHint(String(appName));
+                const sourceAppLooksLikeEWallet = sourceAppHint ? E_WALLET_APPS.includes(sourceAppHint) : false;
+                const recoveredSourceAccountId = sourceAppLooksLikeEWallet
+                    ? sourceAccount?.id ?? null
+                    : sourceAccount?.id ?? account?.id ?? null;
+                const recoveredDestinationAccountId = sourceAppLooksLikeEWallet
+                    ? destinationAccount?.id ?? account?.id ?? null
+                    : destinationAccount?.id ?? null;
+
+                if (
+                    recoveredSourceAccountId
+                    && recoveredDestinationAccountId
+                    && recoveredSourceAccountId !== recoveredDestinationAccountId
+                ) {
+                    effectiveType = TransactionType.TRANSFER;
+                    sourceAccountId = recoveredSourceAccountId;
+                    destinationAccountId = recoveredDestinationAccountId;
+                } else if (sourceAppLooksLikeEWallet) {
+                    effectiveType = TransactionType.INCOME;
+                    destinationAccountId = destinationAccount?.id ?? account?.id ?? sourceAccount?.id ?? null;
+                    sourceAccountId = null;
+                } else {
+                    effectiveType = TransactionType.EXPENSE;
+                    sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
+                    destinationAccountId = null;
+                }
             } else if (transferDirection === 'OUT') {
                 effectiveType = TransactionType.EXPENSE;
                 sourceAccountId = sourceAccount?.id ?? account?.id ?? destinationAccount?.id ?? null;
