@@ -56,7 +56,7 @@ const PROMO_KEYWORDS = [
     'promo', 'promosi', 'diskon', 'voucher', 'cashback spesial', 'cashback hingga',
     'kesempatan terbatas', 'penawaran', 'pakai', 'pertama kali', 'khusus hari ini',
     'berlaku sampai', 's.d.', 'sd.', 'hemat', 'bonus', 'kupon', 'kode promo',
-    'simpan kartu bankmu', 'lebih mudah', 'coba yuk'
+    'simpan kartu bankmu', 'lebih mudah', 'coba yuk', 'spesial buatmu', 'cek info'
 ];
 const SECURITY_ALERT_KEYWORDS = [
     'login gagal', 'masuk gagal', 'gagal masuk', 'percobaan login', 'percobaan masuk',
@@ -231,13 +231,18 @@ const shouldIgnorePromotionalNotification = (sourceApp: string, title: string, t
     const hasPromoKeyword = PROMO_KEYWORDS.some((keyword) => combined.includes(keyword));
     if (!hasPromoKeyword) return false;
 
-    const hasTransactionalProof = [
+    const hasStrongTransactionalProof = [
+        'transaksi berhasil', 'transfer berhasil', 'top up berhasil',
         'transaksi berhasil', 'berhasil ditransfer', 'telah dikirim', 'dikirim ke',
         'diterima dari', 'nomor referensi', 'no. referensi', 'ref:', 'sisa saldo',
-        'saldo akhir', 'mutasi', 'debit', 'kredit', 'tarik tunai', 'va ', 'briva'
+        'saldo akhir', 'mutasi', 'debit', 'kredit', 'va ', 'briva'
     ].some((keyword) => combined.includes(keyword));
 
-    if (hasTransactionalProof) return false;
+    if (hasStrongTransactionalProof) return false;
+
+    if (combined.includes('tarik tunai') && (combined.includes('diskon') || combined.includes('promo'))) {
+        return true;
+    }
 
     return true;
 };

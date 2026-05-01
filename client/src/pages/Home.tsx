@@ -55,6 +55,7 @@ const Home = () => {
     const [recentTransactions, setRecentTransactions] = useState<TransactionItem[]>([]);
     const [pendingTransactions, setPendingTransactions] = useState<TransactionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+    const [notificationLoadError, setNotificationLoadError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const isBalanceHidden = localStorage.getItem('hideBalance') === 'true';
     const [isWealthHidden, setIsWealthHidden] = useState(() => localStorage.getItem('hideWealth') === 'true');
@@ -163,6 +164,13 @@ const Home = () => {
             ]);
             const nextMeta = metaResult.status === 'fulfilled' ? metaResult.value : { owners: [], accounts: [], activities: [] };
             const nextNotifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
+            const nextNotificationError = notificationsResult.status === 'rejected'
+                ? (
+                    (notificationsResult.reason as any)?.response?.data?.error
+                    || (notificationsResult.reason as Error)?.message
+                    || 'Inbox notifikasi gagal dimuat dari API.'
+                )
+                : null;
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
             const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
@@ -200,6 +208,7 @@ const Home = () => {
             setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
             setNotifications(nextNotifications);
+            setNotificationLoadError(nextNotificationError);
             setMeta({ owners: nextMeta.owners, accounts: nextMeta.accounts });
         } catch (error) {
             console.error('Error fetching data:', error);
@@ -536,6 +545,15 @@ const Home = () => {
                     </div>
                 </div>
             </header>
+
+            {notificationLoadError ? (
+                <section className="mb-6 rounded-[24px] border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
+                    <p className="font-bold uppercase tracking-widest text-[10px]">Inbox Notifikasi Bermasalah</p>
+                    <p className="mt-1">
+                        {notificationLoadError}
+                    </p>
+                </section>
+            ) : null}
 
             <section className="app-hero-card rounded-[32px] p-5 mb-8 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
                 <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-20 -mt-20" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.25 }}></div>

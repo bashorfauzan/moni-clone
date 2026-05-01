@@ -3,7 +3,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip, AreaChart, Area
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Calendar, Download, Pencil, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';

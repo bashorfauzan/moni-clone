@@ -174,7 +174,6 @@ const Targets = () => {
     const surplusThisMonth = Math.max(0, transferredThisMonth - monthlyTargetAmount);
     const isSafe = monthlyTargetAmount > 0 && remainingThisMonth === 0;
     const progressBase = monthlyTargetAmount <= 0 ? 100 : Math.min(100, (transferredThisMonth / monthlyTargetAmount) * 100);
-    const totalTargetAmount = activeTargets.reduce((sum, t) => sum + t.totalAmount, 0);
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
@@ -259,7 +258,6 @@ const Targets = () => {
                                 : alreadyMarkedThisMonth
                                     ? 'Sudah TF Bulan Ini'
                                     : 'Tandai Sudah TF';
-                        const remainingTimeLabel = `${monthsLeft} bulan lagi`;
                         const remainingTargetLabel = formatCurrency(target.remainingAmount);
 
                         return (
