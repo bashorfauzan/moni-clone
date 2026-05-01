@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../context/SecurityContext';
 import { canonicalizeAccountAlias } from '../lib/accountAliases';
 import { readStorage, writeStorage } from '../lib/storage';
+import { getErrorMessage } from '../services/errors';
 import {
     inferNotificationCategoryLabel,
     isInvestmentIncome,
@@ -166,11 +167,7 @@ const Home = () => {
             const nextMeta = metaResult.status === 'fulfilled' ? metaResult.value : { owners: [], accounts: [], activities: [] };
             const nextNotifications = notificationsResult.status === 'fulfilled' ? notificationsResult.value : [];
             const nextNotificationError = notificationsResult.status === 'rejected'
-                ? (
-                    (notificationsResult.reason as any)?.response?.data?.error
-                    || (notificationsResult.reason as Error)?.message
-                    || 'Inbox notifikasi gagal dimuat dari API.'
-                )
+                ? getErrorMessage(notificationsResult.reason, 'Inbox notifikasi gagal dimuat dari API.')
                 : null;
             const now = new Date();
             const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

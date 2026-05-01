@@ -55,6 +55,7 @@ import {
     shouldRunAutoBackup,
     type BackupSettings
 } from '../services/backup';
+import { getErrorMessage } from '../services/errors';
 import {
     ACCOUNT_APP_PRESETS,
     canLaunchAccountApp,
@@ -688,7 +689,7 @@ const MenuPage = () => {
                 window.location.reload();
             }, 900);
         } catch (error: any) {
-            setResetFeedback({ type: 'error', message: error?.message || error?.response?.data?.error || 'Gagal mereset data.' });
+            setResetFeedback({ type: 'error', message: getErrorMessage(error, 'Gagal mereset data.') });
         } finally {
             setResetDataLoading(false);
         }
@@ -813,13 +814,13 @@ const MenuPage = () => {
                 apiHealth: healthRes.status === 'fulfilled' && healthRes.value.data?.ok ? 'ok' : 'error',
                 apiMessage: healthRes.status === 'fulfilled'
                     ? 'API merespons normal'
-                    : (healthRes.reason?.response?.data?.error || healthRes.reason?.message || 'API tidak merespons'),
+                    : getErrorMessage(healthRes.reason, 'API tidak merespons'),
                 notificationInboxCount: notificationsRes.status === 'fulfilled'
                     ? notificationItems.length
                     : null,
                 notificationStatus: notificationsRes.status === 'fulfilled'
                     ? 'Inbox notifikasi dapat diambil'
-                    : (notificationsRes.reason?.response?.data?.error || notificationsRes.reason?.message || 'Inbox notifikasi gagal diambil'),
+                    : getErrorMessage(notificationsRes.reason, 'Inbox notifikasi gagal diambil'),
                 notificationReviewCount: reviewCount,
                 notificationApprovedCount: approvedCount,
                 notificationIgnoredCount: ignoredCount,
@@ -890,7 +891,7 @@ const MenuPage = () => {
             alert('Pengaturan akun berhasil diperbarui.');
             setIsAccountSettingsOpen(false);
         } catch (error: any) {
-            setAccountSettingsError(error?.message || 'Gagal memperbarui pengaturan akun.');
+            setAccountSettingsError(getErrorMessage(error, 'Gagal memperbarui pengaturan akun.'));
         } finally {
             setAccountSettingsSaving(false);
         }
@@ -994,7 +995,7 @@ const MenuPage = () => {
                 alert('Backup berhasil dibuat. File disimpan ke folder unduhan perangkat/browser.');
             }
         } catch (error: any) {
-            const message = error?.response?.data?.error || 'Gagal membuat backup data.';
+            const message = getErrorMessage(error, 'Gagal membuat backup data.');
             setBackupError(message);
             if (mode === 'manual') {
                 alert(message);
@@ -1040,7 +1041,7 @@ const MenuPage = () => {
                 payload
             });
         } catch (error: any) {
-            const message = error?.response?.data?.error || error?.message || 'Gagal membaca file backup.';
+            const message = getErrorMessage(error, 'Gagal membaca file backup.');
             setRestoreError(message);
         }
     };
@@ -1069,7 +1070,7 @@ const MenuPage = () => {
             alert('Restore backup berhasil. Halaman akan dimuat ulang.');
             window.location.reload();
         } catch (error: any) {
-            const message = error?.response?.data?.error || error?.message || 'Gagal memulihkan backup.';
+            const message = getErrorMessage(error, 'Gagal memulihkan backup.');
             setRestoreError(message);
             alert(message);
         } finally {

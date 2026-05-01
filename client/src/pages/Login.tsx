@@ -4,6 +4,7 @@ import { Eye, EyeOff, LogIn, Lock, Mail, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { normalizeIdentifierToEmail, resolvePostAuthPath } from '../services/auth';
+import { getErrorMessage } from '../services/errors';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -66,13 +67,13 @@ const Login = () => {
             const nextPath = await resolvePostAuthPath();
             navigate(nextPath, { replace: true });
         } catch (err: any) {
-            const msg = err.message || '';
+            const msg = getErrorMessage(err, 'Login gagal. Coba lagi.');
             if (msg.includes('Invalid login') || msg.includes('invalid_credentials')) {
                 setError('Email/No. Telepon atau password salah.');
             } else if (msg.includes('Email not confirmed')) {
                 setError('Email belum dikonfirmasi. Cek kotak masuk email Anda.');
             } else {
-                setError(msg || 'Login gagal. Coba lagi.');
+                setError(msg);
             }
         } finally {
             setLoading(false);

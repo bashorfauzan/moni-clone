@@ -4,6 +4,7 @@ import { Eye, EyeOff, LogIn, Lock, Mail, Phone } from 'lucide-react';
 import api from '../services/api';
 import { supabase } from '../lib/supabase';
 import { normalizeIdentifierToEmail, resolvePostAuthPath } from '../services/auth';
+import { getErrorMessage } from '../services/errors';
 
 const Register = () => {
     const navigate = useNavigate();
@@ -48,7 +49,7 @@ const Register = () => {
 
             navigate(`/login?registered=1&identifier=${encodeURIComponent(identifier)}`, { replace: true });
         } catch (err: any) {
-            setError(err?.response?.data?.error || err.message || 'Registrasi gagal. Coba lagi.');
+            setError(getErrorMessage(err, 'Registrasi gagal. Coba lagi.'));
         } finally {
             setLoading(false);
         }
