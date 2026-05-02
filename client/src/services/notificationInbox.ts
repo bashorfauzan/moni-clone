@@ -1,5 +1,7 @@
 import api from './api';
 import { recordDataAccessMode } from './dataAccessMode';
+import { getErrorMessage } from './errors';
+import { supabase, useDirectSupabaseData } from '../lib/supabase';
 
 export type NotificationItem = {
     id: string;
@@ -38,7 +40,72 @@ const normalizeNotificationRow = (row: any): NotificationItem => ({
     } : null
 });
 
+const fetchNotificationInboxViaSupabase = async (limit = 8): Promise<NotificationItem[]> => {
+    if (!supabase) return [];
+
+    const { data: notifications, error } = await supabase
+        .from('NotificationInbox')
+        .select(`
+            id,
+            sourceApp,
+            title,
+            senderName,
+            messageText,
+            receivedAt,
+            parseStatus,
+            parsedType,
+            parsedAmount,
+            parsedDescription,
+            parsedAccountHint,
+            parseNotes,
+            confidenceScore
+        `)
+        .neq('parseStatus', 'IGNORED')
+        .order('receivedAt', { ascending: false })
+        .limit(limit);
+
+    if (error) throw error;
+
+    const notificationIds = (notifications || []).map((item) => item.id);
+    const transactionMap = new Map<string, { id: string; isValidated: boolean }>();
+
+    if (notificationIds.length > 0) {
+        const { data: transactions, error: transactionError } = await supabase
+            .from('Transaction')
+            .select('id, isValidated, notificationInboxId')
+            .in('notificationInboxId', notificationIds);
+
+        if (transactionError) throw transactionError;
+
+        for (const tx of transactions || []) {
+            const notificationInboxId = tx.notificationInboxId;
+            if (!notificationInboxId) continue;
+            transactionMap.set(notificationInboxId, {
+                id: tx.id,
+                isValidated: Boolean(tx.isValidated)
+            });
+        }
+    }
+
+    recordDataAccessMode('notifications', 'direct-supabase', 'Inbox notifikasi berhasil dibaca langsung dari Supabase.');
+    return (notifications || []).map((row) => normalizeNotificationRow({
+        ...row,
+        transaction: transactionMap.get(row.id) ?? null
+    }));
+};
+
 export const fetchNotificationInbox = async (limit = 8): Promise<NotificationItem[]> => {
+    if (useDirectSupabaseData && supabase) {
+        try {
+            return await fetchNotificationInboxViaSupabase(limit);
+        } catch (error) {
+            recordDataAccessMode(
+                'notifications',
+                'supabase-fallback-to-api',
+                getErrorMessage(error, 'Query Supabase inbox notifikasi gagal, fallback ke backend API.')
+            );
+        }
+    }
 
     const response = await api.get(`/webhook/notifications?limit=${limit}`);
     recordDataAccessMode('notifications', 'backend-api', 'Inbox notifikasi dibaca lewat backend API.');
