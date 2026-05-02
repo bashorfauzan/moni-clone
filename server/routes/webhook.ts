@@ -32,6 +32,8 @@ const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk',
 const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
+const TOP_UP_RECONCILIATION_WINDOW_MS = 15 * 60 * 1000;
+const TOP_UP_RECONCILIATION_MAX_FEE = 5000;
 const CHAT_APP_HINTS = ['whatsapp', 'wa business', 'telegram', 'line', 'discord', 'messenger', 'instagram', 'facebook', 'signal'];
 const EMAIL_PACKAGE_HINTS = ['com.google.android.gm', 'com.microsoft.office.outlook'];
 const PROMO_KEYWORDS = [
@@ -290,6 +292,11 @@ const detectSourceAppHint = (sourceApp: string) => {
     return canonicalizeAccountHint(detectAccountHint(sourceApp));
 };
 
+const isEWalletHint = (hint?: string | null) => {
+    if (!hint) return false;
+    return E_WALLET_APPS.includes(canonicalizeAccountHint(hint) ?? '');
+};
+
 const detectHintAfterAnchors = (text: string, anchors: string[]) => {
     for (const anchor of anchors) {
         const index = text.indexOf(anchor);
@@ -334,9 +341,15 @@ const resolveAccountHints = (
 
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
+    const isEWalletTopUp = type && isDualAccountTransactionType(type)
+        ? detectTransferLikeTopUp(sourceApp, text) && isEWalletHint(sourceAppHint)
+        : false;
 
     if (type && isDualAccountTransactionType(type)) {
-        if (transferDirection === 'OUT') {
+        if (isEWalletTopUp) {
+            sourceAccountHint = hintFromSourcePhrase;
+            destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
+        } else if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         } else if (transferDirection === 'IN') {
@@ -368,7 +381,7 @@ const resolveAccountHints = (
     };
 };
 
-const parseNotificationText = (sourceApp: string, title: string, text: string): ParsedNotification => {
+export const parseNotificationText = (sourceApp: string, title: string, text: string): ParsedNotification => {
     const combined = `${title} ${text}`.trim();
     const lowerText = normalizeText(combined);
 
@@ -541,6 +554,73 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         parseStatus,
         parseNotes
     };
+};
+
+const findRelatedBankTopUpSourceAccount = async ({
+    notificationId,
+    sourceApp,
+    amount,
+    receivedAt
+}: {
+    notificationId: string;
+    sourceApp: string;
+    amount: number;
+    receivedAt: Date;
+}) => {
+    const windowStart = new Date(receivedAt.getTime() - TOP_UP_RECONCILIATION_WINDOW_MS);
+    const candidates = await prisma.notificationInbox.findMany({
+        where: {
+            id: { not: notificationId },
+            sourceApp: { not: sourceApp },
+            receivedAt: {
+                gte: windowStart,
+                lte: receivedAt
+            },
+            parsedAmount: {
+                gte: amount,
+                lte: amount + TOP_UP_RECONCILIATION_MAX_FEE
+            },
+            parseStatus: {
+                in: ['PENDING', 'PARSED'] as any
+            }
+        },
+        include: {
+            transaction: true
+        },
+        orderBy: { receivedAt: 'desc' },
+        take: 10
+    });
+
+    for (const candidate of candidates) {
+        const candidateSourceHint = detectSourceAppHint(candidate.sourceApp);
+        if (!candidateSourceHint || isEWalletHint(candidateSourceHint)) continue;
+
+        const reparsed = parseNotificationText(
+            candidate.sourceApp,
+            `${candidate.title || ''} ${candidate.senderName || ''}`.trim(),
+            candidate.messageText
+        );
+        const candidateText = normalizeText(`${candidate.title || ''} ${candidate.senderName || ''} ${candidate.messageText}`);
+        const direction = detectTransferDirection(candidateText);
+        const amountGap = (reparsed.amount ?? 0) - amount;
+
+        if (!reparsed.amount || amountGap < 0 || amountGap > TOP_UP_RECONCILIATION_MAX_FEE) continue;
+        if (direction !== 'OUT' && reparsed.type !== TransactionType.EXPENSE && reparsed.type !== TransactionType.TRANSFER) continue;
+
+        const defaults = await ensureDefaults(reparsed, candidate.sourceApp);
+        const sourceAccountId = defaults.sourceAccount?.id ?? defaults.account?.id ?? null;
+        if (!sourceAccountId) continue;
+
+        return {
+            sourceAccountId,
+            relatedNotificationId: candidate.id,
+            amountGap,
+            relatedTransaction: candidate.transaction,
+            authoritativeAmount: reparsed.amount
+        };
+    }
+
+    return null;
 };
 
 const findAccountByHint = async (hint?: string | null) => {
@@ -840,6 +920,7 @@ router.post('/notification', async (req, res) => {
         // Transaksi akan dibuat dengan isValidated: false agar user bisa approve/reject di Home
         const { owner, activity, account, sourceAccount, destinationAccount } = await ensureDefaults(parsed, String(appName));
         let effectiveType = parsed.type;
+        let effectiveAmount = parsed.amount;
         let sourceAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? sourceAccount?.id ?? null
             : parsed.type && isSourceOnlyTransactionType(parsed.type)
@@ -878,7 +959,42 @@ router.post('/notification', async (req, res) => {
                     ? destinationAccount?.id ?? account?.id ?? null
                     : destinationAccount?.id ?? null;
 
+                const relatedBankSource = (
+                    sourceAppLooksLikeEWallet
+                    && parsed.amount
+                    && recoveredDestinationAccountId
+                )
+                    ? await findRelatedBankTopUpSourceAccount({
+                        notificationId: notification.id,
+                        sourceApp: String(appName),
+                        amount: parsed.amount,
+                        receivedAt: notification.receivedAt
+                    })
+                    : null;
+
                 if (
+                    relatedBankSource?.sourceAccountId
+                    && recoveredDestinationAccountId
+                    && relatedBankSource.sourceAccountId !== recoveredDestinationAccountId
+                ) {
+                    if (relatedBankSource.relatedTransaction) {
+                        await prisma.transaction.delete({
+                            where: { id: relatedBankSource.relatedTransaction.id }
+                        });
+                    }
+
+                    await prisma.notificationInbox.update({
+                        where: { id: relatedBankSource.relatedNotificationId },
+                        data: {
+                            parseNotes: 'Notifikasi bank direkonsiliasi dengan transaksi top up e-wallet'
+                        }
+                    });
+
+                    effectiveType = TransactionType.TRANSFER;
+                    effectiveAmount = relatedBankSource.authoritativeAmount;
+                    sourceAccountId = relatedBankSource.sourceAccountId;
+                    destinationAccountId = recoveredDestinationAccountId;
+                } else if (
                     recoveredSourceAccountId
                     && recoveredDestinationAccountId
                     && recoveredSourceAccountId !== recoveredDestinationAccountId
@@ -977,7 +1093,7 @@ router.post('/notification', async (req, res) => {
         // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
         const transaction = await prisma.transaction.create({
             data: {
-                amount: parsed.amount,
+                amount: effectiveAmount,
                 type: effectiveType,
                 date: notification.receivedAt,
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),

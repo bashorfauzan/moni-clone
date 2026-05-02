@@ -50,6 +50,8 @@ const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk',
 const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
 const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit', 'ipo', 'ajaib', 'rhb', 'philip', 'sinarmas sekuritas', 'ciptadana'];
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
+const TOP_UP_RECONCILIATION_WINDOW_MS = 15 * 60 * 1000;
+const TOP_UP_RECONCILIATION_MAX_FEE = 5000;
 const CHAT_APP_HINTS = ['whatsapp', 'wa business', 'telegram', 'line', 'discord', 'messenger', 'instagram', 'facebook', 'signal'];
 const EMAIL_PACKAGE_HINTS = ['com.google.android.gm', 'com.microsoft.office.outlook'];
 const PROMO_KEYWORDS = [
@@ -309,6 +311,11 @@ const detectSourceAppHint = (sourceApp: string) => {
     return canonicalizeAccountHint(detectAccountHint(sourceApp));
 };
 
+const isEWalletHint = (hint?: string | null) => {
+    if (!hint) return false;
+    return E_WALLET_APPS.includes(canonicalizeAccountHint(hint) ?? '');
+};
+
 const detectHintAfterAnchors = (text: string, anchors: string[]) => {
     for (const anchor of anchors) {
         const index = text.indexOf(anchor);
@@ -351,9 +358,15 @@ const resolveAccountHints = (
 
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
+    const isEWalletTopUp = type && isDualAccountTransactionType(type)
+        ? detectTransferLikeTopUp(sourceApp, text) && isEWalletHint(sourceAppHint)
+        : false;
 
     if (type && isDualAccountTransactionType(type)) {
-        if (transferDirection === 'OUT') {
+        if (isEWalletTopUp) {
+            sourceAccountHint = hintFromSourcePhrase;
+            destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
+        } else if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
         } else if (transferDirection === 'IN') {
@@ -560,6 +573,73 @@ const parseNotificationText = (sourceApp: string, title: string, text: string): 
         parseStatus,
         parseNotes
     };
+};
+
+const findRelatedBankTopUpSourceAccount = async ({
+    supabase,
+    notificationId,
+    sourceApp,
+    amount,
+    receivedAt,
+    findAccountByHint
+}: {
+    supabase: any;
+    notificationId: string;
+    sourceApp: string;
+    amount: number;
+    receivedAt: string;
+    findAccountByHint: (hint: string | null) => Promise<any>;
+}) => {
+    const receivedAtMs = new Date(receivedAt).getTime();
+    const windowStartIso = new Date(receivedAtMs - TOP_UP_RECONCILIATION_WINDOW_MS).toISOString();
+
+    const { data: candidates } = await supabase.from('NotificationInbox')
+        .select('id, sourceApp, title, senderName, messageText, receivedAt, parsedAmount, parseStatus, transaction:Transaction(id, amount, type, sourceAccountId, destinationAccountId)')
+        .neq('id', notificationId)
+        .neq('sourceApp', sourceApp)
+        .gte('receivedAt', windowStartIso)
+        .lte('receivedAt', receivedAt)
+        .gte('parsedAmount', amount)
+        .lte('parsedAmount', amount + TOP_UP_RECONCILIATION_MAX_FEE)
+        .in('parseStatus', ['PENDING', 'PARSED'])
+        .order('receivedAt', { ascending: false })
+        .limit(10);
+
+    for (const candidate of candidates || []) {
+        const candidateSourceHint = detectSourceAppHint(candidate.sourceApp);
+        if (!candidateSourceHint || isEWalletHint(candidateSourceHint)) continue;
+
+        const reparsed = parseNotificationText(
+            candidate.sourceApp,
+            `${candidate.title || ''} ${candidate.senderName || ''}`.trim(),
+            candidate.messageText
+        );
+        const candidateText = normalizeText(`${candidate.title || ''} ${candidate.senderName || ''} ${candidate.messageText}`);
+        const direction = detectTransferDirection(candidateText);
+        const amountGap = (reparsed.amount ?? 0) - amount;
+
+        if (!reparsed.amount || amountGap < 0 || amountGap > TOP_UP_RECONCILIATION_MAX_FEE) continue;
+        if (direction !== 'OUT' && reparsed.type !== TransactionType.EXPENSE && reparsed.type !== TransactionType.TRANSFER) continue;
+
+        const sourceAccount = await findAccountByHint(reparsed.sourceAccountHint ?? candidateSourceHint);
+        const fallbackAccount = sourceAccount ?? await findAccountByHint(candidateSourceHint);
+        const sourceAccountId = fallbackAccount?.id ?? null;
+        if (!sourceAccountId) continue;
+
+        const relatedTransaction = Array.isArray(candidate.transaction)
+            ? candidate.transaction[0] ?? null
+            : candidate.transaction ?? null;
+
+        return {
+            sourceAccountId,
+            relatedNotificationId: candidate.id,
+            relatedTransaction,
+            amountGap,
+            authoritativeAmount: reparsed.amount
+        };
+    }
+
+    return null;
 };
 
 const getSupabaseAdminConfig = () => {
@@ -870,6 +950,7 @@ export default async function handler(req: any, res: any) {
         }
 
         let effectiveType = parsed.type;
+        let effectiveAmount = parsed.amount;
         let sourceAccountId = parsed.type && isDualAccountTransactionType(parsed.type)
             ? sourceAccount?.id ?? null
             : parsed.type && isSourceOnlyTransactionType(parsed.type)
@@ -903,8 +984,40 @@ export default async function handler(req: any, res: any) {
                 const recoveredDestinationAccountId = sourceAppLooksLikeEWallet
                     ? destinationAccount?.id ?? account?.id ?? null
                     : destinationAccount?.id ?? null;
+                const relatedBankSource = (
+                    sourceAppLooksLikeEWallet
+                    && parsed.amount
+                    && recoveredDestinationAccountId
+                )
+                    ? await findRelatedBankTopUpSourceAccount({
+                        supabase,
+                        notificationId: notification.id,
+                        sourceApp: String(appName),
+                        amount: parsed.amount,
+                        receivedAt: notification.receivedAt,
+                        findAccountByHint
+                    })
+                    : null;
 
                 if (
+                    relatedBankSource?.sourceAccountId
+                    && recoveredDestinationAccountId
+                    && relatedBankSource.sourceAccountId !== recoveredDestinationAccountId
+                ) {
+                    if (relatedBankSource.relatedTransaction) {
+                        await supabase.from('Transaction').delete().eq('id', relatedBankSource.relatedTransaction.id);
+                    }
+
+                    await supabase.from('NotificationInbox').update({
+                        parseNotes: 'Notifikasi bank direkonsiliasi dengan transaksi top up e-wallet',
+                        updatedAt: new Date().toISOString()
+                    }).eq('id', relatedBankSource.relatedNotificationId);
+
+                    effectiveType = TransactionType.TRANSFER;
+                    effectiveAmount = relatedBankSource.authoritativeAmount;
+                    sourceAccountId = relatedBankSource.sourceAccountId;
+                    destinationAccountId = recoveredDestinationAccountId;
+                } else if (
                     recoveredSourceAccountId
                     && recoveredDestinationAccountId
                     && recoveredSourceAccountId !== recoveredDestinationAccountId
@@ -979,7 +1092,7 @@ export default async function handler(req: any, res: any) {
         const txNow = new Date().toISOString();
         const { data: transaction, error: txError } = await supabase.from('Transaction').insert({
             id: crypto.randomUUID(),
-            amount: parsed.amount,
+            amount: effectiveAmount,
             type: normalizeTransactionType(effectiveType),
             date: nowIso,
             description: `[Notif Auto] ${parsed.description}`.slice(0, 190),

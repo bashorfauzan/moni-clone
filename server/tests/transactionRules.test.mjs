@@ -5,6 +5,7 @@ import {
     isDualAccountTransactionType,
     isLegacyInvestmentTransactionType
 } from '../lib/transactionRules.ts';
+import { parseNotificationText } from '../routes/webhook.ts';
 import {
     inferNotificationCategoryLabel,
     isInvestmentTransfer,
@@ -71,6 +72,33 @@ runCase('client normalizes TOP_UP and infers helpful notification labels', () =>
         }),
         'Gaji'
     );
+});
+
+runCase('parser keeps Flip top up as transfer with destination hint on Flip', () => {
+    const parsed = parseNotificationText(
+        'Flip',
+        'Flip',
+        'Pengisian Saldo 260502192126663KAI01TUP sejumlah Rp200.000 berhasil'
+    );
+
+    assert.equal(parsed.amount, 200000);
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.destinationAccountHint, 'flip');
+});
+
+runCase('parser reads BRImo transfer out as transfer with BRI source hint', () => {
+    const parsed = parseNotificationText(
+        'BRI',
+        'BRImo',
+        '02/05/2026 19:21:58 - Transfer dari XXXXXX1533 dengan nomor rekening tujuan XXXXXXXXXXXX2303 sebesar Rp200.549,00 BERHASIL.'
+    );
+
+    assert.equal(parsed.amount, 200549);
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.sourceAccountHint, 'bri');
+    assert.ok(parsed.destinationAccountHint);
 });
 
 console.log('All transaction rule checks passed.');
