@@ -15,10 +15,14 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.moni.notifier.databinding.ActivityMainBinding
 import com.moni.notifier.service.PreferenceStore
+import com.moni.notifier.service.WebhookSender
+import org.json.JSONObject
+import java.time.Instant
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var preferenceStore: PreferenceStore
+    private lateinit var webhookSender: WebhookSender
 
     private val requestNotificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* no-op */ }
@@ -26,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         preferenceStore = PreferenceStore(this)
+        webhookSender = WebhookSender(preferenceStore)
 
         if (shouldAutoOpenWebApp(savedInstanceState)) {
             openWebApp(preferenceStore.getWebAppUrl(), finishCurrent = true)
@@ -91,6 +96,38 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
         }
 
+        binding.testWebhookButton.setOnClickListener {
+            saveCurrentEndpointInputs()
+            val webhookUrl = preferenceStore.getWebhookUrl()
+
+            if (!isValidHttpUrl(webhookUrl)) {
+                binding.statusText.text = getString(R.string.status_invalid_url)
+                Toast.makeText(this, R.string.status_invalid_url, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            binding.statusText.text = getString(R.string.status_testing_webhook)
+            webhookSender.send(
+                JSONObject().apply {
+                    put("appName", "NOVA Test")
+                    put("title", "Tes Koneksi Webhook")
+                    put("senderName", "NOVA Penghubung Android")
+                    put("text", "Tes koneksi helper Android tanpa transaksi")
+                    put("receivedAt", Instant.now().toString())
+                    put(
+                        "rawPayload",
+                        JSONObject().apply {
+                            put("packageName", packageName)
+                            put("source", "manual-test")
+                        }
+                    )
+                }
+            )
+            binding.root.postDelayed({
+                binding.lastDeliveryText.text = preferenceStore.getLastDeliveryStatus()
+            }, 1800)
+        }
+
         binding.openAppInfoButton.setOnClickListener {
             openAppInfo()
         }
@@ -145,6 +182,23 @@ class MainActivity : AppCompatActivity() {
         builder.clearQuery()
         builder.fragment(null)
         return builder.build().toString()
+    }
+
+    private fun saveCurrentEndpointInputs() {
+        val webAppUrl = binding.webAppUrlInput.text?.toString()?.trim().orEmpty()
+        val rawWebhookUrl = binding.baseUrlInput.text?.toString()?.trim().orEmpty()
+        val webhookUrl = rawWebhookUrl.ifBlank {
+            if (isValidHttpUrl(webAppUrl)) deriveWebhookUrlFromWebAppUrl(webAppUrl) else rawWebhookUrl
+        }
+
+        if (isValidHttpUrl(webhookUrl)) {
+            preferenceStore.setWebhookUrl(webhookUrl)
+            binding.baseUrlInput.setText(webhookUrl)
+        }
+
+        if (isValidHttpUrl(webAppUrl)) {
+            preferenceStore.setWebAppUrl(webAppUrl)
+        }
     }
 
     private fun isSameOriginWebhook(webAppUrl: String, webhookUrl: String): Boolean {
