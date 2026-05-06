@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
 import {
     User,
     Wallet,
     Settings,
     Shield,
+    CheckCircle2,
     LogOut,
     ChevronRight,
     CreditCard,
@@ -153,6 +154,9 @@ const MenuPage = () => {
     const [securityPinError, setSecurityPinError] = useState('');
     const [securityPinNotice, setSecurityPinNotice] = useState('');
     const [securityPinSaving, setSecurityPinSaving] = useState(false);
+    const [securityPinSaved, setSecurityPinSaved] = useState(false);
+    const securityPinSaveTimerRef = useRef<number | null>(null);
+    const securityPinCloseTimerRef = useRef<number | null>(null);
     const {
         isSecurityEnabled,
         isBiometricEnabled,
@@ -221,6 +225,15 @@ const MenuPage = () => {
         setSecurityPinError('');
         setSecurityPinNotice('');
         setSecurityPinSaving(false);
+        setSecurityPinSaved(false);
+        if (securityPinSaveTimerRef.current) {
+            window.clearTimeout(securityPinSaveTimerRef.current);
+            securityPinSaveTimerRef.current = null;
+        }
+        if (securityPinCloseTimerRef.current) {
+            window.clearTimeout(securityPinCloseTimerRef.current);
+            securityPinCloseTimerRef.current = null;
+        }
     };
 
     const closeSecurityModal = () => {
@@ -230,6 +243,7 @@ const MenuPage = () => {
 
     const handleSaveSecurityPin = () => {
         if (securityPinSaving) return;
+        if (securityPinSaved) return;
 
         if (securityPinInput.length !== 6 || securityPinConfirm.length !== 6) {
             setSecurityPinError('PIN harus 6 digit.');
@@ -245,23 +259,36 @@ const MenuPage = () => {
         }
 
         setSecurityPinSaving(true);
-        const result = setupSecurity(securityPinInput);
-        if (!result.success) {
-            setSecurityPinError(result.message || 'PIN gagal disimpan. Coba lagi.');
-            setSecurityPinSaving(false);
-            alert(result.message || 'PIN gagal disimpan. Coba lagi.');
-            return;
-        }
+        securityPinSaveTimerRef.current = window.setTimeout(() => {
+            securityPinSaveTimerRef.current = null;
+            const result = setupSecurity(securityPinInput);
+            if (!result.success) {
+                setSecurityPinError(result.message || 'PIN gagal disimpan. Coba lagi.');
+                setSecurityPinSaving(false);
+                alert(result.message || 'PIN gagal disimpan. Coba lagi.');
+                return;
+            }
 
-        setSecurityPinNotice(result.message || 'PIN berhasil diatur dan siap dipakai.');
-        setSecurityPinStep('menu');
-        setSecurityPinInput('');
-        setSecurityPinConfirm('');
-        setSecurityPinError('');
-        setSecurityPinSaving(false);
-        alert(result.message || 'PIN berhasil diatur dan siap dipakai.');
-        closeSecurityModal();
+            setSecurityPinNotice(result.message || 'PIN berhasil diatur dan siap dipakai.');
+            setSecurityPinSaved(true);
+            setSecurityPinInput('');
+            setSecurityPinConfirm('');
+            setSecurityPinError('');
+            setSecurityPinSaving(false);
+            securityPinCloseTimerRef.current = window.setTimeout(() => {
+                closeSecurityModal();
+            }, 900);
+        }, 120);
     };
+
+    useEffect(() => () => {
+        if (securityPinSaveTimerRef.current) {
+            window.clearTimeout(securityPinSaveTimerRef.current);
+        }
+        if (securityPinCloseTimerRef.current) {
+            window.clearTimeout(securityPinCloseTimerRef.current);
+        }
+    }, []);
 
     useEffect(() => {
         if (!isSecurityModalOpen) return;
@@ -272,14 +299,6 @@ const MenuPage = () => {
             setSecurityPinStep('confirm-pin');
         }
     }, [isSecurityModalOpen, securityPinInput, securityPinSaving, securityPinStep]);
-
-    useEffect(() => {
-        if (!isSecurityModalOpen) return;
-        if (securityPinStep !== 'confirm-pin') return;
-        if (securityPinConfirm.length !== 6) return;
-
-        handleSaveSecurityPin();
-    }, [isSecurityModalOpen, securityPinConfirm, securityPinStep]);
 
     const fetchMeta = async () => {
         try {
@@ -2929,12 +2948,14 @@ const MenuPage = () => {
                                         type="password"
                                         inputMode="numeric"
                                         maxLength={6}
-                                        placeholder="••••••"
+                                        placeholder="Masukkan 6 digit"
                                         className="h-12 w-full rounded-2xl border border-slate-200 px-4 text-center text-xl font-bold tracking-[0.4em] outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-100"
                                         value={securityPinInput}
                                         onChange={(e) => { setSecurityPinInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
                                     />
-                                    <p className="mt-2 text-[11px] text-slate-500">Setelah 6 digit terisi, form akan lanjut otomatis ke konfirmasi PIN.</p>
+                                    <p className="mt-2 text-[11px] text-slate-500">
+                                        Terisi {securityPinInput.length}/6 digit. Setelah lengkap, form akan lanjut otomatis ke konfirmasi PIN.
+                                    </p>
                                 </div>
                                 <button
                                     disabled={securityPinInput.length !== 6 || securityPinSaving}
@@ -2950,28 +2971,50 @@ const MenuPage = () => {
                         {/* ─── Step: Confirm PIN ─────────────────────── */}
                         {securityPinStep === 'confirm-pin' && (
                             <div className="space-y-4">
+                                {securityPinNotice && (
+                                    <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+                                        <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-sm font-bold">PIN tersimpan</p>
+                                            <p className="mt-0.5 text-[11px] font-semibold">{securityPinNotice}</p>
+                                        </div>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="block text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500 mb-2">Konfirmasi PIN</label>
                                     <input
                                         type="password"
                                         inputMode="numeric"
                                         maxLength={6}
-                                        placeholder="••••••"
+                                        placeholder="Ulangi 6 digit"
                                         className={`h-12 w-full rounded-2xl border px-4 text-center text-xl font-bold tracking-[0.4em] outline-none ${securityPinError ? 'border-rose-400 ring-4 ring-rose-100' : 'border-slate-200 focus:border-rose-400 focus:ring-4 focus:ring-rose-100'}`}
                                         value={securityPinConfirm}
                                         onChange={(e) => { setSecurityPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
+                                        disabled={securityPinSaving || securityPinSaved}
                                     />
-                                    {!securityPinError && (
-                                        <p className="mt-2 text-[11px] text-slate-500">Saat 6 digit konfirmasi terisi, PIN akan langsung disimpan.</p>
+                                    {!securityPinError && !securityPinSaving && !securityPinSaved && (
+                                        <p className="mt-2 text-[11px] text-slate-500">
+                                            Terisi {securityPinConfirm.length}/6 digit. Tombol Simpan aktif setelah 6 digit benar-benar masuk.
+                                        </p>
+                                    )}
+                                    {securityPinSaving && (
+                                        <p className="mt-2 text-[11px] font-semibold text-slate-600">Menyimpan PIN, sebentar...</p>
                                     )}
                                     {securityPinError && <p className="mt-2 text-xs text-rose-600 font-semibold">{securityPinError}</p>}
                                 </div>
                                 <button
-                                    disabled={securityPinConfirm.length !== 6 || securityPinSaving}
-                                    className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
+                                    disabled={securityPinConfirm.length !== 6 || securityPinSaving || securityPinSaved}
+                                    className={`w-full h-12 rounded-2xl text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:cursor-not-allowed ${
+                                        securityPinSaved
+                                            ? 'bg-emerald-500'
+                                            : securityPinSaving
+                                                ? 'bg-slate-700'
+                                                : 'bg-slate-900 disabled:bg-slate-300'
+                                    }`}
                                     onClick={handleSaveSecurityPin}
                                 >
-                                    <Save size={16} /> {securityPinSaving ? 'Menyimpan PIN...' : 'Simpan PIN'}
+                                    {securityPinSaved ? <CheckCircle2 size={16} /> : <Save size={16} />}
+                                    {securityPinSaved ? 'PIN Berhasil Disimpan' : (securityPinSaving ? 'Menyimpan PIN...' : 'Simpan PIN')}
                                 </button>
                                 <button disabled={securityPinSaving} onClick={() => setSecurityPinStep('set-pin')} className="w-full text-xs text-slate-400 font-semibold py-1 disabled:opacity-40">Kembali</button>
                             </div>

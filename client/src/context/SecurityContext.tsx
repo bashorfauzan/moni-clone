@@ -28,6 +28,7 @@ interface SecurityContextType {
 const SecurityContext = createContext<SecurityContextType | undefined>(undefined);
 const PIN_STORAGE_KEY = 'app-pin-hash';
 const PIN_SESSION_KEY = 'app-pin-hash-session';
+const SECURITY_STATE_CHANGED_EVENT = 'nova:security-state-changed';
 const BIOMETRIC_ENABLED_KEY = 'app-biometric';
 const BIOMETRIC_CREDENTIAL_KEY = 'app-bio-cred-id';
 
@@ -63,6 +64,9 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
     const getCurrentPinHash = () =>
         pinHash
         || readStorage(PIN_STORAGE_KEY, null, 'local')
+        || readStorage(PIN_SESSION_KEY, null, 'session');
+    const readPersistedPinHash = () =>
+        readStorage(PIN_STORAGE_KEY, null, 'local')
         || readStorage(PIN_SESSION_KEY, null, 'session');
     const markActivity = () => {
         try {
@@ -100,6 +104,25 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
             window.removeEventListener('scroll', updateActivity);
         };
     }, [isSecurityEnabled]);
+
+    useEffect(() => {
+        const syncSecurityState = () => {
+            const persistedPinHash = readPersistedPinHash();
+            setPinHash((current) => current === persistedPinHash ? current : persistedPinHash);
+        };
+
+        window.addEventListener('focus', syncSecurityState);
+        window.addEventListener('pageshow', syncSecurityState);
+        window.addEventListener('visibilitychange', syncSecurityState);
+        window.addEventListener(SECURITY_STATE_CHANGED_EVENT, syncSecurityState);
+
+        return () => {
+            window.removeEventListener('focus', syncSecurityState);
+            window.removeEventListener('pageshow', syncSecurityState);
+            window.removeEventListener('visibilitychange', syncSecurityState);
+            window.removeEventListener(SECURITY_STATE_CHANGED_EVENT, syncSecurityState);
+        };
+    }, []);
 
     useEffect(() => {
         let cancelled = false;
@@ -174,10 +197,11 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                 persistedToLocal = writeStorage(PIN_STORAGE_KEY, hash, 'local');
             }
 
-            if (persistedToLocal) {
+            if (persistedToLocal && readStorage(PIN_STORAGE_KEY, null, 'local') === hash) {
                 removeStorage(PIN_SESSION_KEY, 'session');
                 setPinHash(hash);
                 markActivity();
+                window.dispatchEvent(new Event(SECURITY_STATE_CHANGED_EVENT));
                 return {
                     success: true,
                     message: recovered
@@ -187,9 +211,10 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
             }
 
             const persistedToSession = writeStorage(PIN_SESSION_KEY, hash, 'session');
-            if (persistedToSession) {
+            if (persistedToSession && readStorage(PIN_SESSION_KEY, null, 'session') === hash) {
                 setPinHash(hash);
                 markActivity();
+                window.dispatchEvent(new Event(SECURITY_STATE_CHANGED_EVENT));
                 return {
                     success: true,
                     message: 'PIN aktif untuk sesi ini. Penyimpanan permanen di perangkat sedang penuh atau dibatasi.'
@@ -217,6 +242,7 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
         setPinHash(null);
         setBiometricEnabled(false);
         setBioCredentialId(null);
+        window.dispatchEvent(new Event(SECURITY_STATE_CHANGED_EVENT));
     };
 
     const setupBiometric = async (): Promise<boolean> => {
@@ -327,6 +353,10 @@ export const SecurityProvider = ({ children }: { children: ReactNode }) => {
                 alert(`PIN keamanan belum aktif. Aktifkan PIN terlebih dulu untuk aksi "${reason}".`);
                 resolve(false);
                 return;
+            }
+
+            if (pinHash !== currentPinHash) {
+                setPinHash(currentPinHash);
             }
 
             // Show lock screen
