@@ -101,6 +101,20 @@ runCase('parser reads BRImo transfer out as transfer with BRI source hint', () =
     assert.ok(parsed.destinationAccountHint);
 });
 
+runCase('parser reads BRImo DANA top up with e-wallet destination hint', () => {
+    const parsed = parseNotificationText(
+        'BRI',
+        'BRImo',
+        '06/05/2026 22:17:47 - Transaksi Top Up DANA 081246699770 sebesar Rp20.000,00 BERHASIL. Info lebih lanjut hubungi Call Center BRI 1500017'
+    );
+
+    assert.equal(parsed.amount, 20000);
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.sourceAccountHint, 'bri');
+    assert.equal(parsed.destinationAccountHint, 'dana');
+});
+
 runCase('parser reads wondr by BNI incoming receipt as income', () => {
     const parsed = parseNotificationText(
         'BNI',

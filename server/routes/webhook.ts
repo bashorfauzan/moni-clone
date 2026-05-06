@@ -389,11 +389,12 @@ const resolveAccountHints = (
     const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
     const accountNumberHint = detectAccountNumberHint(text);
     const transferDirection = detectTransferDirection(text);
+    const isTopUpLike = detectTransferLikeTopUp(sourceApp, text);
 
     let sourceAccountHint: string | null = null;
     let destinationAccountHint: string | null = null;
     const isEWalletTopUp = type && isDualAccountTransactionType(type)
-        ? detectTransferLikeTopUp(sourceApp, text) && isEWalletHint(sourceAppHint)
+        ? isTopUpLike && isEWalletHint(sourceAppHint)
         : false;
 
     if (type && isDualAccountTransactionType(type)) {
@@ -406,6 +407,9 @@ const resolveAccountHints = (
         } else if (transferDirection === 'IN') {
             sourceAccountHint = hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? sourceAppHint ?? fallbackHint ?? hintFromDestinationPhrase;
+        } else if (isTopUpLike) {
+            sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
+            destinationAccountHint = hintFromDestinationPhrase ?? accountNumberHint ?? fallbackHint;
         } else {
             sourceAccountHint = hintFromSourcePhrase
                 ?? sourceAppHint
@@ -708,6 +712,18 @@ const findAccountByHint = async (hint?: string | null) => {
 
         if (matchedByNumber) return matchedByNumber;
     }
+
+    const exactNameMatch = await prisma.account.findFirst({
+        where: {
+            OR: [
+                { name: { equals: hint, mode: 'insensitive' } },
+                { appPackageName: { equals: hint, mode: 'insensitive' } }
+            ]
+        },
+        orderBy: { createdAt: 'asc' }
+    });
+
+    if (exactNameMatch) return exactNameMatch;
 
     return prisma.account.findFirst({
         where: {
