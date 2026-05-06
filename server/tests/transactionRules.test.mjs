@@ -115,6 +115,33 @@ runCase('parser reads BRImo DANA top up with e-wallet destination hint', () => {
     assert.equal(parsed.destinationAccountHint, 'dana');
 });
 
+runCase('parser reads BRImo incoming from DANA as bank income', () => {
+    const parsed = parseNotificationText(
+        'BRI',
+        'BRImo',
+        'Sobat BRI! Dana Rp19.000 masuk ke rekening 790001009621533 pada 06/05/2026 22:53:10 KET.:DANA20260506031725979066Bashor'
+    );
+
+    assert.equal(parsed.amount, 19000);
+    assert.equal(parsed.type, TransactionType.INCOME);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.destinationAccountHint, '790001009621533');
+});
+
+runCase('parser reads DANA transfer to bank account as transfer', () => {
+    const parsed = parseNotificationText(
+        'DANA',
+        'DANA',
+        'Rp19.000 telah dikirim ke BASHOR FAUZAN MUTHOHIRIN - ****1533 💸'
+    );
+
+    assert.equal(parsed.amount, 19000);
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.sourceAccountHint, 'dana');
+    assert.equal(parsed.destinationAccountHint, '1533');
+});
+
 runCase('parser reads wondr by BNI incoming receipt as income', () => {
     const parsed = parseNotificationText(
         'BNI',

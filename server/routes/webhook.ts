@@ -689,6 +689,43 @@ const findRelatedBankTopUpSourceAccount = async ({
     return null;
 };
 
+const findRelatedEWalletTransferToAccount = async ({
+    notificationId,
+    amount,
+    receivedAt,
+    destinationAccountId
+}: {
+    notificationId: string;
+    amount: number;
+    receivedAt: Date;
+    destinationAccountId: string;
+}) => {
+    const windowStart = new Date(receivedAt.getTime() - TOP_UP_RECONCILIATION_WINDOW_MS);
+    const windowEnd = new Date(receivedAt.getTime() + TOP_UP_RECONCILIATION_WINDOW_MS);
+
+    return prisma.transaction.findFirst({
+        where: {
+            notificationInboxId: { not: notificationId },
+            type: TransactionType.TRANSFER,
+            amount,
+            destinationAccountId,
+            date: {
+                gte: windowStart,
+                lte: windowEnd
+            },
+            sourceAccount: {
+                type: { contains: 'E-Wallet', mode: 'insensitive' }
+            }
+        },
+        include: {
+            notificationInbox: true,
+            sourceAccount: true,
+            destinationAccount: true
+        },
+        orderBy: { createdAt: 'desc' }
+    });
+};
+
 const findAccountByHint = async (hint?: string | null) => {
     if (!hint) return null;
     hint = canonicalizeAccountHint(hint);
@@ -1110,6 +1147,37 @@ router.post('/notification', async (req, res) => {
                         : 'Rekening transaksi belum berhasil dipetakan'
                 )
                 : null;
+        }
+
+        if (
+            effectiveType === TransactionType.INCOME
+            && parsed.amount
+            && destinationAccountId
+        ) {
+            const relatedEWalletTransfer = await findRelatedEWalletTransferToAccount({
+                notificationId: notification.id,
+                amount: parsed.amount,
+                receivedAt: notification.receivedAt,
+                destinationAccountId
+            });
+
+            if (relatedEWalletTransfer) {
+                const reconciledNotification = await prisma.notificationInbox.update({
+                    where: { id: notification.id },
+                    data: {
+                        parseStatus: 'PARSED',
+                        parseNotes: `Direkonsiliasi dengan transfer ${relatedEWalletTransfer.sourceAccount?.name ?? 'e-wallet'} ke ${relatedEWalletTransfer.destinationAccount?.name ?? 'rekening tujuan'}`
+                    }
+                });
+
+                return res.status(200).json({
+                    success: true,
+                    notification: reconciledNotification,
+                    createdTransaction: false,
+                    reason: 'reconciled_with_existing_ewallet_transfer',
+                    relatedTransactionId: relatedEWalletTransfer.id
+                });
+            }
         }
 
         const isMissingCriticalFields = !owner || !activity || (!account && !sourceAccount && !destinationAccount) || missingAccountReason;
