@@ -157,6 +157,40 @@ const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
         || text.includes('dari ');
 };
 
+const isBniFamilySource = (sourceApp: string) => {
+    const normalized = normalizeText(sourceApp);
+    return normalized.includes('bni') || normalized.includes('wondr');
+};
+
+const detectBniIncomingNotification = (sourceApp: string, text: string) => {
+    if (!isBniFamilySource(sourceApp)) return false;
+
+    return containsAny(text, [
+        'transaksi diterima',
+        'kamu baru aja terima rp',
+        'kamu baru aja menerima rp'
+    ]);
+};
+
+const detectTransferOutConfirmation = (sourceApp: string, text: string) => {
+    if (containsAny(text, [
+        'nomor rekening tujuan',
+        'rekening tujuan',
+        'penerima',
+        'tujuan transfer',
+        'sumber dana'
+    ])) {
+        return true;
+    }
+
+    return isBniFamilySource(sourceApp) && containsAny(text, [
+        'transfer berhasil',
+        'kamu baru aja transaksi sebesar',
+        'telah dikirim ke',
+        'dikirim ke'
+    ]);
+};
+
 const detectFeeCharge = (text: string) => {
     return text.includes('dikenakan biaya')
         || text.includes('biaya admin')
@@ -311,7 +345,13 @@ const detectHintAfterAnchors = (text: string, anchors: string[]) => {
 };
 
 const detectTransferDirection = (text: string) => {
-    if (text.includes('rekening tujuan') || text.includes('nomor rekening tujuan')) return 'OUT';
+    if (
+        text.includes('rekening tujuan')
+        || text.includes('nomor rekening tujuan')
+        || text.includes('tujuan transfer')
+        || text.includes('penerima')
+        || text.includes('sumber dana')
+    ) return 'OUT';
     if (containsAny(text, TRANSFER_OUT_KEYWORDS)) return 'OUT';
     if (containsAny(text, TRANSFER_IN_KEYWORDS)) return 'IN';
     return 'UNKNOWN';
@@ -334,7 +374,7 @@ const resolveAccountHints = (
     fallbackHint: string | null
 ) => {
     const sourceAppHint = detectSourceAppHint(sourceApp);
-    const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ']);
+    const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ', 'sumber dana ']);
     const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
     const accountNumberHint = detectAccountNumberHint(text);
     const transferDirection = detectTransferDirection(text);
@@ -448,9 +488,17 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
     let parseStatus: ParseStatus = 'FAILED';
     let parseNotes: string | null = 'Format belum dikenali';
 
-    if (detectTransferLikeTopUp(sourceApp, lowerText)) {
+    if (detectBniIncomingNotification(sourceApp, lowerText)) {
+        type = TransactionType.INCOME;
+        confidenceScore = 0.9;
+    } else if (detectTransferLikeTopUp(sourceApp, lowerText)) {
         type = TransactionType.TRANSFER;
         confidenceScore = 0.84;
+    } else if (detectTransferOutConfirmation(sourceApp, lowerText)) {
+        type = containsAny(lowerText, TRANSFER_KEYWORDS)
+            ? TransactionType.TRANSFER
+            : TransactionType.EXPENSE;
+        confidenceScore = 0.82;
     } else if (INVESTMENT_KEYWORDS.some((keyword) => lowerText.includes(keyword))) {
         type = TransactionType.TRANSFER;
         confidenceScore = 0.82;

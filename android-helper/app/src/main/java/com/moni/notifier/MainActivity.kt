@@ -52,6 +52,12 @@ class MainActivity : AppCompatActivity() {
             val rawWebhookUrl = binding.baseUrlInput.text?.toString()?.trim().orEmpty()
             val filterKeywords = binding.filterKeywordsInput.text?.toString()?.trim().orEmpty()
 
+            if (webAppUrl.isBlank()) {
+                binding.statusText.text = getString(R.string.status_web_app_required)
+                Toast.makeText(this, R.string.status_web_app_required, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
             if (!isValidHttpUrl(webAppUrl)) {
                 binding.statusText.text = getString(R.string.status_invalid_url)
                 Toast.makeText(this, R.string.status_invalid_url, Toast.LENGTH_SHORT).show()

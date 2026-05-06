@@ -101,4 +101,29 @@ runCase('parser reads BRImo transfer out as transfer with BRI source hint', () =
     assert.ok(parsed.destinationAccountHint);
 });
 
+runCase('parser reads wondr by BNI incoming receipt as income', () => {
+    const parsed = parseNotificationText(
+        'BNI',
+        'wondr by BNI',
+        'Transaksi diterima! Kamu baru aja terima Rp600.000. Klik untuk cek detailnya.'
+    );
+
+    assert.equal(parsed.amount, 600000);
+    assert.equal(parsed.type, TransactionType.INCOME);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.destinationAccountHint, 'bni');
+});
+
+runCase('parser treats BNI transfer confirmation email as outgoing transfer', () => {
+    const parsed = parseNotificationText(
+        'com.google.android.gm',
+        'wondr Transfer berhasil!',
+        'Hai, BASHOR FAUZAN MUTHOHIRIN Terima kasih sudah bertransaksi dengan wondr by BNI! Kamu baru aja transfer uang dengan detail sebagai berikut: Penerima FLIPTECH LENTERA INSPIRASI PERTIWI PT BNI: 1211146477 Sumber dana BNI.'
+    );
+
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.destinationAccountHint, '1211146477');
+});
+
 console.log('All transaction rule checks passed.');

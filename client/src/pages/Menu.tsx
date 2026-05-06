@@ -152,6 +152,7 @@ const MenuPage = () => {
     const [securityPinConfirm, setSecurityPinConfirm] = useState('');
     const [securityPinError, setSecurityPinError] = useState('');
     const [securityPinNotice, setSecurityPinNotice] = useState('');
+    const [securityPinSaving, setSecurityPinSaving] = useState(false);
     const {
         isSecurityEnabled,
         isBiometricEnabled,
@@ -219,6 +220,7 @@ const MenuPage = () => {
         setSecurityPinConfirm('');
         setSecurityPinError('');
         setSecurityPinNotice('');
+        setSecurityPinSaving(false);
     };
 
     const closeSecurityModal = () => {
@@ -227,20 +229,27 @@ const MenuPage = () => {
     };
 
     const handleSaveSecurityPin = () => {
+        if (securityPinSaving) return;
+
         if (securityPinInput.length !== 6 || securityPinConfirm.length !== 6) {
             setSecurityPinError('PIN harus 6 digit.');
+            alert('PIN harus 6 digit.');
             return;
         }
 
         if (securityPinInput !== securityPinConfirm) {
             setSecurityPinError('PIN tidak cocok. Coba lagi.');
             setSecurityPinConfirm('');
+            alert('PIN tidak cocok. Coba lagi.');
             return;
         }
 
+        setSecurityPinSaving(true);
         const result = setupSecurity(securityPinInput);
         if (!result.success) {
             setSecurityPinError(result.message || 'PIN gagal disimpan. Coba lagi.');
+            setSecurityPinSaving(false);
+            alert(result.message || 'PIN gagal disimpan. Coba lagi.');
             return;
         }
 
@@ -249,7 +258,28 @@ const MenuPage = () => {
         setSecurityPinInput('');
         setSecurityPinConfirm('');
         setSecurityPinError('');
+        setSecurityPinSaving(false);
+        alert(result.message || 'PIN berhasil diatur dan siap dipakai.');
+        closeSecurityModal();
     };
+
+    useEffect(() => {
+        if (!isSecurityModalOpen) return;
+        if (securityPinSaving) return;
+        if ((securityPinStep === 'set-pin' || securityPinStep === 'change-pin') && securityPinInput.length === 6) {
+            setSecurityPinConfirm('');
+            setSecurityPinError('');
+            setSecurityPinStep('confirm-pin');
+        }
+    }, [isSecurityModalOpen, securityPinInput, securityPinSaving, securityPinStep]);
+
+    useEffect(() => {
+        if (!isSecurityModalOpen) return;
+        if (securityPinStep !== 'confirm-pin') return;
+        if (securityPinConfirm.length !== 6) return;
+
+        handleSaveSecurityPin();
+    }, [isSecurityModalOpen, securityPinConfirm, securityPinStep]);
 
     const fetchMeta = async () => {
         try {
@@ -2904,9 +2934,10 @@ const MenuPage = () => {
                                         value={securityPinInput}
                                         onChange={(e) => { setSecurityPinInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
                                     />
+                                    <p className="mt-2 text-[11px] text-slate-500">Setelah 6 digit terisi, form akan lanjut otomatis ke konfirmasi PIN.</p>
                                 </div>
                                 <button
-                                    disabled={securityPinInput.length !== 6}
+                                    disabled={securityPinInput.length !== 6 || securityPinSaving}
                                     className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
                                     onClick={() => { setSecurityPinConfirm(''); setSecurityPinError(''); setSecurityPinStep('confirm-pin'); }}
                                 >
@@ -2930,16 +2961,19 @@ const MenuPage = () => {
                                         value={securityPinConfirm}
                                         onChange={(e) => { setSecurityPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6)); setSecurityPinError(''); }}
                                     />
+                                    {!securityPinError && (
+                                        <p className="mt-2 text-[11px] text-slate-500">Saat 6 digit konfirmasi terisi, PIN akan langsung disimpan.</p>
+                                    )}
                                     {securityPinError && <p className="mt-2 text-xs text-rose-600 font-semibold">{securityPinError}</p>}
                                 </div>
                                 <button
-                                    disabled={securityPinConfirm.length !== 6}
+                                    disabled={securityPinConfirm.length !== 6 || securityPinSaving}
                                     className="w-full h-12 rounded-2xl bg-slate-900 text-white text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2"
                                     onClick={handleSaveSecurityPin}
                                 >
-                                    <Save size={16} /> Simpan PIN
+                                    <Save size={16} /> {securityPinSaving ? 'Menyimpan PIN...' : 'Simpan PIN'}
                                 </button>
-                                <button onClick={() => setSecurityPinStep('set-pin')} className="w-full text-xs text-slate-400 font-semibold py-1">Kembali</button>
+                                <button disabled={securityPinSaving} onClick={() => setSecurityPinStep('set-pin')} className="w-full text-xs text-slate-400 font-semibold py-1 disabled:opacity-40">Kembali</button>
                             </div>
                         )}
                     </div>

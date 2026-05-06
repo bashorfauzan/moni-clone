@@ -8,6 +8,7 @@ class PreferenceStore(context: Context) {
 
     init {
         migrateLegacyPreferences(context)
+        resetDeprecatedEndpointDefaultsIfNeeded()
     }
 
     fun getWebhookUrl(): String =
@@ -61,10 +62,13 @@ class PreferenceStore(context: Context) {
         private const val KEY_WEB_APP_URL = "web_app_url"
         private const val KEY_OPEN_WEB_APP_ON_LAUNCH = "open_web_app_on_launch"
         private const val KEY_INITIAL_SETUP_COMPLETED = "initial_setup_completed"
-        private const val DEFAULT_WEBHOOK_URL = "https://moni-clone.vercel.app/api/webhook/notification"
+        private const val DEFAULT_WEBHOOK_URL = ""
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,wondr,bri,brimo,bsi,mandiri,livin,seabank,jago,dana,gopay,ovo,shopeepay,flip,gaji,transfer,masuk,terima,diterima,keluar,pembayaran,briva,top up,debit,kredit,tarik"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private const val DEFAULT_WEB_APP_URL = "https://moni-clone.vercel.app"
+        private const val DEFAULT_WEB_APP_URL = ""
+        private val DEPRECATED_HOSTS = setOf(
+            "moni-clone.vercel.app"
+        )
 
         private fun copyIfMissing(target: android.content.SharedPreferences.Editor, key: String, value: Any?) {
             when (value) {
@@ -99,5 +103,34 @@ class PreferenceStore(context: Context) {
         }
 
         editor.apply()
+    }
+
+    private fun resetDeprecatedEndpointDefaultsIfNeeded() {
+        val webhookUrl = prefs.getString(KEY_WEBHOOK_URL, DEFAULT_WEBHOOK_URL).orEmpty()
+        val webAppUrl = prefs.getString(KEY_WEB_APP_URL, DEFAULT_WEB_APP_URL).orEmpty()
+        val usesDeprecatedWebhook = usesDeprecatedHost(webhookUrl)
+        val usesDeprecatedWebApp = usesDeprecatedHost(webAppUrl)
+
+        if (!usesDeprecatedWebhook && !usesDeprecatedWebApp) return
+
+        prefs.edit()
+            .apply {
+                if (usesDeprecatedWebhook) putString(KEY_WEBHOOK_URL, DEFAULT_WEBHOOK_URL)
+                if (usesDeprecatedWebApp) putString(KEY_WEB_APP_URL, DEFAULT_WEB_APP_URL)
+                putBoolean(KEY_INITIAL_SETUP_COMPLETED, false)
+                putBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, false)
+                putString(
+                    KEY_LAST_DELIVERY_STATUS,
+                    "Endpoint lama dinonaktifkan. Buka pengaturan NOVA lalu isi ulang URL backend dan web app."
+                )
+            }
+            .apply()
+    }
+
+    private fun usesDeprecatedHost(value: String): Boolean {
+        if (value.isBlank()) return false
+        return DEPRECATED_HOSTS.any { host ->
+            value.contains(host, ignoreCase = true)
+        }
     }
 }
