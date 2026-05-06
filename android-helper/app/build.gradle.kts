@@ -3,6 +3,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val defaultWebhookUrl = (providers.gradleProperty("NOVA_DEFAULT_WEBHOOK_URL").orNull ?: "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+val defaultWebAppUrl = (providers.gradleProperty("NOVA_DEFAULT_WEB_APP_URL").orNull ?: "")
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
+
 android {
     namespace = "com.moni.notifier"
     compileSdk = 35
@@ -13,6 +20,8 @@ android {
         targetSdk = 35
         versionCode = 4
         versionName = "1.0.3"
+        buildConfigField("String", "DEFAULT_WEBHOOK_URL", "\"$defaultWebhookUrl\"")
+        buildConfigField("String", "DEFAULT_WEB_APP_URL", "\"$defaultWebAppUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,6 +52,7 @@ android {
     }
 
     buildFeatures {
+        buildConfig = true
         viewBinding = true
     }
 }

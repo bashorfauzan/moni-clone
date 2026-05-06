@@ -5,8 +5,12 @@ import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
+import java.net.ConnectException
 import java.net.HttpURLConnection
+import java.net.SocketTimeoutException
 import java.net.URL
+import java.net.URI
+import java.net.UnknownHostException
 import java.text.SimpleDateFormat
 import java.util.concurrent.Executors
 import java.util.Date
@@ -47,7 +51,7 @@ class WebhookSender(
                     }
                 } else {
                     Log.e(LOG_TAG, "Webhook failed: $responseCode $responseBody")
-                    val status = "Gagal ${timeFormatter.format(Date())} • HTTP $responseCode • ${responseBody.take(80)}"
+                    val status = buildHttpFailureStatus(endpoint, responseCode, responseBody)
                     preferenceStore.setLastDeliveryStatus(status)
                     NotificationHelper.showDeliveryFailureNotification(
                         context = preferenceStore.getContext(),
@@ -59,7 +63,7 @@ class WebhookSender(
                 connection.disconnect()
             } catch (error: Exception) {
                 Log.e(LOG_TAG, "Failed to send webhook", error)
-                val status = "Gagal ${timeFormatter.format(Date())} • ${error.message ?: "unknown error"}"
+                val status = buildExceptionFailureStatus(endpoint, error)
                 preferenceStore.setLastDeliveryStatus(status)
                 NotificationHelper.showDeliveryFailureNotification(
                     context = preferenceStore.getContext(),
@@ -69,6 +73,57 @@ class WebhookSender(
                 )
             }
         }
+    }
+
+    private fun buildHttpFailureStatus(endpoint: String, responseCode: Int, responseBody: String): String {
+        val timestamp = timeFormatter.format(Date())
+        val host = parseHost(endpoint)
+        val hint = if (isPrivateHost(host)) {
+            "Cek apakah HP dan server ada di Wi-Fi yang sama."
+        } else {
+            null
+        }
+
+        return listOfNotNull(
+            "Gagal $timestamp",
+            "HTTP $responseCode",
+            responseBody.take(80).takeIf { it.isNotBlank() },
+            hint
+        ).joinToString(" • ")
+    }
+
+    private fun buildExceptionFailureStatus(endpoint: String, error: Exception): String {
+        val timestamp = timeFormatter.format(Date())
+        val host = parseHost(endpoint)
+        val detail = when {
+            isPrivateHost(host) && (error is SocketTimeoutException || error is ConnectException) ->
+                "HP ini belum bisa menjangkau server lokal $host. Samakan Wi-Fi dengan laptop/server atau pakai domain online."
+            error is UnknownHostException ->
+                "Host $host tidak ditemukan. Periksa URL backend/web app."
+            error is SocketTimeoutException ->
+                "Server terlalu lama merespons. Cek backend dan jaringan."
+            error is ConnectException ->
+                "Koneksi ke server ditolak. Pastikan backend aktif dan port-nya terbuka."
+            else ->
+                error.message?.take(120) ?: "unknown error"
+        }
+
+        return "Gagal $timestamp • $detail"
+    }
+
+    private fun parseHost(endpoint: String): String {
+        return runCatching { URI(endpoint).host ?: endpoint }.getOrDefault(endpoint)
+    }
+
+    private fun isPrivateHost(host: String): Boolean {
+        val normalized = host.lowercase()
+        if (normalized == "localhost" || normalized == "127.0.0.1") return true
+        if (normalized.startsWith("192.168.")) return true
+        if (normalized.startsWith("10.")) return true
+        if (!normalized.startsWith("172.")) return false
+
+        val secondOctet = normalized.split(".").getOrNull(1)?.toIntOrNull() ?: return false
+        return secondOctet in 16..31
     }
 
     private fun readResponse(connection: HttpURLConnection): String {
