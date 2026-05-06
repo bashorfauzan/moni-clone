@@ -33,30 +33,30 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
-            android:hint="@string/backend_url_hint">
+            android:hint="@string/backend_url_hint"
+            app:placeholderText="http://192.168.0.103:5001/api/webhook/notification">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/baseUrlInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
-                android:minHeight="56dp"
-                android:hint="https://your-domain.vercel.app/api/webhook/notification" />
+                android:minHeight="56dp" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:hint="@string/web_app_url_hint">
+            android:hint="@string/web_app_url_hint"
+            app:placeholderText="http://192.168.0.103:5173">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/webAppUrlInput"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:inputType="textUri"
-                android:minHeight="56dp"
-                android:hint="https://your-domain.vercel.app" />
+                android:minHeight="56dp" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.button.MaterialButton
