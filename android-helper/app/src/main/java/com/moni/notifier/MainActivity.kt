@@ -211,6 +211,7 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra(EXTRA_FORCE_SETUP, false) == true) return false
         if (!preferenceStore.isInitialSetupCompleted()) return false
         if (!preferenceStore.shouldOpenWebAppOnLaunch()) return false
+        if (!isNotificationServiceEnabled()) return false
 
         val webAppUrl = preferenceStore.getWebAppUrl()
         return isValidHttpUrl(webAppUrl)
