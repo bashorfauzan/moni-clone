@@ -831,7 +831,7 @@ router.delete('/notifications', async (_req, res) => {
     try {
         const result = await prisma.notificationInbox.deleteMany({
             where: {
-                transaction: null
+                transaction: { is: null }
             }
         });
 

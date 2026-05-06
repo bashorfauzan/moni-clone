@@ -3,7 +3,7 @@ import {
     PieChart, Pie, Cell, ResponsiveContainer,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip, AreaChart, Area
 } from 'recharts';
-import { ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';
@@ -844,10 +844,15 @@ const Reports = () => {
                             {visibleTx.map((tx: TransactionItem) => {
                                 const badge = getTypeBadge(tx);
                                 const origin = getOriginBadge(tx);
+                                const isSelected = selectedTx.has(tx.id);
                                 return (
                                     <div
                                         key={tx.id}
-                                        className={`flex items-center gap-2.5 px-4 py-3.5 transition-colors ${selectedTx.has(tx.id) ? 'bg-blue-50/60' : 'hover:bg-slate-50/60'}`}
+                                        className={`relative flex items-center gap-2.5 px-4 py-3.5 transition-colors ${
+                                            isSelected
+                                                ? 'bg-rose-100/95 shadow-[inset_5px_0_0_#e11d48,inset_0_0_0_1px_rgba(225,29,72,0.18)]'
+                                                : 'hover:bg-slate-50/60'
+                                        }`}
                                         onTouchStart={() => startLongPressSelection(tx.id)}
                                         onTouchEnd={cancelLongPressSelection}
                                         onTouchCancel={cancelLongPressSelection}
@@ -856,9 +861,21 @@ const Reports = () => {
                                         onMouseLeave={cancelLongPressSelection}
                                         onClick={() => handleTransactionPress(tx)}
                                     >
+                                        {isSelected && (
+                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-white shadow-sm">
+                                                <CheckCircle2 size={16} />
+                                            </span>
+                                        )}
                                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
                                         <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
+                                            <div className="flex items-center gap-2">
+                                                <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
+                                                {isSelected && (
+                                                    <span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
+                                                        Dipilih
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
                                                 <p className="text-[11px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
                                                 <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${origin.cls}`}>{origin.label}</span>
@@ -896,10 +913,11 @@ const Reports = () => {
                                     {visibleTx.map((tx: TransactionItem) => {
                                         const badge = getTypeBadge(tx);
                                         const origin = getOriginBadge(tx);
+                                        const isSelected = selectedTx.has(tx.id);
                                         return (
                                             <tr
                                                 key={tx.id}
-                                                className={`transition-colors hover:bg-slate-50/60 ${selectedTx.has(tx.id) ? 'bg-blue-50/20' : ''}`}
+                                                className={`transition-colors hover:bg-slate-50/60 ${isSelected ? 'bg-rose-50 shadow-[inset_5px_0_0_#e11d48]' : ''}`}
                                                 onMouseDown={() => startLongPressSelection(tx.id)}
                                                 onMouseUp={cancelLongPressSelection}
                                                 onMouseLeave={cancelLongPressSelection}
@@ -917,7 +935,15 @@ const Reports = () => {
                                                 </td>
                                                 <td className="px-5 py-4 font-semibold text-slate-600">{tx.owner?.name || '-'}</td>
                                                 <td className="px-5 py-4">
-                                                    <p className="max-w-[180px] truncate font-semibold text-slate-800">{tx.activity?.name || '-'}</p>
+                                                    <div className="flex max-w-[220px] items-center gap-2">
+                                                        {isSelected && <CheckCircle2 size={16} className="shrink-0 text-rose-600" />}
+                                                        <p className="truncate font-semibold text-slate-800">{tx.activity?.name || '-'}</p>
+                                                        {isSelected && (
+                                                            <span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
+                                                                Dipilih
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                     {tx.description && <p className="max-w-[180px] truncate text-[11px] text-slate-400">{tx.description}</p>}
                                                 </td>
                                                 <td className={`px-5 py-4 text-right font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</td>

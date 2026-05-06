@@ -507,7 +507,7 @@ const Home = () => {
             await deleteNotificationInboxItem(id);
             await fetchData();
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menghapus notifikasi');
+            alert(getErrorMessage(error, 'Gagal menghapus notifikasi'));
         } finally {
             setDeletingNotificationId(null);
         }
@@ -524,7 +524,7 @@ const Home = () => {
             await clearNotificationInbox();
             await fetchData();
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal mengosongkan inbox notifikasi');
+            alert(getErrorMessage(error, 'Gagal mengosongkan inbox notifikasi'));
         } finally {
             setClearingNotifications(false);
         }
