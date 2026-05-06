@@ -9,10 +9,13 @@ class PreferenceStore(context: Context) {
     init {
         migrateLegacyPreferences(context)
         resetDeprecatedEndpointDefaultsIfNeeded()
+        applyBundledDefaultsIfMissing()
     }
 
     fun getWebhookUrl(): String =
-        prefs.getString(KEY_WEBHOOK_URL, DEFAULT_WEBHOOK_URL) ?: DEFAULT_WEBHOOK_URL
+        prefs.getString(KEY_WEBHOOK_URL, DEFAULT_WEBHOOK_URL)
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_WEBHOOK_URL
 
     fun setWebhookUrl(value: String) {
         prefs.edit().putString(KEY_WEBHOOK_URL, value).apply()
@@ -33,21 +36,23 @@ class PreferenceStore(context: Context) {
     }
 
     fun getWebAppUrl(): String =
-        prefs.getString(KEY_WEB_APP_URL, DEFAULT_WEB_APP_URL) ?: DEFAULT_WEB_APP_URL
+        prefs.getString(KEY_WEB_APP_URL, DEFAULT_WEB_APP_URL)
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_WEB_APP_URL
 
     fun setWebAppUrl(value: String) {
         prefs.edit().putString(KEY_WEB_APP_URL, value).apply()
     }
 
     fun shouldOpenWebAppOnLaunch(): Boolean =
-        prefs.getBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, false)
+        prefs.getBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, DEFAULT_WEB_APP_URL.isNotBlank())
 
     fun setOpenWebAppOnLaunch(value: Boolean) {
         prefs.edit().putBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, value).apply()
     }
 
     fun isInitialSetupCompleted(): Boolean =
-        prefs.getBoolean(KEY_INITIAL_SETUP_COMPLETED, false)
+        prefs.getBoolean(KEY_INITIAL_SETUP_COMPLETED, DEFAULT_WEB_APP_URL.isNotBlank())
 
     fun setInitialSetupCompleted(value: Boolean) {
         prefs.edit().putBoolean(KEY_INITIAL_SETUP_COMPLETED, value).apply()
@@ -62,10 +67,10 @@ class PreferenceStore(context: Context) {
         private const val KEY_WEB_APP_URL = "web_app_url"
         private const val KEY_OPEN_WEB_APP_ON_LAUNCH = "open_web_app_on_launch"
         private const val KEY_INITIAL_SETUP_COMPLETED = "initial_setup_completed"
-        private const val DEFAULT_WEBHOOK_URL = ""
+        private const val DEFAULT_WEBHOOK_URL = "http://192.168.0.103:5001/api/webhook/notification"
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,wondr,bri,brimo,bsi,mandiri,livin,seabank,jago,dana,gopay,ovo,shopeepay,flip,gaji,transfer,masuk,terima,diterima,keluar,pembayaran,briva,top up,debit,kredit,tarik"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private const val DEFAULT_WEB_APP_URL = ""
+        private const val DEFAULT_WEB_APP_URL = "http://192.168.0.103:5173"
         private val DEPRECATED_HOSTS = setOf(
             "moni-clone.vercel.app"
         )
@@ -125,6 +130,38 @@ class PreferenceStore(context: Context) {
                 )
             }
             .apply()
+    }
+
+    private fun applyBundledDefaultsIfMissing() {
+        var changed = false
+        val editor = prefs.edit()
+        val webhookUrl = prefs.getString(KEY_WEBHOOK_URL, null).orEmpty()
+        val webAppUrl = prefs.getString(KEY_WEB_APP_URL, null).orEmpty()
+
+        if (webhookUrl.isBlank() && DEFAULT_WEBHOOK_URL.isNotBlank()) {
+            editor.putString(KEY_WEBHOOK_URL, DEFAULT_WEBHOOK_URL)
+            changed = true
+        }
+
+        if (webAppUrl.isBlank() && DEFAULT_WEB_APP_URL.isNotBlank()) {
+            editor.putString(KEY_WEB_APP_URL, DEFAULT_WEB_APP_URL)
+            changed = true
+        }
+
+        if (DEFAULT_WEB_APP_URL.isNotBlank()) {
+            if (!prefs.getBoolean(KEY_INITIAL_SETUP_COMPLETED, false)) {
+                editor.putBoolean(KEY_INITIAL_SETUP_COMPLETED, true)
+                changed = true
+            }
+            if (!prefs.getBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, false)) {
+                editor.putBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, true)
+                changed = true
+            }
+        }
+
+        if (changed) {
+            editor.apply()
+        }
     }
 
     private fun usesDeprecatedHost(value: String): Boolean {
