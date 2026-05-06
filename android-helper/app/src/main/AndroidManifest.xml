@@ -14,6 +14,7 @@
         <package android:name="id.co.bri.brimo" />
         <package android:name="src.com.bni" />
         <package android:name="id.co.bni.mobilebanking" />
+        <package android:name="id.bni.wondr" />
         <package android:name="com.bsi.mobile" />
         <package android:name="id.bsi.bsimobile" />
         <package android:name="id.co.bsi.mobile" />

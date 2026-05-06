@@ -114,6 +114,19 @@ runCase('parser reads wondr by BNI incoming receipt as income', () => {
     assert.equal(parsed.destinationAccountHint, 'bni');
 });
 
+runCase('parser reads wondr by BNI successful transaction as expense', () => {
+    const parsed = parseNotificationText(
+        'BNI',
+        'wondr by BNI',
+        'Transaksi Berhasil!! Kamu baru aja transaksi sebesar Rp500.000. Klik untuk cek detailnya.'
+    );
+
+    assert.equal(parsed.amount, 500000);
+    assert.equal(parsed.type, TransactionType.EXPENSE);
+    assert.equal(parsed.parseStatus, 'PARSED');
+    assert.equal(parsed.sourceAccountHint, 'bni');
+});
+
 runCase('parser treats BNI transfer confirmation email as outgoing transfer', () => {
     const parsed = parseNotificationText(
         'com.google.android.gm',

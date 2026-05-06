@@ -172,6 +172,17 @@ const detectBniIncomingNotification = (sourceApp: string, text: string) => {
     ]);
 };
 
+const detectBniOutgoingNotification = (sourceApp: string, text: string) => {
+    if (!isBniFamilySource(sourceApp)) return false;
+
+    return containsAny(text, [
+        'transaksi berhasil',
+        'kamu baru aja transaksi sebesar rp',
+        'kamu baru aja bayar rp',
+        'kamu baru aja membayar rp'
+    ]);
+};
+
 const detectTransferOutConfirmation = (sourceApp: string, text: string) => {
     if (containsAny(text, [
         'nomor rekening tujuan',
@@ -491,6 +502,9 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
     if (detectBniIncomingNotification(sourceApp, lowerText)) {
         type = TransactionType.INCOME;
         confidenceScore = 0.9;
+    } else if (detectBniOutgoingNotification(sourceApp, lowerText)) {
+        type = TransactionType.EXPENSE;
+        confidenceScore = 0.88;
     } else if (detectTransferLikeTopUp(sourceApp, lowerText)) {
         type = TransactionType.TRANSFER;
         confidenceScore = 0.84;
@@ -557,7 +571,7 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
             ? 'Parser berhasil mengenali notifikasi'
             : 'Parser butuh konfirmasi tambahan';
 
-        if (isDirectionlessSuccessNotification(lowerText)) {
+        if (isDirectionlessSuccessNotification(lowerText) && !detectBniOutgoingNotification(sourceApp, lowerText)) {
             parseStatus = 'PENDING';
             parseNotes = 'Notifikasi berhasil, tetapi arah dana belum jelas. Konfirmasi jenis dan rekening dulu.';
             confidenceScore = Math.min(confidenceScore, 0.55);

@@ -146,7 +146,7 @@ class AccountNotificationListenerService : NotificationListenerService() {
             // BRI
             "id.co.bri.brimo",
             // BNI
-            "src.com.bni", "id.co.bni.mobilebanking",
+            "src.com.bni", "id.co.bni.mobilebanking", "id.bni.wondr",
             // BSI
             "com.bsi.mobile", "id.bsi.bsimobile", "id.co.bsi.mobile",
             // Bank Jago
