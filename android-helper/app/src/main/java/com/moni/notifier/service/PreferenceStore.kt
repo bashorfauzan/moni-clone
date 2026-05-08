@@ -68,10 +68,8 @@ class PreferenceStore(context: Context) {
         private const val KEY_WEB_APP_URL = "web_app_url"
         private const val KEY_OPEN_WEB_APP_ON_LAUNCH = "open_web_app_on_launch"
         private const val KEY_INITIAL_SETUP_COMPLETED = "initial_setup_completed"
-        private const val LEGACY_BUNDLED_WEBHOOK_URL = "http://192.168.0.103:5001/api/webhook/notification"
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,wondr,bri,brimo,bsi,mandiri,livin,seabank,jago,dana,gopay,ovo,shopeepay,flip,gaji,transfer,masuk,terima,diterima,keluar,pembayaran,briva,top up,debit,kredit,tarik"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private const val LEGACY_BUNDLED_WEB_APP_URL = "http://192.168.0.103:5173"
         private val DEPRECATED_HOSTS = setOf(
             "moni-clone.vercel.app"
         )
@@ -120,8 +118,8 @@ class PreferenceStore(context: Context) {
     private fun resetDeprecatedEndpointDefaultsIfNeeded() {
         val webhookUrl = prefs.getString(KEY_WEBHOOK_URL, defaultWebhookUrl).orEmpty()
         val webAppUrl = prefs.getString(KEY_WEB_APP_URL, defaultWebAppUrl).orEmpty()
-        val usesDeprecatedWebhook = usesDeprecatedHost(webhookUrl) || webhookUrl == LEGACY_BUNDLED_WEBHOOK_URL
-        val usesDeprecatedWebApp = usesDeprecatedHost(webAppUrl) || webAppUrl == LEGACY_BUNDLED_WEB_APP_URL
+        val usesDeprecatedWebhook = usesDeprecatedHost(webhookUrl)
+        val usesDeprecatedWebApp = usesDeprecatedHost(webAppUrl)
 
         if (!usesDeprecatedWebhook && !usesDeprecatedWebApp) return
 
@@ -169,12 +167,6 @@ class PreferenceStore(context: Context) {
         if (changed) {
             editor.apply()
         }
-    }
-
-    fun usesLegacyBundledLocalEndpoint(): Boolean {
-        val webhookUrl = prefs.getString(KEY_WEBHOOK_URL, "").orEmpty()
-        val webAppUrl = prefs.getString(KEY_WEB_APP_URL, "").orEmpty()
-        return webhookUrl == LEGACY_BUNDLED_WEBHOOK_URL || webAppUrl == LEGACY_BUNDLED_WEB_APP_URL
     }
 
     private fun usesDeprecatedHost(value: String): Boolean {
