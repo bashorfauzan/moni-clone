@@ -34,7 +34,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:hint="@string/backend_url_hint"
-            app:placeholderText="http://192.168.0.103:5001/api/webhook/notification">
+            app:placeholderText="http://192.168.1.10:5001/api/webhook/notification">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/baseUrlInput"
@@ -49,7 +49,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:hint="@string/web_app_url_hint"
-            app:placeholderText="http://192.168.0.103:5173">
+            app:placeholderText="http://192.168.1.10:5173">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/webAppUrlInput"

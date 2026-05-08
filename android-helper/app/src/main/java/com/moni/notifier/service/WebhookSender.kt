@@ -1,5 +1,8 @@
 package com.moni.notifier.service
 
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -26,7 +29,8 @@ class WebhookSender(
         executor.execute {
             val endpoint = preferenceStore.getWebhookUrl()
             try {
-                val connection = URL(endpoint).openConnection() as HttpURLConnection
+                val host = parseHost(endpoint)
+                val connection = openConnection(endpoint, host)
                 connection.requestMethod = "POST"
                 connection.setRequestProperty("Content-Type", "application/json")
                 connection.connectTimeout = 10_000
@@ -96,8 +100,10 @@ class WebhookSender(
         val timestamp = timeFormatter.format(Date())
         val host = parseHost(endpoint)
         val detail = when {
+            error is MissingLocalNetworkException ->
+                "Endpoint lokal $host butuh Wi-Fi yang sama dengan server. Aktifkan Wi-Fi atau pakai URL online."
             isPrivateHost(host) && (error is SocketTimeoutException || error is ConnectException) ->
-                "HP ini belum bisa menjangkau server lokal $host. Samakan Wi-Fi dengan laptop/server atau pakai domain online."
+                "HP ini belum bisa menjangkau server lokal $host lewat Wi-Fi. Samakan Wi-Fi dengan laptop/server, matikan data seluler sementara, atau pakai domain online."
             error is UnknownHostException ->
                 "Host $host tidak ditemukan. Periksa URL backend/web app."
             error is SocketTimeoutException ->
@@ -109,6 +115,28 @@ class WebhookSender(
         }
 
         return "Gagal $timestamp • $detail"
+    }
+
+    private fun openConnection(endpoint: String, host: String): HttpURLConnection {
+        val url = URL(endpoint)
+        val network = if (isPrivateHost(host)) findLocalNetwork() else null
+        if (isPrivateHost(host) && network == null) {
+            throw MissingLocalNetworkException()
+        }
+
+        return (network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection
+    }
+
+    private fun findLocalNetwork(): Network? {
+        val connectivityManager = preferenceStore.getContext()
+            .getSystemService(ConnectivityManager::class.java)
+            ?: return null
+
+        return connectivityManager.allNetworks.firstOrNull { network ->
+            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return@firstOrNull false
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+        }
     }
 
     private fun parseHost(endpoint: String): String {
@@ -171,4 +199,6 @@ class WebhookSender(
     companion object {
         private const val LOG_TAG = "NovaHelper"
     }
+
+    private class MissingLocalNetworkException : ConnectException("No Wi-Fi or Ethernet network is available")
 }

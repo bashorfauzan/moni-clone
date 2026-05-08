@@ -120,8 +120,8 @@ class PreferenceStore(context: Context) {
     private fun resetDeprecatedEndpointDefaultsIfNeeded() {
         val webhookUrl = prefs.getString(KEY_WEBHOOK_URL, defaultWebhookUrl).orEmpty()
         val webAppUrl = prefs.getString(KEY_WEB_APP_URL, defaultWebAppUrl).orEmpty()
-        val usesDeprecatedWebhook = usesDeprecatedHost(webhookUrl)
-        val usesDeprecatedWebApp = usesDeprecatedHost(webAppUrl)
+        val usesDeprecatedWebhook = usesDeprecatedHost(webhookUrl) || webhookUrl == LEGACY_BUNDLED_WEBHOOK_URL
+        val usesDeprecatedWebApp = usesDeprecatedHost(webAppUrl) || webAppUrl == LEGACY_BUNDLED_WEB_APP_URL
 
         if (!usesDeprecatedWebhook && !usesDeprecatedWebApp) return
 
@@ -133,7 +133,7 @@ class PreferenceStore(context: Context) {
                 putBoolean(KEY_OPEN_WEB_APP_ON_LAUNCH, false)
                 putString(
                     KEY_LAST_DELIVERY_STATUS,
-                    "Endpoint lama dinonaktifkan. Buka pengaturan NOVA lalu isi ulang URL backend dan web app."
+                    "Endpoint lokal bawaan lama sudah direset. Isi ulang URL backend dan web app sesuai jaringan/hosting aktif."
                 )
             }
             .apply()
