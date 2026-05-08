@@ -70,9 +70,7 @@ class PreferenceStore(context: Context) {
         private const val KEY_INITIAL_SETUP_COMPLETED = "initial_setup_completed"
         private const val DEFAULT_FILTER_KEYWORDS = "bca,bni,wondr,bri,brimo,bsi,mandiri,livin,seabank,jago,dana,gopay,ovo,shopeepay,flip,gaji,transfer,masuk,terima,diterima,keluar,pembayaran,briva,top up,debit,kredit,tarik"
         private const val DEFAULT_DELIVERY_STATUS = "Belum ada pengiriman"
-        private val DEPRECATED_HOSTS = setOf(
-            "moni-clone.vercel.app"
-        )
+        private val DEPRECATED_HOSTS = emptySet<String>()
 
         private fun copyIfMissing(target: android.content.SharedPreferences.Editor, key: String, value: Any?) {
             when (value) {
