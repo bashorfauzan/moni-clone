@@ -12,6 +12,8 @@ export type Account = {
     appPackageName?: string | null;
     appDeepLink?: string | null;
     appStoreUrl?: string | null;
+    stockBrokerFeePercent?: number;
+    stockLevyFeePercent?: number;
     balance: number;
     ownerId?: string;
 };
@@ -32,6 +34,8 @@ type AccountPayload = {
     appPackageName?: string | null;
     appDeepLink?: string | null;
     appStoreUrl?: string | null;
+    stockBrokerFeePercent?: number;
+    stockLevyFeePercent?: number;
 };
 
 const nowIso = () => new Date().toISOString();
@@ -50,6 +54,8 @@ const normalizeAccount = (row: any): Account => ({
     appPackageName: row.appPackageName ?? row.app_package_name ?? null,
     appDeepLink: row.appDeepLink ?? row.app_deep_link ?? null,
     appStoreUrl: row.appStoreUrl ?? row.app_store_url ?? null,
+    stockBrokerFeePercent: Number(row.stockBrokerFeePercent ?? row.stock_broker_fee_percent ?? 0),
+    stockLevyFeePercent: Number(row.stockLevyFeePercent ?? row.stock_levy_fee_percent ?? 0),
     balance: Number(row.balance ?? 0),
     ownerId: row.ownerId ?? row.owner_id
 });
@@ -63,7 +69,7 @@ export const fetchMasterMeta = async (): Promise<MasterMeta> => {
     if (useDirectSupabaseData && supabase) {
         const [ownersRes, accountsRes, activitiesRes] = await Promise.all([
             supabase.from('Owner').select('id, name').order('createdAt', { ascending: true }),
-            supabase.from('Account').select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, balance, ownerId').order('createdAt', { ascending: false }),
+            supabase.from('Account').select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, stockBrokerFeePercent, stockLevyFeePercent, balance, ownerId').order('createdAt', { ascending: false }),
             supabase.from('Activity').select('id, name').order('createdAt', { ascending: false })
         ]);
 
@@ -111,7 +117,7 @@ export const createAccount = async (payload: AccountPayload): Promise<Account> =
                 createdAt: timestamp,
                 updatedAt: timestamp
             })
-            .select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, balance, ownerId')
+            .select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, stockBrokerFeePercent, stockLevyFeePercent, balance, ownerId')
             .single();
 
         if (!error && data) {
@@ -136,7 +142,7 @@ export const updateAccount = async (id: string, payload: Partial<AccountPayload>
                 updatedAt: nowIso()
             })
             .eq('id', id)
-            .select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, balance, ownerId')
+            .select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, stockBrokerFeePercent, stockLevyFeePercent, balance, ownerId')
             .single();
 
         if (!error && data) {

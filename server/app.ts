@@ -8,6 +8,8 @@ import targetRoutes from './routes/target.js';
 import webhookRoutes from './routes/webhook.js';
 import telegramRoutes from './routes/telegram.js';
 import authRoutes from './routes/auth.js';
+import stockRoutes from './routes/stocks.js';
+import stockIpoRoutes from './routes/stocksIpo.js';
 
 const app = express();
 
@@ -23,6 +25,8 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/budgets', budgetRoutes);
 app.use('/api/master', masterRoutes);
 app.use('/api/targets', targetRoutes);
+app.use('/api/stocks', stockRoutes);
+app.use('/api/stocks/ipo', stockIpoRoutes);
 app.use('/api/webhook', webhookRoutes);
 app.use('/api/telegram', telegramRoutes);
 app.use('/api/auth', authRoutes);

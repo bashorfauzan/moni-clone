@@ -40,11 +40,26 @@ enum NotificationParseStatus {
   FAILED
 }
 
+enum StockTransactionSide {
+  BUY
+  SELL
+}
+
+enum IpoOrderStatus {
+  PESAN
+  JATAH
+  TIDAK_JATAH
+  JUAL
+}
+
 model Owner {
   id           String        @id @default(uuid())
   name         String
   accounts     Account[]
   transactions Transaction[]
+  stockTransactions StockTransaction[]
+  ipoOrders     IpoOrder[]
+  ipoTransactions IpoTransaction[]
   budgets      Budget[]
   targets      Target[]
   createdAt    DateTime      @default(now())
@@ -59,11 +74,16 @@ model Account {
   appPackageName   String?
   appDeepLink      String?
   appStoreUrl      String?
+  stockBrokerFeePercent Float    @default(0)
+  stockLevyFeePercent   Float    @default(0)
   balance          Float         @default(0)
   owner            Owner         @relation(fields: [ownerId], references: [id])
   ownerId          String
   sourceTrans      Transaction[] @relation("SourceAccount")
   destinationTrans Transaction[] @relation("DestinationAccount")
+  stockTransactions StockTransaction[]
+  ipoOrders        IpoOrder[]
+  ipoTransactions  IpoTransaction[]
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 }
@@ -150,4 +170,76 @@ model Target {
   ownerId         String
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+}
+
+model StockTransaction {
+  id            String               @id @default(uuid())
+  owner         Owner                @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  account       Account              @relation(fields: [accountId], references: [id])
+  accountId     String
+  ticker        String
+  side          StockTransactionSide
+  lot           Int
+  pricePerShare Float
+  grossValue    Float
+  brokerFee     Float                @default(0)
+  levyFee       Float                @default(0)
+  netValue      Float
+  tradedAt      DateTime
+  notes         String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([ownerId, ticker, tradedAt])
+  @@index([accountId, tradedAt])
+}
+
+model IpoOrder {
+  id            String         @id @default(uuid())
+  owner         Owner          @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  account       Account        @relation(fields: [accountId], references: [id])
+  accountId     String
+  ticker        String
+  broker        String
+  ipoPrice      Float
+  lotRequested  Int
+  lotAllocated  Int            @default(0)
+  sellPrice     Float?
+  status        IpoOrderStatus
+  notes         String?
+  orderedAt     DateTime
+  allottedAt    DateTime?
+  soldAt        DateTime?
+  transactions  IpoTransaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([ownerId, status, orderedAt])
+  @@index([accountId, orderedAt])
+}
+
+model IpoTransaction {
+  id            String               @id @default(uuid())
+  ipoOrder      IpoOrder             @relation(fields: [ipoOrderId], references: [id], onDelete: Cascade)
+  ipoOrderId    String
+  owner         Owner                @relation(fields: [ownerId], references: [id])
+  ownerId       String
+  account       Account              @relation(fields: [accountId], references: [id])
+  accountId     String
+  ticker        String
+  side          StockTransactionSide
+  lot           Int
+  pricePerShare Float
+  grossValue    Float
+  feePercent    Float                @default(0)
+  feeAmount     Float                @default(0)
+  netValue      Float
+  tradedAt      DateTime
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  @@index([ownerId, ticker, tradedAt])
+  @@index([ipoOrderId, side])
 }

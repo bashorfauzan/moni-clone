@@ -7,9 +7,13 @@ import {
 } from './transactionRules.js';
 
 type PrismaExecutor = Prisma.TransactionClient | Prisma.DefaultPrismaClient;
+const BUY_SELL_SIDES = {
+    BUY: -1,
+    SELL: 1
+} as const;
 
 export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
-    const [accounts, transactions] = await Promise.all([
+    const [accounts, transactions, stockTransactions, ipoTransactions] = await Promise.all([
         db.account.findMany({
             select: { id: true }
         }),
@@ -20,6 +24,20 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
                 amount: true,
                 sourceAccountId: true,
                 destinationAccountId: true
+            }
+        }),
+        db.stockTransaction.findMany({
+            select: {
+                side: true,
+                netValue: true,
+                accountId: true
+            }
+        }),
+        db.ipoTransaction.findMany({
+            select: {
+                side: true,
+                netValue: true,
+                accountId: true
             }
         })
     ]);
@@ -70,6 +88,26 @@ export const computeValidatedAccountBalances = async (db: PrismaExecutor) => {
                 );
             }
         }
+    }
+
+    for (const tx of stockTransactions) {
+        const amount = Number(tx.netValue || 0);
+        if (!Number.isFinite(amount) || amount === 0 || !tx.accountId) continue;
+        const multiplier = BUY_SELL_SIDES[tx.side];
+        balanceMap.set(
+            tx.accountId,
+            (balanceMap.get(tx.accountId) || 0) + (amount * multiplier)
+        );
+    }
+
+    for (const tx of ipoTransactions) {
+        const amount = Number(tx.netValue || 0);
+        if (!Number.isFinite(amount) || amount === 0 || !tx.accountId) continue;
+        const multiplier = BUY_SELL_SIDES[tx.side];
+        balanceMap.set(
+            tx.accountId,
+            (balanceMap.get(tx.accountId) || 0) + (amount * multiplier)
+        );
     }
 
     return balanceMap;

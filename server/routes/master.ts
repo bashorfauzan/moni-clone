@@ -338,7 +338,18 @@ router.post('/restore-backup', async (req, res) => {
 });
 
 router.post('/accounts', async (req, res) => {
-    const { name, type, balance, ownerId, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
+    const {
+        name,
+        type,
+        balance,
+        ownerId,
+        accountNumber,
+        appPackageName,
+        appDeepLink,
+        appStoreUrl,
+        stockBrokerFeePercent,
+        stockLevyFeePercent
+    } = req.body;
 
     if (!name || !type) {
         return res.status(400).json({ error: 'Nama dan tipe wajib diisi' });
@@ -354,6 +365,8 @@ router.post('/accounts', async (req, res) => {
                 appPackageName: appPackageName ? String(appPackageName) : null,
                 appDeepLink: appDeepLink ? String(appDeepLink) : null,
                 appStoreUrl: appStoreUrl ? String(appStoreUrl) : null,
+                stockBrokerFeePercent: Number.isFinite(Number(stockBrokerFeePercent)) ? Number(stockBrokerFeePercent) : 0,
+                stockLevyFeePercent: Number.isFinite(Number(stockLevyFeePercent)) ? Number(stockLevyFeePercent) : 0,
                 ownerId: selectedOwnerId,
                 balance: Number.isFinite(Number(balance)) ? Number(balance) : 0
             }
@@ -365,7 +378,18 @@ router.post('/accounts', async (req, res) => {
 });
 
 router.put('/accounts/:id', async (req, res) => {
-    const { name, type, balance, ownerId, accountNumber, appPackageName, appDeepLink, appStoreUrl } = req.body;
+    const {
+        name,
+        type,
+        balance,
+        ownerId,
+        accountNumber,
+        appPackageName,
+        appDeepLink,
+        appStoreUrl,
+        stockBrokerFeePercent,
+        stockLevyFeePercent
+    } = req.body;
 
     try {
         const data: {
@@ -377,6 +401,8 @@ router.put('/accounts/:id', async (req, res) => {
             appPackageName?: string | null;
             appDeepLink?: string | null;
             appStoreUrl?: string | null;
+            stockBrokerFeePercent?: number;
+            stockLevyFeePercent?: number;
         } = {};
         if (name !== undefined) data.name = String(name);
         if (type !== undefined) data.type = String(type);
@@ -386,6 +412,8 @@ router.put('/accounts/:id', async (req, res) => {
         if (appPackageName !== undefined) data.appPackageName = appPackageName ? String(appPackageName) : null;
         if (appDeepLink !== undefined) data.appDeepLink = appDeepLink ? String(appDeepLink) : null;
         if (appStoreUrl !== undefined) data.appStoreUrl = appStoreUrl ? String(appStoreUrl) : null;
+        if (stockBrokerFeePercent !== undefined && Number.isFinite(Number(stockBrokerFeePercent))) data.stockBrokerFeePercent = Number(stockBrokerFeePercent);
+        if (stockLevyFeePercent !== undefined && Number.isFinite(Number(stockLevyFeePercent))) data.stockLevyFeePercent = Number(stockLevyFeePercent);
 
         const account = await prisma.account.update({
             where: { id: req.params.id },

@@ -14,6 +14,10 @@ const normalizeDatasourceUrl = (rawUrl?: string) => {
             url.searchParams.set('pgbouncer', 'true');
         }
 
+        if (url.searchParams.get('sslmode') === 'require' && !url.searchParams.get('sslaccept')) {
+            url.searchParams.set('sslaccept', 'accept_invalid_certs');
+        }
+
         return url.toString();
     } catch {
         return trimmed;

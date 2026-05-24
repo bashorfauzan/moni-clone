@@ -12,6 +12,8 @@ const Reports = lazy(() => import('./pages/Reports'));
 const Targets = lazy(() => import('./pages/Targets'));
 const MenuPage = lazy(() => import('./pages/Menu'));
 const Investment = lazy(() => import('./pages/Investment'));
+const Stocks = lazy(() => import('./pages/Stocks'));
+const StocksIpo = lazy(() => import('./pages/StocksIpo'));
 const Login = lazy(() => import('./pages/Login'));
 const Register = lazy(() => import('./pages/Register'));
 
@@ -40,6 +42,8 @@ function AppRoutes() {
             <Route path="reports" element={<Reports />} />
             <Route path="targets" element={<Targets />} />
             <Route path="investment" element={<Investment />} />
+            <Route path="stocks" element={<Stocks />} />
+            <Route path="stocks/ipo" element={<StocksIpo />} />
             <Route path="menu" element={<MenuPage />} />
           </Route>
 

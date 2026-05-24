@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2 } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
+import { fetchStockPositions, type StockPosition } from '../services/stocks';
+import { fetchIpoOrders, type IpoOrder } from '../services/stocksIpo';
 import { Link } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 import {
@@ -71,6 +73,11 @@ const getInvestmentFlowTone = (tx: any, accountId: string) => {
     return 'bg-slate-100 text-slate-500';
 };
 
+const getPendingIpoReservedValue = (orders: IpoOrder[], accountId: string) =>
+    orders
+        .filter((order) => order.accountId === accountId && order.status === 'PESAN')
+        .reduce((sum, order) => sum + (Number(order.lotRequested || 0) * 100 * Number(order.ipoPrice || 0)), 0);
+
 const Investment = () => {
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
     const [investmentIncomeAccounts, setInvestmentIncomeAccounts] = useState<any[]>([]);
@@ -78,6 +85,8 @@ const Investment = () => {
     const [owners, setOwners] = useState<any[]>([]);
     const [activities, setActivities] = useState<any[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
+    const [ipoOrders, setIpoOrders] = useState<IpoOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
 
@@ -115,9 +124,18 @@ const Investment = () => {
 
     const loadData = async () => {
         try {
-            const [metaRes, txRes] = await Promise.all([
+            setLoading(true);
+            const ownerFilter = selectedOwnerId !== 'ALL' ? selectedOwnerId : undefined;
+            const [metaRes, txRes, stockPositionRes, ipoOrderRes] = await Promise.all([
                 fetchMasterMeta(),
-                fetchTransactions()
+                fetchTransactions(),
+                fetchStockPositions({
+                    ownerId: ownerFilter,
+                    groupByAccount: true
+                }),
+                fetchIpoOrders({
+                    ownerId: ownerFilter
+                })
             ]);
 
             setOwners(metaRes.owners || []);
@@ -133,6 +151,8 @@ const Investment = () => {
             // Required to calculate accurate Modal 
             // Modal = sum(Transfer IN) - sum(Transfer OUT)
             setTransactions(txRes);
+            setStockPositions(stockPositionRes);
+            setIpoOrders(ipoOrderRes);
             setIncomeForm((prev) => ({
                 ...prev,
                 ownerId: prev.ownerId || metaRes.owners[0]?.id || '',
@@ -147,8 +167,8 @@ const Investment = () => {
     };
 
     useEffect(() => {
-        loadData();
-    }, []);
+        void loadData();
+    }, [selectedOwnerId]);
 
     // Derived Metrics
     const validatedTransactions = transactions.filter((tx: any) => tx.isValidated && !shouldHideLegacyInvestmentTransactionType(tx.type));
@@ -162,22 +182,35 @@ const Investment = () => {
         return txDate >= currentMonthStart && txDate < nextMonthStart;
     });
 
-    const filteredRdns = rdnAccounts;
+    const filteredRdns = selectedOwnerId === 'ALL'
+        ? rdnAccounts
+        : rdnAccounts.filter((account) => account.ownerId === selectedOwnerId);
 
     const portfolioData = filteredRdns.map((rdn) => {
         const summary = summarizeFlows(scopedTransactions, rdn.id);
-        const returnAmount = summary.currentValue - summary.modal;
+        const accountStockPositions = stockPositions.filter((position) => position.accountId === rdn.id);
+        const stockHoldingValue = accountStockPositions.reduce((sum, position) => sum + Number(position.totalCost || 0), 0);
+        const pendingIpoValue = getPendingIpoReservedValue(ipoOrders, rdn.id);
+        const cashBalance = Number(rdn.balance || 0);
+        const ecosystemValue = cashBalance + stockHoldingValue;
+        const availableCash = cashBalance - pendingIpoValue;
+        const returnAmount = ecosystemValue - summary.modal;
         const returnPercent = summary.modal > 0 ? (returnAmount / summary.modal) * 100 : 0;
 
         return {
             ...rdn,
-            balance: summary.currentValue,
+            balance: ecosystemValue,
+            cashBalance,
+            stockHoldingValue,
+            pendingIpoValue,
+            availableCash,
             modal: summary.modal,
             returnAmount,
             returnPercent,
             depositCount: summary.depositCount,
             withdrawalCount: summary.withdrawalCount,
-            incomeCount: summary.incomeCount
+            incomeCount: summary.incomeCount,
+            stockPositionCount: accountStockPositions.length
         };
     }).filter((rdn) => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
 
@@ -230,7 +263,14 @@ const Investment = () => {
         : owners.find((owner) => owner.id === selectedOwnerId)?.name || 'kepemilikan terpilih';
 
     const detailAccountSummary = detailAccount
-        ? summarizeFlows(scopedTransactions, detailAccount.id)
+        ? {
+            ...summarizeFlows(scopedTransactions, detailAccount.id),
+            cashBalance: Number(detailAccount.balance || 0),
+            stockHoldingValue: stockPositions
+                .filter((position) => position.accountId === detailAccount.id)
+                .reduce((sum, position) => sum + Number(position.totalCost || 0), 0),
+            pendingIpoValue: getPendingIpoReservedValue(ipoOrders, detailAccount.id)
+        }
         : null;
     const detailAccountTransactions = detailAccount
         ? scopedTransactions
@@ -429,12 +469,33 @@ const Investment = () => {
                 </div>
             )}
 
+            <div className="flex gap-3 mb-6">
+                <Link
+                    to="/stocks"
+                    className="flex flex-1 items-center justify-center rounded-[20px] bg-blue-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
+                >
+                    <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Portofolio</p>
+                        <p className="text-base font-black text-white leading-tight mt-0.5">Saham</p>
+                    </div>
+                </Link>
+                <Link
+                    to="/stocks/ipo"
+                    className="flex flex-1 items-center justify-center rounded-[20px] bg-emerald-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
+                >
+                    <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200">Pesanan</p>
+                        <p className="text-base font-black text-white leading-tight mt-0.5">IPO</p>
+                    </div>
+                </Link>
+            </div>
+
             {/* Summary Card */}
             <div className="app-hero-card rounded-[28px] p-5 mb-6 relative overflow-hidden shadow-sm">
                 <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
                 <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
                 <div className="relative z-10 flex flex-col h-full">
-                    
+
                     <div className="mb-5">
                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60 mb-1.5">Nilai Portofolio</p>
                         <p className="text-3xl font-black text-white tracking-tight">{formatCurrency(totalValue)}</p>
@@ -468,7 +529,7 @@ const Investment = () => {
                                 {monthlyInvestmentSnapshot.depositCount + monthlyInvestmentSnapshot.incomeCount + monthlyInvestmentSnapshot.withdrawalCount} trx
                             </span>
                         </div>
-                        
+
                         <div className="flex justify-between items-start">
                             <div>
                                 <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Setoran</p>
@@ -491,7 +552,7 @@ const Investment = () => {
             {/* RDN List */}
             <section className="space-y-4">
                 <div className="app-section-header rounded-2xl px-4 py-3 flex flex-col sm:flex-row justify-between sm:items-center gap-3 text-xs font-bold uppercase tracking-[0.14em] sm:tracking-widest text-slate-600">
-                    <h3>Daftar Sekuritas (RDN)</h3>
+                    <h3>Ekosistem Sekuritas (RDN)</h3>
                 </div>
 
                 <div className="space-y-4">
@@ -507,12 +568,29 @@ const Investment = () => {
                                 <div className="min-w-0">
                                     <h3 className="font-bold text-base text-slate-900 truncate leading-tight">{rdn.name}</h3>
                                     <p className="text-[10px] text-slate-500 mt-1 line-clamp-1">
-                                        {rdn.depositCount} msk, {rdn.incomeCount} hasil{rdn.withdrawalCount > 0 ? `, ${rdn.withdrawalCount} cair` : ''}
+                                        {rdn.depositCount} msk, {rdn.incomeCount} hasil, {rdn.stockPositionCount} posisi saham{rdn.withdrawalCount > 0 ? `, ${rdn.withdrawalCount} cair` : ''}
                                     </p>
                                 </div>
                                 <div className="text-right shrink-0">
                                     <p className="text-base font-bold text-blue-600 leading-tight">{formatCurrency(rdn.balance)}</p>
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mt-1">Nilai Tercatat</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mt-1">Nilai Ekosistem</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-2 text-left">
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Kas</p>
+                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.cashBalance)}</p>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Saham @ modal</p>
+                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.stockHoldingValue)}</p>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">IPO Pending</p>
+                                    <p className={`text-xs font-semibold truncate ${rdn.pendingIpoValue > 0 && rdn.availableCash < 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                                        {formatCurrency(rdn.pendingIpoValue)}
+                                    </p>
                                 </div>
                             </div>
 
@@ -520,6 +598,9 @@ const Investment = () => {
                                 <div className="min-w-0">
                                     <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Modal</p>
                                     <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.modal)}</p>
+                                    <p className="mt-1 text-[10px] text-slate-500 truncate">
+                                        Kas bebas setelah IPO pending: {formatCurrency(rdn.availableCash)}
+                                    </p>
                                 </div>
                                 <div className={`shrink-0 flex items-center gap-1 text-[11px] font-bold ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {rdn.returnAmount >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -603,9 +684,10 @@ const Investment = () => {
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rekening</p>
                                 <p className="text-lg font-bold text-slate-900">{detailAccount.name}</p>
                                 {detailAccountSummary && (
-                                    <p className="mt-2 text-[11px] text-slate-600">
-                                        Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.
-                                    </p>
+                                    <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                                        <p>Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.</p>
+                                        <p>Kas tersisa {formatCurrency(detailAccountSummary.cashBalance)}, saham aktif {formatCurrency(detailAccountSummary.stockHoldingValue)}, IPO pending {formatCurrency(detailAccountSummary.pendingIpoValue)}.</p>
+                                    </div>
                                 )}
                             </div>
 

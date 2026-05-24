@@ -119,7 +119,9 @@ const MenuPage = () => {
         ownerId: '',
         appPackageName: '',
         appDeepLink: '',
-        appStoreUrl: ''
+        appStoreUrl: '',
+        stockBrokerFeePercent: '',
+        stockLevyFeePercent: ''
     });
     const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
     const [isAccountManagerOpen, setIsAccountManagerOpen] = useState(false);
@@ -460,7 +462,9 @@ const MenuPage = () => {
             ownerId: meta.owners[0]?.id || '',
             appPackageName: '',
             appDeepLink: '',
-            appStoreUrl: ''
+            appStoreUrl: '',
+            stockBrokerFeePercent: '',
+            stockLevyFeePercent: ''
         });
         setEditingAccountId(null);
     };
@@ -480,7 +484,9 @@ const MenuPage = () => {
             ownerId: acc.ownerId || meta.owners[0]?.id || '',
             appPackageName: acc.appPackageName || '',
             appDeepLink: acc.appDeepLink || '',
-            appStoreUrl: acc.appStoreUrl || ''
+            appStoreUrl: acc.appStoreUrl || '',
+            stockBrokerFeePercent: String(acc.stockBrokerFeePercent ?? 0),
+            stockLevyFeePercent: String(acc.stockLevyFeePercent ?? 0)
         });
         setShowAccountForm(true);
     };
@@ -497,6 +503,8 @@ const MenuPage = () => {
                 appPackageName: accountForm.appPackageName.trim() || null,
                 appDeepLink: accountForm.appDeepLink.trim() || null,
                 appStoreUrl: accountForm.appStoreUrl.trim() || null,
+                stockBrokerFeePercent: Number(accountForm.stockBrokerFeePercent || 0),
+                stockLevyFeePercent: Number(accountForm.stockLevyFeePercent || 0),
                 ownerId: accountForm.ownerId || meta.owners[0].id,
             };
             if (editingAccountId) {
@@ -2270,6 +2278,28 @@ const MenuPage = () => {
                                         </p>
                                     ) : null}
                                 </div>
+                                {(accountForm.type === 'RDN' || accountForm.type === 'Sekuritas') ? (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Broker Fee (%)</label>
+                                            <input
+                                                value={accountForm.stockBrokerFeePercent}
+                                                onChange={(e) => setAccountForm((p) => ({ ...p, stockBrokerFeePercent: e.target.value.replace(/[^\d.]/g, '') }))}
+                                                placeholder="cth: 0.15"
+                                                className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Levy Fee (%)</label>
+                                            <input
+                                                value={accountForm.stockLevyFeePercent}
+                                                onChange={(e) => setAccountForm((p) => ({ ...p, stockLevyFeePercent: e.target.value.replace(/[^\d.]/g, '') }))}
+                                                placeholder="cth: 0.043"
+                                                className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                ) : null}
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
                                     <div>
                                         <p className="text-[11px] font-bold uppercase tracking-widest text-slate-500">Launcher Aplikasi</p>

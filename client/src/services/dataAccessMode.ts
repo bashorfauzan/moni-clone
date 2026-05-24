@@ -1,6 +1,6 @@
 import { readStorage, writeStorage } from '../lib/storage';
 
-export type DataAccessModule = 'master' | 'transactions' | 'targets' | 'notifications';
+export type DataAccessModule = 'master' | 'transactions' | 'targets' | 'notifications' | 'stocks';
 export type DataAccessMode = 'backend-api' | 'direct-supabase' | 'supabase-fallback-to-api';
 
 export type DataAccessSnapshot = {
