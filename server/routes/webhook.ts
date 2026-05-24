@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import { TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { syncAccountBalances } from '../lib/accountBalances.js';
@@ -21,11 +21,17 @@ type ParsedNotification = {
     parseNotes: string | null;
 };
 
+export const shouldCreateTransactionFromNotification = (parsed: ParsedNotification) =>
+    Boolean(parsed.amount && parsed.type && parsed.parseStatus !== 'IGNORED' && parsed.parseStatus !== 'FAILED');
+
+export const shouldAutoValidateNotificationTransaction = (parsed: ParsedNotification) =>
+    parsed.parseStatus === 'PARSED';
+
 const ACCOUNT_HINTS = ['bca', 'bsya', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'rhb', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
-const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
+const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'transfer dana ke rekening', 'pindah ke', 'ditransfer ke', 'pembayaran'];
 const TRANSFER_IN_KEYWORDS = ['diterima', 'menerima', 'transfer masuk', 'dana masuk', 'masuk dari', 'ditransfer dari'];
 // Keywords yang sangat kuat mengindikasikan INCOME (prioritas tinggi vs EXPENSE ambiguous)
 const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'penerimaan', 'pemasukan', 'setor tunai'];
@@ -374,7 +380,8 @@ const needsDestinationReview = (text: string) => {
         'sesama bca syariah',
         'ke rekening sesama',
         'antar rekening',
-        'transfer dana ke rekening sesama'
+        'transfer dana ke rekening sesama',
+        'grup bca'
     ]);
 };
 
@@ -1021,8 +1028,9 @@ router.post('/notification', async (req, res) => {
             }
         });
 
-        // Jika belum cukup yakin / data belum lengkap, simpan dulu ke inbox untuk konfirmasi user
-        if (!parsed.amount || !parsed.type || parsed.parseStatus !== 'PARSED') {
+        // Abaikan auto-create hanya jika parser gagal total atau data dasarnya belum cukup.
+        // Notifikasi PENDING yang sudah punya nominal + tipe tetap boleh dibuat sebagai transaksi review.
+        if (!shouldCreateTransactionFromNotification(parsed)) {
             return res.status(202).json({
                 success: true,
                 notification,
@@ -1236,7 +1244,16 @@ router.post('/notification', async (req, res) => {
             });
         }
 
-        // Buat transaksi langsung tervalidasi — sesuai request user ("langsung masuk, tidak perlu persetujuan")
+        if (effectiveAmount == null || !effectiveType) {
+            return res.status(202).json({
+                success: true,
+                notification,
+                createdTransaction: false,
+                reason: 'Nominal atau tipe transaksi belum final'
+            });
+        }
+
+        const shouldAutoValidate = shouldAutoValidateNotificationTransaction(parsed);
         const transaction = await prisma.transaction.create({
             data: {
                 amount: effectiveAmount,
@@ -1245,7 +1262,7 @@ router.post('/notification', async (req, res) => {
                 description: `[Notif Auto] ${parsed.description}`.slice(0, 190),
                 ownerId: owner!.id,
                 activityId: activity!.id,
-                isValidated: true,
+                isValidated: shouldAutoValidate,
                 notificationInboxId: notification.id,
                 ...(sourceAccountId ? { sourceAccountId } : {}),
                 ...(destinationAccountId ? { destinationAccountId } : {})

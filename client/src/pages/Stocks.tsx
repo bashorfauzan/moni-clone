@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Plus, Save, Trash2, Wallet, X } from 'lucide-react';
 import Spinner from '../components/Spinner';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
@@ -34,6 +34,7 @@ const emptyForm = () => ({
 });
 
 const Stocks = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [owners, setOwners] = useState<Owner[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [transactions, setTransactions] = useState<StockTransaction[]>([]);
@@ -87,6 +88,31 @@ const Stocks = () => {
     useEffect(() => {
         void loadData();
     }, [selectedOwnerId, selectedAccountId, tickerFilter]);
+
+    useEffect(() => {
+        const action = searchParams.get('action');
+        if (!action || stockAccounts.length === 0) return;
+
+        const requestedAccountId = searchParams.get('accountId');
+        const requestedOwnerId = searchParams.get('ownerId');
+        const resolvedAccount = stockAccounts.find((account) => account.id === requestedAccountId) || stockAccounts[0];
+        const resolvedOwnerId = requestedOwnerId || resolvedAccount?.ownerId || owners[0]?.id || '';
+
+        setEditingId(null);
+        setForm({
+            ...emptyForm(),
+            side: action === 'sell' ? 'SELL' : 'BUY',
+            accountId: resolvedAccount?.id || '',
+            ownerId: resolvedOwnerId
+        });
+        setIsFormOpen(true);
+
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('action');
+        nextParams.delete('accountId');
+        nextParams.delete('ownerId');
+        setSearchParams(nextParams, { replace: true });
+    }, [owners, searchParams, setSearchParams, stockAccounts]);
 
     const resetForm = () => {
         setEditingId(null);
@@ -159,7 +185,8 @@ const Stocks = () => {
         }
     };
 
-    const totalOpenLots = positions.reduce((sum, row) => sum + row.totalLots, 0);
+    const activePositions = useMemo(() => positions.filter((row) => row.totalLots > 0), [positions]);
+    const totalOpenLots = activePositions.reduce((sum, row) => sum + row.totalLots, 0);
     const totalRealizedPnl = positions.reduce((sum, row) => sum + row.realizedPnl, 0);
 
     if (loading) return <Spinner message="Memuat modul saham..." />;
@@ -204,24 +231,24 @@ const Stocks = () => {
                 <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
 
                 <div className="relative z-10 grid grid-cols-3 divide-x divide-white/10">
-                    <div className="flex flex-col justify-center px-2 sm:px-6 pl-0">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">Posisi Aktif</p>
-                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6 pl-0">
+                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Posisi Aktif</p>
+                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
                             {totalOpenLots.toLocaleString('id-ID')}
                         </p>
                         <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">lot</p>
                     </div>
-                    <div className="flex flex-col justify-center px-2 sm:px-6">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">Realized PnL</p>
-                        <p className={`text-xl sm:text-3xl font-black tracking-tight leading-none ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6">
+                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Realized PnL</p>
+                        <p className={`text-sm sm:text-2xl font-black tracking-tight leading-tight break-words ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                             {formatCurrency(totalRealizedPnl)}
                         </p>
                         <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">total</p>
                     </div>
-                    <div className="flex flex-col justify-center px-2 sm:px-6 pr-0">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5">Dipantau</p>
-                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
-                            {positions.length}
+                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6 pr-0">
+                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Dipantau</p>
+                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
+                            {activePositions.length}
                         </p>
                         <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">emiten</p>
                     </div>
@@ -283,15 +310,15 @@ const Stocks = () => {
                             <Wallet size={15} className="text-blue-600" />
                         </div>
                         <h2 className="text-base font-black text-slate-900 tracking-tight">Posisi Saham Aktif</h2>
-                        {positions.length > 0 && (
+                        {activePositions.length > 0 && (
                             <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-500">
-                                {positions.length}
+                                {activePositions.length}
                             </span>
                         )}
                     </div>
 
                     <div className="space-y-3">
-                        {positions.length === 0 ? (
+                        {activePositions.length === 0 ? (
                             <div className="rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2 py-10 px-4 text-center">
                                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
                                     <Wallet size={20} className="text-slate-400" />
@@ -299,7 +326,7 @@ const Stocks = () => {
                                 <p className="text-sm font-bold text-slate-500">Belum ada posisi aktif</p>
                                 <p className="text-xs text-slate-400">Tambahkan transaksi BUY untuk melihat posisi saham.</p>
                             </div>
-                        ) : positions.map((row) => (
+                        ) : activePositions.map((row) => (
                             <div
                                 key={row.ticker}
                                 className={`rounded-2xl border bg-white/80 p-4 hover:shadow-md transition-all space-y-3 border-l-4 ${row.realizedPnl >= 0 ? 'border-l-blue-500 border-slate-100 hover:border-blue-100' : 'border-l-rose-400 border-slate-100 hover:border-rose-100'}`}
@@ -508,16 +535,6 @@ const Stocks = () => {
                                         onChange={(e) => setForm((current) => ({ ...current, pricePerShare: e.target.value.replace(/\D/g, '') }))}
                                     />
                                 </label>
-                            </div>
-
-                            {/* Fee info */}
-                            <div className="rounded-2xl bg-slate-50 border border-slate-100 px-4 py-3">
-                                <p className="text-xs font-bold text-slate-700">
-                                    Broker {Number(selectedAccount?.stockBrokerFeePercent || 0).toLocaleString('id-ID')}% &middot; Levy {Number(selectedAccount?.stockLevyFeePercent || 0).toLocaleString('id-ID')}%
-                                </p>
-                                <p className="mt-0.5 text-[11px] text-slate-500">
-                                    Ubah dari menu Setting jika sekuritas memakai tarif berbeda.
-                                </p>
                             </div>
 
                             {/* Trade date */}

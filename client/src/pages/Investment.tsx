@@ -1,11 +1,11 @@
-import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download } from 'lucide-react';
+﻿import { useState, useEffect } from 'react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download, History, Plus, Wallet, BarChart2 } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
 import { fetchStockPositions, fetchStockTransactions, type StockPosition } from '../services/stocks';
 import { fetchIpoOrders, type IpoOrder } from '../services/stocksIpo';
 import { downloadBackupBlob } from '../services/backup';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 import {
     isInvestmentIncome,
@@ -80,6 +80,7 @@ const getPendingIpoReservedValue = (orders: IpoOrder[], accountId: string) =>
         .reduce((sum, order) => sum + (Number(order.lotRequested || 0) * 100 * Number(order.ipoPrice || 0)), 0);
 
 const Investment = () => {
+    const navigate = useNavigate();
     const [rdnAccounts, setRdnAccounts] = useState<any[]>([]);
     const [investmentIncomeAccounts, setInvestmentIncomeAccounts] = useState<any[]>([]);
     const [bankAccounts, setBankAccounts] = useState<any[]>([]);
@@ -90,12 +91,14 @@ const Investment = () => {
     const [ipoOrders, setIpoOrders] = useState<IpoOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
+    const [selectedRdnId, setSelectedRdnId] = useState('ALL');
 
     // Modals
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
     const [selectedRdn, setSelectedRdn] = useState<any>(null);
     const [detailAccount, setDetailAccount] = useState<any | null>(null);
+    const [historyAccount, setHistoryAccount] = useState<any | null>(null);
     const [submitting, setSubmitting] = useState(false);
     const [incomeFormLock, setIncomeFormLock] = useState<{ ownerId: string; accountId: string; active: boolean }>({
         ownerId: '',
@@ -183,9 +186,7 @@ const Investment = () => {
         return txDate >= currentMonthStart && txDate < nextMonthStart;
     });
 
-    const filteredRdns = selectedOwnerId === 'ALL'
-        ? rdnAccounts
-        : rdnAccounts.filter((account) => account.ownerId === selectedOwnerId);
+    const filteredRdns = rdnAccounts;
 
     const portfolioData = filteredRdns.map((rdn) => {
         const summary = summarizeFlows(scopedTransactions, rdn.id);
@@ -213,7 +214,8 @@ const Investment = () => {
             incomeCount: summary.incomeCount,
             stockPositionCount: accountStockPositions.length
         };
-    }).filter((rdn) => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0);
+    }).filter((rdn) => Math.abs(Number(rdn.balance || 0)) > 0 || Math.abs(rdn.modal) > 0)
+        .filter((rdn) => selectedRdnId === 'ALL' || rdn.id === selectedRdnId);
 
     const totalValue = portfolioData.reduce((sum, rdn) => sum + Math.abs(Number(rdn.balance || 0)), 0);
     const totalModal = portfolioData.reduce((sum, rdn) => sum + Number(rdn.modal || 0), 0);
@@ -273,12 +275,12 @@ const Investment = () => {
             pendingIpoValue: getPendingIpoReservedValue(ipoOrders, detailAccount.id)
         }
         : null;
-    const detailAccountTransactions = detailAccount
+    const historyAccountTransactions = historyAccount
         ? scopedTransactions
             .filter((tx: any) =>
-                (isInvestmentTransfer(tx) && tx.destinationAccountId === detailAccount.id)
-                || (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === detailAccount.id)
-                || (isInvestmentIncome(tx) && tx.destinationAccountId === detailAccount.id)
+                (isInvestmentTransfer(tx) && tx.destinationAccountId === historyAccount.id)
+                || (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === historyAccount.id)
+                || (isInvestmentIncome(tx) && tx.destinationAccountId === historyAccount.id)
             )
             .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
             .slice(0, 10)
@@ -427,6 +429,115 @@ const Investment = () => {
         }
     };
 
+    const preferredRdnForQuickAction = selectedRdnId !== 'ALL'
+        ? filteredRdns.find((account) => account.id === selectedRdnId) || null
+        : filteredRdns[0] || null;
+
+    const openTransferQuickAction = () => {
+        if (!preferredRdnForQuickAction) {
+            alert('Belum ada rekening RDN untuk transfer investasi.');
+            return;
+        }
+
+        const preferredOwnerId = selectedOwnerId !== 'ALL'
+            ? selectedOwnerId
+            : preferredRdnForQuickAction.ownerId || owners[0]?.id || '';
+
+        setSelectedRdn(preferredRdnForQuickAction);
+        setTransferForm((prev) => ({
+            ...prev,
+            type: 'DEPOSIT',
+            bankId: bankAccounts[0]?.id || '',
+            ownerId: preferredOwnerId,
+            amount: ''
+        }));
+        setIsTransferModalOpen(true);
+        setFabOpen(false);
+    };
+
+    const openInvestmentIncomeQuickAction = (kind: 'SUKUK' | 'STOCK_GROWTH') => {
+        const preferredAccount = preferredRdnForQuickAction || investmentIncomeAccounts[0] || null;
+        if (!preferredAccount) {
+            alert('Belum ada rekening investasi bertipe RDN atau Sekuritas.');
+            return;
+        }
+
+        const preferredOwnerId = selectedOwnerId !== 'ALL'
+            ? selectedOwnerId
+            : preferredAccount.ownerId || owners[0]?.id || '';
+
+        setIncomeFormLock({ ownerId: preferredOwnerId, accountId: preferredAccount.id, active: false });
+        setEditingIncomeId(null);
+        setStockGrowthDirection('UP');
+        setIncomeForm({
+            kind,
+            ownerId: preferredOwnerId,
+            accountId: preferredAccount.id,
+            amount: '',
+            description: kind === 'SUKUK' ? 'Pendapatan sukuk triwulan' : 'Pertumbuhan saham',
+            date: new Date().toISOString().slice(0, 10)
+        });
+        setIsIncomeModalOpen(true);
+        setFabOpen(false);
+    };
+
+    const openStocksQuickAction = (side: 'BUY' | 'SELL') => {
+        const query = new URLSearchParams();
+        query.set('action', side === 'BUY' ? 'buy' : 'sell');
+        if (preferredRdnForQuickAction?.id) query.set('accountId', preferredRdnForQuickAction.id);
+        if (selectedOwnerId !== 'ALL') query.set('ownerId', selectedOwnerId);
+        navigate(`/stocks?${query.toString()}`);
+        setFabOpen(false);
+    };
+
+    const investmentFabActions = [
+        {
+            label: 'Update Nilai',
+            icon: <TrendingUp size={18} />,
+            gradient: 'from-emerald-500 to-green-400',
+            shadow: 'rgba(16,185,129,0.4)',
+            onClick: () => openInvestmentIncomeQuickAction('STOCK_GROWTH')
+        },
+        {
+            label: 'Pemasukan',
+            icon: <Wallet size={18} />,
+            gradient: 'from-blue-500 to-cyan-400',
+            shadow: 'rgba(59,130,246,0.4)',
+            onClick: () => openInvestmentIncomeQuickAction('SUKUK')
+        },
+        {
+            label: 'Transfer',
+            icon: <ArrowRightLeft size={18} />,
+            gradient: 'from-sky-500 to-blue-400',
+            shadow: 'rgba(14,165,233,0.4)',
+            onClick: openTransferQuickAction
+        },
+        {
+            label: 'Order IPO',
+            icon: <BarChart2 size={18} />,
+            gradient: 'from-violet-500 to-purple-400',
+            shadow: 'rgba(139,92,246,0.4)',
+            onClick: () => {
+                navigate('/stocks/ipo?newOrder=true');
+                setFabOpen(false);
+            }
+        },
+        {
+            label: 'Jual Saham',
+            icon: <TrendingDown size={18} />,
+            gradient: 'from-rose-500 to-red-400',
+            shadow: 'rgba(244,63,94,0.4)',
+            onClick: () => openStocksQuickAction('SELL')
+        },
+        {
+            label: 'Beli Saham',
+            icon: <Plus size={20} strokeWidth={2.5} />,
+            gradient: 'from-teal-500 to-emerald-400',
+            shadow: 'rgba(20,184,166,0.4)',
+            onClick: () => openStocksQuickAction('BUY')
+        }
+    ];
+
     const [exportingStocks, setExportingStocks] = useState(false);
 
     const exportStocksExcel = async () => {
@@ -506,34 +617,49 @@ const Investment = () => {
     return (
         <div className="p-4 md:p-8 space-y-5 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             <header className="flex flex-col gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold italic text-slate-900">Portofolio Investasi</h1>
-                    <p className="mt-2 text-xs text-slate-500">
-                        Menampilkan portofolio untuk {selectedOwnerName}.
+                <div className="flex flex-col gap-1 items-start">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-[28px] font-black italic tracking-tight text-slate-900">Portofolio Investasi</h1>
+                        <button
+                            onClick={exportStocksExcel}
+                            disabled={exportingStocks}
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform active:scale-95 hover:shadow hover:-translate-y-0.5 disabled:opacity-50 shrink-0"
+                            title="Export Saham & IPO ke Excel"
+                        >
+                            {exportingStocks ? <span className="text-xs font-bold">...</span> : <Download size={16} />}
+                        </button>
+                    </div>
+                    <p className="text-[13px] font-medium text-slate-500 mt-1">
+                        Menampilkan portofolio untuk {selectedOwnerName.toLowerCase()}.
                     </p>
                 </div>
-                <div className="flex flex-col gap-3 w-full lg:flex-row lg:items-center lg:justify-between">
 
-                    <div className="w-full lg:w-[240px]">
+                <div className={`grid gap-3 ${portfolioData.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                    <div className="w-full min-w-0">
                         <select
-                            className="w-full bg-slate-100 rounded-xl px-4 py-3 text-xs font-bold text-slate-700 border-none focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer"
+                            className="w-full bg-slate-50/70 rounded-2xl px-4 py-3.5 text-sm font-bold text-slate-700 border border-slate-100 hover:border-slate-200 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm truncate"
                             value={selectedOwnerId}
-                            onChange={(e) => setSelectedOwnerId(e.target.value)}
+                            onChange={(e) => { setSelectedOwnerId(e.target.value); setSelectedRdnId('ALL'); }}
                         >
-                            <option value="ALL">Semua Kepemilikan (Global)</option>
+                            <option value="ALL">Semua</option>
                             {owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                         </select>
                     </div>
 
-                    <button
-                        onClick={exportStocksExcel}
-                        disabled={exportingStocks}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-10 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 shrink-0"
-                        title="Export Saham & IPO ke Excel"
-                    >
-                        <Download size={14} />
-                        {exportingStocks ? 'Mengekspor...' : 'Export Saham & IPO'}
-                    </button>
+                    {portfolioData.length > 1 && (
+                        <div className="w-full min-w-0">
+                            <select
+                                className="w-full bg-slate-50/70 rounded-2xl px-4 py-3.5 text-sm font-bold text-slate-700 border border-slate-100 hover:border-slate-200 focus:outline-none focus:ring-4 focus:ring-blue-500/10 transition-all cursor-pointer shadow-sm truncate"
+                                value={selectedRdnId}
+                                onChange={(e) => setSelectedRdnId(e.target.value)}
+                            >
+                                <option value="ALL">Semua Sekuritas</option>
+                                {portfolioData.map((rdn) => (
+                                    <option key={rdn.id} value={rdn.id}>{rdn.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
             </header>
 
@@ -556,8 +682,8 @@ const Investment = () => {
 
             {/* Summary Card */}
             <div className="app-hero-card rounded-[28px] p-5 mb-6 relative overflow-hidden shadow-sm">
-                <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
-                <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
+                <div className="pointer-events-none absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
+                <div className="pointer-events-none absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.12 }}></div>
                 <div className="relative z-10 flex flex-col h-full">
 
                     <div className="mb-5">
@@ -652,44 +778,52 @@ const Investment = () => {
                             <div className="flex justify-between items-start gap-2">
                                 <div className="min-w-0">
                                     <h3 className="font-bold text-base text-slate-900 truncate leading-tight">{rdn.name}</h3>
-                                    <p className="text-[10px] text-slate-500 mt-1 line-clamp-1">
-                                        {rdn.depositCount} msk, {rdn.incomeCount} hasil, {rdn.stockPositionCount} posisi saham{rdn.withdrawalCount > 0 ? `, ${rdn.withdrawalCount} cair` : ''}
+                                    <p className="text-[10px] text-slate-400 mt-0.5">
+                                        {rdn.depositCount}x setor - {rdn.incomeCount}x hasil - {rdn.stockPositionCount} saham aktif
                                     </p>
                                 </div>
                                 <div className="text-right shrink-0">
-                                    <p className="text-base font-bold text-blue-600 leading-tight">{formatCurrency(rdn.balance)}</p>
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mt-1">Nilai Ekosistem</p>
+                                    <p className="text-base font-black text-blue-600 leading-tight">{formatCurrency(rdn.balance)}</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mt-0.5">Kas + Saham</p>
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-2 text-left">
+                            <div className="grid grid-cols-3 gap-2 rounded-xl bg-slate-50 p-3">
                                 <div className="min-w-0">
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Kas</p>
-                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.cashBalance)}</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">Saldo RDN</p>
+                                    <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(rdn.cashBalance)}</p>
+                                    <p className="text-[9px] text-slate-400 mt-0.5">tunai di akun</p>
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Saham @ modal</p>
-                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.stockHoldingValue)}</p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">Nilai Saham</p>
+                                    <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(rdn.stockHoldingValue)}</p>
+                                    <p className="text-[9px] text-slate-400 mt-0.5">@ harga beli</p>
                                 </div>
                                 <div className="min-w-0">
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">IPO Pending</p>
-                                    <p className={`text-xs font-semibold truncate ${rdn.pendingIpoValue > 0 && rdn.availableCash < 0 ? 'text-rose-600' : 'text-slate-700'}`}>
-                                        {formatCurrency(rdn.pendingIpoValue)}
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">IPO Dipesan</p>
+                                    <p className={`text-xs font-bold truncate ${rdn.pendingIpoValue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                        {rdn.pendingIpoValue > 0 ? formatCurrency(rdn.pendingIpoValue) : 'â€”'}
                                     </p>
+                                    <p className="text-[9px] text-slate-400 mt-0.5">belum jatah</p>
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-end gap-2">
+                            <div className="flex justify-between items-start gap-2">
                                 <div className="min-w-0">
-                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Modal</p>
-                                    <p className="text-xs font-semibold text-slate-700 truncate">{formatCurrency(rdn.modal)}</p>
-                                    <p className="mt-1 text-[10px] text-slate-500 truncate">
-                                        Kas bebas setelah IPO pending: {formatCurrency(rdn.availableCash)}
-                                    </p>
+                                    <p className="text-[9px] font-bold uppercase text-slate-400 mb-0.5">Dana Disetor Bersih</p>
+                                    <p className="text-xs font-semibold text-slate-700">{formatCurrency(rdn.modal)}</p>
+                                    {rdn.pendingIpoValue > 0 && (
+                                        <p className="text-[9px] text-amber-600 mt-0.5">
+                                            Tunai bebas: {formatCurrency(rdn.availableCash)}
+                                        </p>
+                                    )}
                                 </div>
                                 <div className={`shrink-0 flex items-center gap-1 text-[11px] font-bold ${rdn.returnAmount >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {rdn.returnAmount >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                                    {formatCurrency(Math.abs(rdn.returnAmount))} ({rdn.returnPercent.toFixed(2)}%)
+                                    <div className="text-right">
+                                        <p>{rdn.returnAmount >= 0 ? '+' : ''}{formatCurrency(rdn.returnAmount)}</p>
+                                        <p className="text-[9px] opacity-80">({rdn.returnPercent.toFixed(1)}%)</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -713,34 +847,10 @@ const Investment = () => {
                                     <ArrowRightLeft size={12} /> Transfer
                                 </button>
                                 <button
-                                    onClick={() => {
-                                        const preferredOwnerId = rdn.ownerId || (selectedOwnerId !== 'ALL'
-                                            ? selectedOwnerId
-                                            : owners[0]?.id || '');
-                                        if (!preferredOwnerId) {
-                                            alert('Rekening investasi ini belum punya kepemilikan. Atur owner rekening dulu sebelum update pertumbuhan.');
-                                            return;
-                                        }
-                                        setIncomeFormLock({
-                                            ownerId: preferredOwnerId,
-                                            accountId: rdn.id,
-                                            active: true
-                                        });
-                                        setIncomeForm((prev) => ({
-                                            ...prev,
-                                            kind: 'STOCK_GROWTH',
-                                            ownerId: preferredOwnerId,
-                                            accountId: rdn.id,
-                                            amount: '',
-                                            description: 'Pertumbuhan saham',
-                                            date: new Date().toISOString().slice(0, 10)
-                                        }));
-                                        setEditingIncomeId(null);
-                                        setIsIncomeModalOpen(true);
-                                    }}
-                                    className="flex items-center justify-center gap-1.5 h-9 w-full rounded-xl bg-emerald-50 text-emerald-700 font-bold text-[10px] uppercase hover:bg-emerald-100 transition-colors"
+                                    onClick={() => setHistoryAccount(rdn)}
+                                    className="flex items-center justify-center gap-1.5 h-9 w-full rounded-xl bg-slate-50 text-slate-600 font-bold text-[10px] uppercase hover:bg-slate-100 transition-colors border border-slate-200"
                                 >
-                                    <TrendingUp size={12} /> Update
+                                    <History size={12} /> Riwayat
                                 </button>
                                 <button
                                     onClick={() => setDetailAccount(rdn)}
@@ -756,144 +866,140 @@ const Investment = () => {
 
             {detailAccount && (
                 <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => setDetailAccount(null)}>
-                    <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
+                    <div className="w-full max-w-md bg-white rounded-[28px] border border-slate-100 p-6 space-y-5 shadow-2xl animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between">
                             <div>
-                                <h3 className="font-bold text-slate-900">Detail Kepemilikan</h3>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">Detail Kepemilikan</h3>
+                                <p className="mt-0.5 text-xs text-slate-500">Rincian nilai portofolio berdasarkan pemilik.</p>
                             </div>
-                            <button onClick={() => setDetailAccount(null)} className="p-2 text-slate-400"><X size={18} /></button>
+                            <button onClick={() => setDetailAccount(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"><X size={15} /></button>
                         </div>
 
-                        <div className="space-y-3">
-                            <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Rekening</p>
-                                <p className="text-lg font-bold text-slate-900">{detailAccount.name}</p>
+                        <div className="space-y-4">
+                            <div className="rounded-2xl bg-blue-50/50 border border-blue-100/50 p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-blue-500/80 mb-1">Rekening</p>
+                                <p className="text-xl font-black text-blue-950 tracking-tight">{detailAccount.name}</p>
                                 {detailAccountSummary && (
-                                    <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                                    <div className="mt-2 space-y-1 text-[11px] font-medium text-blue-900/70 leading-relaxed">
                                         <p>Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.</p>
                                         <p>Kas tersisa {formatCurrency(detailAccountSummary.cashBalance)}, saham aktif {formatCurrency(detailAccountSummary.stockHoldingValue)}, IPO pending {formatCurrency(detailAccountSummary.pendingIpoValue)}.</p>
                                     </div>
                                 )}
                             </div>
 
-                            <div className="overflow-hidden rounded-2xl border border-slate-200">
-                                <div className="grid grid-cols-[1fr_auto] gap-3 bg-slate-50 px-4 py-3 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                            <div>
+                                <div className="grid grid-cols-[1fr_auto] gap-3 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                     <span>Kepemilikan</span>
                                     <span>Nilai Tercatat</span>
                                 </div>
-                                {ownershipRows.length > 0 ? ownershipRows.map((row) => (
-                                    <div key={row.ownerId} className="grid grid-cols-[1fr_auto] gap-3 border-t border-slate-100 px-4 py-3 text-sm">
-                                        <div>
-                                            <span className="font-semibold text-slate-900">{row.name}</span>
-                                            <p className="mt-1 text-[11px] text-slate-500">
-                                                {row.depositCount} msk, {row.incomeCount} hasil
-                                            </p>
+                                <div className="space-y-2">
+                                    {ownershipRows.length > 0 ? ownershipRows.map((row) => (
+                                        <div key={row.ownerId} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors">
+                                            <div>
+                                                <span className="font-bold text-slate-900">{row.name}</span>
+                                                <p className="mt-0.5 text-[11px] font-medium text-slate-500">
+                                                    {row.depositCount} setor, {row.incomeCount} hasil
+                                                </p>
+                                            </div>
+                                            <span className="text-base font-black text-slate-900 tracking-tight">{formatCurrency(row.amount)}</span>
                                         </div>
-                                        <span className="font-bold text-slate-900">{formatCurrency(row.amount)}</span>
-                                    </div>
-                                )) : (
-                                    <div className="px-4 py-4 text-sm text-slate-500">
-                                        Belum ada rincian kepemilikan.
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="overflow-hidden rounded-2xl border border-slate-200">
-                                <div className="flex items-center justify-between bg-slate-50 px-4 py-3">
-                                    <div>
-                                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Riwayat Transaksi Terakhir</p>
-                                        <p className="mt-1 text-[11px] text-slate-500">
-                                            10 mutasi terbaru (setoran, penarikan, hasil).
-                                        </p>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const preferredOwnerId = detailAccount.ownerId || (selectedOwnerId !== 'ALL'
-                                                ? selectedOwnerId
-                                                : owners[0]?.id || '');
-                                            if (!preferredOwnerId) {
-                                                alert('Rekening investasi ini belum punya kepemilikan. Atur owner rekening dulu.');
-                                                return;
-                                            }
-                                            setIncomeFormLock({
-                                                ownerId: preferredOwnerId,
-                                                accountId: detailAccount.id,
-                                                active: true
-                                            });
-                                            setIncomeForm((prev) => ({
-                                                ...prev,
-                                                kind: 'STOCK_GROWTH',
-                                                ownerId: preferredOwnerId,
-                                                accountId: detailAccount.id,
-                                                amount: '',
-                                                description: 'Pertumbuhan saham',
-                                                date: new Date().toISOString().slice(0, 10)
-                                            }));
-                                            setEditingIncomeId(null);
-                                            setIsIncomeModalOpen(true);
-                                        }}
-                                        className="shrink-0 flex items-center justify-center h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
-                                        title="Tambah Pertumbuhan"
-                                    >
-                                        <TrendingUp size={14} />
-                                    </button>
+                                    )) : (
+                                        <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-6 text-center text-sm font-medium text-slate-500">
+                                            Belum ada rincian kepemilikan.
+                                        </div>
+                                    )}
                                 </div>
-                                {detailAccountTransactions.length > 0 ? (
-                                    <div className="max-h-72 overflow-y-auto overscroll-contain">
-                                        {detailAccountTransactions.map((tx: any) => {
-                                            const txIsIncome = isInvestmentIncome(tx);
-                                            return (
-                                                <div key={tx.id} className="flex items-start justify-between gap-3 border-t border-slate-100 px-4 py-3">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {historyAccount && (
+                <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => setHistoryAccount(null)}>
+                    <div className="w-full max-w-md bg-white rounded-[28px] border border-slate-100 p-6 space-y-5 shadow-2xl max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between shrink-0">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">Riwayat Transaksi</h3>
+                                <p className="mt-0.5 text-xs text-slate-500">{historyAccount.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const preferredOwnerId = historyAccount.ownerId || (selectedOwnerId !== 'ALL' ? selectedOwnerId : owners[0]?.id || '');
+                                        if (!preferredOwnerId) {
+                                            alert('Rekening investasi ini belum punya kepemilikan. Atur owner rekening dulu.');
+                                            return;
+                                        }
+                                        setIncomeFormLock({ ownerId: preferredOwnerId, accountId: historyAccount.id, active: true });
+                                        setIncomeForm((prev) => ({ ...prev, kind: 'STOCK_GROWTH', ownerId: preferredOwnerId, accountId: historyAccount.id, amount: '', description: 'Pertumbuhan saham', date: new Date().toISOString().slice(0, 10) }));
+                                        setEditingIncomeId(null);
+                                        setIsIncomeModalOpen(true);
+                                    }}
+                                    className="flex h-8 items-center justify-center rounded-full bg-emerald-50 px-3 text-[10px] font-bold uppercase tracking-widest text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                >
+                                    <TrendingUp size={12} className="mr-1.5" /> Update
+                                </button>
+                                <button onClick={() => setHistoryAccount(null)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"><X size={15} /></button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-y-auto overscroll-contain flex-1 -mx-2 px-2">
+                            <div className="space-y-2">
+                                {historyAccountTransactions.length > 0 ? (
+                                    historyAccountTransactions.map((tx: any) => {
+                                        const txIsIncome = isInvestmentIncome(tx);
+                                        return (
+                                            <div key={tx.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors">
+                                                <div className="flex items-start justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span className={`rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, detailAccount.id)}`}>
-                                                                {txIsIncome && tx.amount < 0 ? 'Penurunan Nilai' : getInvestmentFlowLabel(tx, detailAccount.id)}
+                                                        <div className="flex items-center gap-2 mb-1.5">
+                                                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${getInvestmentFlowTone(tx, historyAccount.id)}`}>
+                                                                {txIsIncome && tx.amount < 0 ? 'Penurunan' : getInvestmentFlowLabel(tx, historyAccount.id)}
                                                             </span>
-                                                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                                                {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                                                {new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
                                                             </span>
                                                         </div>
-                                                        <p className="mt-2 text-sm font-semibold text-slate-900 break-words">
+                                                        <p className="text-sm font-bold text-slate-900 truncate">
                                                             {tx.description || tx.activity?.name || 'Transaksi investasi'}
                                                         </p>
-                                                        <p className="mt-1 text-[11px] text-slate-500">
+                                                        <p className="mt-0.5 text-[11px] font-medium text-slate-500 truncate">
                                                             {tx.owner?.name || 'Tanpa owner'}
-                                                            {!txIsIncome && (tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` • ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
+                                                            {!txIsIncome && (tx.sourceAccount?.name || tx.destinationAccount?.name) ? ` - ${tx.sourceAccount?.name || '-'} -> ${tx.destinationAccount?.name || '-'}` : ''}
                                                         </p>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-2 shrink-0">
-                                                        <span className={`text-sm font-black ${(txIsIncome && Number(tx.amount) < 0) ? 'text-rose-600' : 'text-slate-900'}`}>
+                                                        <span className={`text-sm font-black tracking-tight ${(txIsIncome && Number(tx.amount) < 0) ? 'text-rose-600' : 'text-slate-900'}`}>
                                                             {txIsIncome && Number(tx.amount) > 0 ? '+' : ''}{formatCurrency(tx.amount)}
                                                         </span>
                                                         {txIsIncome && (
-                                                            <div className="flex items-center gap-1">
+                                                            <div className="flex items-center gap-1 bg-white rounded-lg p-0.5 shadow-sm border border-slate-100 mt-1">
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleEditInvestmentIncome(tx)}
-                                                                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-blue-600"
-                                                                    title="Edit transaksi"
+                                                                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-colors"
                                                                 >
-                                                                    <Pencil size={14} />
+                                                                    <Pencil size={12} />
                                                                 </button>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => handleDeleteInvestmentIncome(tx)}
-                                                                    className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500 disabled:opacity-50"
-                                                                    title="Hapus transaksi"
+                                                                    className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-50 transition-colors"
                                                                     disabled={submitting}
                                                                 >
-                                                                    <Trash2 size={14} />
+                                                                    <Trash2 size={12} />
                                                                 </button>
                                                             </div>
                                                         )}
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
-                                    </div>
+                                            </div>
+                                        );
+                                    })
                                 ) : (
-                                    <div className="px-4 py-4 text-sm text-slate-500">
+                                    <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-6 text-center text-sm font-medium text-slate-500">
                                         Belum ada riwayat transaksi.
                                     </div>
                                 )}
@@ -905,53 +1011,53 @@ const Investment = () => {
 
             {isIncomeModalOpen && (
                 <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={resetIncomeModalState}>
-                    <div className="w-full max-w-lg bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
+                    <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-slate-100 p-6 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between mb-5">
                             <div>
-                                <h3 className="font-bold text-slate-900">
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">
                                     {editingIncomeId
-                                        ? (incomeForm.kind === 'STOCK_GROWTH' ? 'Edit Pertumbuhan Investasi' : 'Edit Pemasukan Investasi')
+                                        ? (incomeForm.kind === 'STOCK_GROWTH' ? 'Edit Pertumbuhan' : 'Edit Pemasukan')
                                         : (incomeForm.kind === 'STOCK_GROWTH' ? 'Update Nilai Investasi' : 'Pemasukan Investasi')}
                                 </h3>
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mt-1">
+                                <p className="mt-0.5 text-xs text-slate-500">
                                     {incomeForm.kind === 'STOCK_GROWTH'
-                                        ? 'Catat kenaikan atau penurunan nilai pada rekening investasi yang dipilih'
-                                        : 'Pemasukan akan langsung menambah saldo rekening investasi yang dipilih'}
+                                        ? 'Catat perubahan nilai portofolio investasi.'
+                                        : 'Catat pemasukan riil ke saldo investasi.'}
                                 </p>
                             </div>
-                            <button onClick={resetIncomeModalState} className="p-2 text-slate-400"><X size={18} /></button>
+                            <button onClick={resetIncomeModalState} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"><X size={15} /></button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="flex gap-2 h-11 mb-4">
                             <button
                                 type="button"
                                 onClick={() => { setStockGrowthDirection('UP'); setIncomeForm((prev) => ({ ...prev, kind: 'SUKUK', description: 'Pendapatan sukuk triwulan' })); }}
-                                className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${incomeForm.kind === 'SUKUK' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${incomeForm.kind === 'SUKUK' ? 'bg-emerald-600 text-white border-emerald-600 shadow-md shadow-emerald-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-emerald-200 hover:text-emerald-600'}`}
                             >
                                 Pendapatan Sukuk
                             </button>
                             <button
                                 type="button"
                                 onClick={() => { setIncomeForm((prev) => ({ ...prev, kind: 'STOCK_GROWTH', description: 'Pertumbuhan saham' })); }}
-                                className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${incomeForm.kind === 'STOCK_GROWTH' ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${incomeForm.kind === 'STOCK_GROWTH' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'}`}
                             >
                                 Pertumbuhan Saham
                             </button>
                         </div>
 
                         {incomeForm.kind === 'STOCK_GROWTH' && (
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="flex gap-2 h-11 mb-4">
                                 <button
                                     type="button"
                                     onClick={() => { setStockGrowthDirection('UP'); setIncomeForm((prev) => ({ ...prev, description: prev.description === 'Penurunan saham' ? 'Pertumbuhan saham' : prev.description })); }}
-                                    className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${stockGrowthDirection === 'UP' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                    className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${stockGrowthDirection === 'UP' ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-white text-slate-400 border-slate-200 hover:border-emerald-200 hover:text-emerald-500'}`}
                                 >
                                     Nilai Naik
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => { setStockGrowthDirection('DOWN'); setIncomeForm((prev) => ({ ...prev, description: prev.description === 'Pertumbuhan saham' ? 'Penurunan saham' : prev.description })); }}
-                                    className={`h-11 rounded-2xl border text-xs font-bold uppercase tracking-wider ${stockGrowthDirection === 'DOWN' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-slate-200 bg-white text-slate-500'}`}
+                                    className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${stockGrowthDirection === 'DOWN' ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-white text-slate-400 border-slate-200 hover:border-rose-200 hover:text-rose-500'}`}
                                 >
                                     Nilai Turun
                                 </button>
@@ -959,10 +1065,10 @@ const Investment = () => {
                         )}
 
                         <form onSubmit={handleCreateInvestmentIncome} className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Kepemilikan</label>
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Kepemilikan</span>
                                 <select
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={incomeForm.ownerId}
                                     onChange={(e) => setIncomeForm((prev) => ({ ...prev, ownerId: e.target.value }))}
                                     disabled={incomeFormLock.active}
@@ -971,46 +1077,47 @@ const Investment = () => {
                                         <option key={owner.id} value={owner.id}>{owner.name}</option>
                                     ))}
                                 </select>
-                            </div>
+                            </label>
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Nominal</label>
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Nominal</span>
                                     <input
                                         required
                                         type="text"
                                         inputMode="numeric"
                                         placeholder="0"
-                                        className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm font-semibold"
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-semibold bg-slate-50"
                                         value={activeAmountField === 'income' ? incomeForm.amount : formatThousands(incomeForm.amount)}
                                         onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: sanitizeAmount(e.target.value) }))}
                                         onFocus={() => setActiveAmountField('income')}
                                         onBlur={() => setActiveAmountField((current) => current === 'income' ? null : current)}
                                     />
-                                    {incomeForm.kind === 'STOCK_GROWTH' && (
-                                        <p className={`mt-1 text-[11px] font-semibold ${stockGrowthDirection === 'DOWN' ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                            {stockGrowthDirection === 'DOWN'
-                                                ? 'Akan dicatat sebagai penurunan nilai portofolio.'
-                                                : 'Akan dicatat sebagai kenaikan nilai portofolio.'}
-                                        </p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Tanggal</label>
+                                </label>
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal</span>
                                     <input
                                         required
                                         type="date"
-                                        className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm"
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-medium bg-slate-50"
                                         value={incomeForm.date}
                                         onChange={(e) => setIncomeForm((prev) => ({ ...prev, date: e.target.value }))}
                                     />
-                                </div>
+                                </label>
                             </div>
 
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Rekening Investasi Tujuan</label>
+                            {incomeForm.kind === 'STOCK_GROWTH' && (
+                                <p className={`text-[11px] font-semibold ${stockGrowthDirection === 'DOWN' ? 'text-rose-600' : 'text-emerald-600'} ml-1 -mt-2`}>
+                                    {stockGrowthDirection === 'DOWN'
+                                        ? 'Akan dicatat sebagai penurunan nilai portofolio.'
+                                        : 'Akan dicatat sebagai kenaikan nilai portofolio.'}
+                                </p>
+                            )}
+
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Rekening Investasi Tujuan</span>
                                 <select
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={incomeForm.accountId}
                                     onChange={(e) => setIncomeForm((prev) => ({ ...prev, accountId: e.target.value }))}
                                     required
@@ -1021,21 +1128,21 @@ const Investment = () => {
                                         <option key={account.id} value={account.id}>{account.name} ({account.type})</option>
                                     ))}
                                 </select>
-                            </div>
+                            </label>
 
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Keterangan</label>
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Keterangan</span>
                                 <input
                                     type="text"
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={incomeForm.description}
                                     onChange={(e) => setIncomeForm((prev) => ({ ...prev, description: e.target.value }))}
                                 />
-                            </div>
+                            </label>
 
                             <button
                                 disabled={submitting || investmentIncomeAccounts.length === 0}
-                                className="w-full h-12 rounded-xl bg-slate-900 text-white text-xs font-bold uppercase tracking-wider disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                                className="w-full h-12 rounded-2xl bg-blue-600 text-white text-xs font-bold uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2 mt-4 shadow-lg shadow-blue-600/20 hover:bg-blue-500 active:scale-95 transition-all"
                             >
                                 <Save size={16} /> {submitting ? 'Menyimpan...' : editingIncomeId ? 'Simpan Perubahan' : 'Catat Pemasukan'}
                             </button>
@@ -1061,32 +1168,35 @@ const Investment = () => {
             {/* Transfer Modal */}
             {isTransferModalOpen && selectedRdn && (
                 <div className="fixed inset-0 z-[120] bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onMouseDown={() => setIsTransferModalOpen(false)}>
-                    <div className="w-full max-w-md bg-white rounded-3xl border border-slate-200 p-6 space-y-5" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between">
-                            <h3 className="font-bold text-slate-900">Transfer Dana Investasi</h3>
-                            <button onClick={() => setIsTransferModalOpen(false)} className="p-2 text-slate-400"><X size={18} /></button>
+                    <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-slate-100 p-6 animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between mb-5">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">Transfer Dana Investasi</h3>
+                                <p className="mt-0.5 text-xs text-slate-500">Pindah dana antara bank dan rekening investasi.</p>
+                            </div>
+                            <button onClick={() => setIsTransferModalOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"><X size={15} /></button>
                         </div>
 
-                        <div className="flex bg-slate-100 rounded-xl p-1 shrink-0">
+                        <div className="flex gap-2 h-11 mb-4">
                             <button
                                 onClick={() => setTransferForm({ ...transferForm, type: 'DEPOSIT' })}
-                                className={`flex-1 text-xs font-bold h-9 rounded-lg transition-all ${transferForm.type === 'DEPOSIT' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}
+                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${transferForm.type === 'DEPOSIT' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'}`}
                             >
-                                Transfer ke Investasi
+                                Ke Investasi
                             </button>
                             <button
                                 onClick={() => setTransferForm({ ...transferForm, type: 'WITHDRAW' })}
-                                className={`flex-1 text-xs font-bold h-9 rounded-lg transition-all ${transferForm.type === 'WITHDRAW' ? 'bg-white shadow-sm text-amber-600' : 'text-slate-500'}`}
+                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${transferForm.type === 'WITHDRAW' ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-amber-200 hover:text-amber-500'}`}
                             >
-                                Pencairan ke Bank
+                                Pencairan
                             </button>
                         </div>
 
                         <form onSubmit={handleTransfer} className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Kepemilikan</label>
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Kepemilikan</span>
                                 <select
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={transferForm.ownerId}
                                     onChange={e => setTransferForm({ ...transferForm, ownerId: e.target.value })}
                                     required
@@ -1096,14 +1206,14 @@ const Investment = () => {
                                         <option key={owner.id} value={owner.id}>{owner.name}</option>
                                     ))}
                                 </select>
-                            </div>
+                            </label>
 
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">
                                     {transferForm.type === 'DEPOSIT' ? 'Rekening Sumber Dana' : 'Rekening Tujuan Pencairan'}
-                                </label>
+                                </span>
                                 <select
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm bg-white"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={transferForm.bankId}
                                     onChange={e => setTransferForm({ ...transferForm, bankId: e.target.value })}
                                     required
@@ -1117,37 +1227,78 @@ const Investment = () => {
                                     ))}
                                 </select>
                                 {bankAccounts.length === 0 && (
-                                    <p className="mt-1 text-[11px] text-amber-600">
+                                    <p className="mt-1 text-[11px] text-amber-600 ml-1">
                                         Belum ada rekening bank atau e-wallet yang tersedia.
                                     </p>
                                 )}
-                            </div>
+                            </label>
 
-                            <div>
-                                <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">Nominal Transfer</label>
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Nominal Transfer</span>
                                 <input
                                     required
                                     type="text"
                                     inputMode="numeric"
                                     placeholder="0"
-                                    className="w-full rounded-xl border border-slate-200 px-4 h-11 text-sm font-semibold"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-semibold bg-slate-50"
                                     value={activeAmountField === 'transfer' ? transferForm.amount : formatThousands(transferForm.amount)}
                                     onChange={(e) => setTransferForm((f) => ({ ...f, amount: sanitizeAmount(e.target.value) }))}
                                     onFocus={() => setActiveAmountField('transfer')}
                                     onBlur={() => setActiveAmountField((current) => current === 'transfer' ? null : current)}
                                 />
-                            </div>
+                            </label>
 
-                            <button disabled={submitting} className="w-full h-12 rounded-xl bg-blue-600 text-white text-xs font-bold uppercase tracking-wider disabled:opacity-60 flex items-center justify-center gap-2 mt-2">
-                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : transferForm.type === 'DEPOSIT' ? 'Catat Transfer ke Investasi' : 'Catat Pencairan ke Bank'}
+                            <button disabled={submitting} className={`w-full h-12 rounded-2xl text-white text-xs font-bold uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2 mt-4 shadow-lg active:scale-95 transition-all ${transferForm.type === 'DEPOSIT' ? 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-500' : 'bg-amber-500 shadow-amber-500/20 hover:bg-amber-400'}`}>
+                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : transferForm.type === 'DEPOSIT' ? 'Transfer ke Investasi' : 'Pencairan ke Bank'}
                             </button>
                         </form>
                     </div>
                 </div>
             )}
 
+            <div
+                className={`fixed inset-0 z-[45] transition-all duration-300 ${fabOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(2px)' }}
+                onClick={() => setFabOpen(false)}
+            />
+
+            <div className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
+                {investmentFabActions.map((action, idx) => (
+                    <div
+                        key={action.label}
+                        className="flex items-center gap-3 transition-all duration-300"
+                        style={{
+                            transitionDelay: fabOpen ? `${idx * 40}ms` : `${(investmentFabActions.length - 1 - idx) * 30}ms`,
+                            opacity: fabOpen ? 1 : 0,
+                            transform: fabOpen ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.85)',
+                            pointerEvents: fabOpen ? 'auto' : 'none',
+                        }}
+                    >
+                        <span className="whitespace-nowrap rounded-2xl border border-white/60 bg-white/95 px-3.5 py-1.5 text-sm font-semibold text-slate-800 shadow-lg backdrop-blur-sm">
+                            {action.label}
+                        </span>
+                        <button
+                            onClick={action.onClick}
+                            className={`flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br ${action.gradient} text-white transition-transform active:scale-90`}
+                            style={{ boxShadow: `0 6px 20px -4px ${action.shadow}` }}
+                        >
+                            {action.icon}
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <button
+                onClick={() => setFabOpen((prev) => !prev)}
+                className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-emerald-500 text-white shadow-[0_8px_24px_-6px_rgba(37,99,235,0.5)] transition-all hover:-translate-y-1 hover:shadow-2xl active:scale-95"
+                style={{ transform: `rotate(${fabOpen ? '45deg' : '0deg'})` }}
+                title="Aksi Investasi"
+            >
+                <Plus size={28} strokeWidth={3} className={`transition-transform duration-300 ${fabOpen ? 'rotate-45' : 'rotate-0'}`} />
+            </button>
         </div>
     );
 };
 
 export default Investment;
+

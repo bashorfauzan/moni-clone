@@ -9,6 +9,7 @@ const Layout = () => {
     const navigate = useNavigate();
     const { openModal } = useTransaction();
     const [fabOpen, setFabOpen] = useState(false);
+    const hideGlobalFab = location.pathname === '/investment';
 
     const navItems = [
         { path: '/', label: 'Home', mobileLabel: 'Home', icon: <HomeIcon size={20} /> },
@@ -57,48 +58,52 @@ const Layout = () => {
 
             <TransactionModal />
 
-            {/* Backdrop */}
-            <div
-                className={`fixed inset-0 z-[45] transition-all duration-300 ${fabOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-                style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(2px)' }}
-                onClick={() => setFabOpen(false)}
-            />
-
-            {/* Speed Dial Actions */}
-            <div className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
-                {fabActions.map((action, idx) => (
+            {!hideGlobalFab && (
+                <>
+                    {/* Backdrop */}
                     <div
-                        key={idx}
-                        className="flex items-center gap-3 transition-all duration-300"
-                        style={{
-                            transitionDelay: fabOpen ? `${idx * 40}ms` : `${(fabActions.length - 1 - idx) * 30}ms`,
-                            opacity: fabOpen ? 1 : 0,
-                            transform: fabOpen ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.85)',
-                            pointerEvents: fabOpen ? 'auto' : 'none',
-                        }}
-                    >
-                        <span className="bg-white/95 text-slate-800 text-sm font-semibold px-3.5 py-1.5 rounded-2xl shadow-lg border border-white/60 whitespace-nowrap backdrop-blur-sm">
-                            {action.label}
-                        </span>
-                        <button
-                            onClick={action.onClick}
-                            className={`w-12 h-12 bg-gradient-to-br ${action.gradient} rounded-full flex items-center justify-center text-white active:scale-90 transition-transform`}
-                            style={{ boxShadow: `0 6px 20px -4px ${action.shadow}` }}
-                        >
-                            {action.icon}
-                        </button>
-                    </div>
-                ))}
-            </div>
+                        className={`fixed inset-0 z-[45] transition-all duration-300 ${fabOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+                        style={{ background: 'rgba(15,23,42,0.35)', backdropFilter: 'blur(2px)' }}
+                        onClick={() => setFabOpen(false)}
+                    />
 
-            {/* Floating Action Button (FAB) */}
-            <button
-                onClick={() => setFabOpen((prev) => !prev)}
-                className={`fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 w-14 h-14 bg-gradient-to-br from-blue-600 to-emerald-500 rounded-full shadow-[0_8px_24px_-6px_rgba(37,99,235,0.5)] flex items-center justify-center text-white active:scale-95 transition-all z-50 hover:shadow-2xl hover:-translate-y-1`}
-                style={{ transform: `rotate(${fabOpen ? '45deg' : '0deg'}) ${fabOpen ? '' : ''}` }}
-            >
-                <Plus size={28} strokeWidth={3} className={`transition-transform duration-300 ${fabOpen ? 'rotate-45' : 'rotate-0'}`} />
-            </button>
+                    {/* Speed Dial Actions */}
+                    <div className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
+                        {fabActions.map((action, idx) => (
+                            <div
+                                key={idx}
+                                className="flex items-center gap-3 transition-all duration-300"
+                                style={{
+                                    transitionDelay: fabOpen ? `${idx * 40}ms` : `${(fabActions.length - 1 - idx) * 30}ms`,
+                                    opacity: fabOpen ? 1 : 0,
+                                    transform: fabOpen ? 'translateY(0) scale(1)' : 'translateY(16px) scale(0.85)',
+                                    pointerEvents: fabOpen ? 'auto' : 'none',
+                                }}
+                            >
+                                <span className="bg-white/95 text-slate-800 text-sm font-semibold px-3.5 py-1.5 rounded-2xl shadow-lg border border-white/60 whitespace-nowrap backdrop-blur-sm">
+                                    {action.label}
+                                </span>
+                                <button
+                                    onClick={action.onClick}
+                                    className={`w-12 h-12 bg-gradient-to-br ${action.gradient} rounded-full flex items-center justify-center text-white active:scale-90 transition-transform`}
+                                    style={{ boxShadow: `0 6px 20px -4px ${action.shadow}` }}
+                                >
+                                    {action.icon}
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Floating Action Button (FAB) */}
+                    <button
+                        onClick={() => setFabOpen((prev) => !prev)}
+                        className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-blue-600 to-emerald-500 text-white shadow-[0_8px_24px_-6px_rgba(37,99,235,0.5)] transition-all hover:-translate-y-1 hover:shadow-2xl active:scale-95"
+                        style={{ transform: `rotate(${fabOpen ? '45deg' : '0deg'})` }}
+                    >
+                        <Plus size={28} strokeWidth={3} className={`transition-transform duration-300 ${fabOpen ? 'rotate-45' : 'rotate-0'}`} />
+                    </button>
+                </>
+            )}
 
             {/* Shared Bottom Navigation */}
             <nav className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-md sm:max-w-xl bg-white/85 backdrop-blur-2xl border border-white/60 rounded-3xl h-[72px] flex items-center justify-between shadow-[0_12px_40px_-12px_rgba(0,0,0,0.15)] px-6 sm:px-8 z-40">

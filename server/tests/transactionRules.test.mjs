@@ -5,7 +5,11 @@ import {
     isDualAccountTransactionType,
     isLegacyInvestmentTransactionType
 } from '../lib/transactionRules.ts';
-import { parseNotificationText } from '../routes/webhook.ts';
+import {
+    parseNotificationText,
+    shouldAutoValidateNotificationTransaction,
+    shouldCreateTransactionFromNotification
+} from '../routes/webhook.ts';
 import {
     inferNotificationCategoryLabel,
     isInvestmentTransfer,
@@ -140,6 +144,20 @@ runCase('parser reads DANA transfer to bank account as transfer', () => {
     assert.equal(parsed.parseStatus, 'PARSED');
     assert.equal(parsed.sourceAccountHint, 'dana');
     assert.equal(parsed.destinationAccountHint, '1533');
+});
+
+runCase('parser keeps sesama BCA transfer as pending review but still eligible for transaction creation', () => {
+    const parsed = parseNotificationText(
+        'BSya',
+        'Transfer',
+        'Sukses - Transfer Dana ke Rekening sesama BCA Syariah Rp. 3.500.000'
+    );
+
+    assert.equal(parsed.amount, 3500000);
+    assert.equal(parsed.type, TransactionType.TRANSFER);
+    assert.equal(parsed.parseStatus, 'PENDING');
+    assert.equal(shouldCreateTransactionFromNotification(parsed), true);
+    assert.equal(shouldAutoValidateNotificationTransaction(parsed), false);
 });
 
 runCase('parser reads wondr by BNI incoming receipt as income', () => {
