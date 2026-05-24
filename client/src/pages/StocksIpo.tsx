@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Pencil, Plus, Save, Trash2 } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Pencil, Plus, Save, Trash2, X, Wallet } from 'lucide-react';
 import Spinner from '../components/Spinner';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import {
@@ -40,7 +40,16 @@ const emptyForm = () => ({
     notes: ''
 });
 
+// Status badge styling map
+const STATUS_STYLE: Record<IpoOrderStatus, { badge: string; dot: string; label: string }> = {
+    PESAN:      { badge: 'bg-blue-50 text-blue-600 border border-blue-100',    dot: 'bg-blue-500',    label: 'Pesan' },
+    JATAH:      { badge: 'bg-emerald-50 text-emerald-600 border border-emerald-100', dot: 'bg-emerald-500', label: 'Jatah' },
+    TIDAK_JATAH:{ badge: 'bg-rose-50 text-rose-500 border border-rose-100',    dot: 'bg-rose-500',    label: 'Tidak Jatah' },
+    JUAL:       { badge: 'bg-amber-50 text-amber-600 border border-amber-100', dot: 'bg-amber-500',   label: 'Jual' },
+};
+
 const StocksIpo = () => {
+    const [searchParams] = useSearchParams();
     const [owners, setOwners] = useState<Owner[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [orders, setOrders] = useState<IpoOrder[]>([]);
@@ -48,6 +57,7 @@ const StocksIpo = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
+    const [isFormOpen, setIsFormOpen] = useState(() => searchParams.get('newOrder') === 'true');
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
     const [selectedStatus, setSelectedStatus] = useState<'ALL' | IpoOrderStatus>('ALL');
     const [form, setForm] = useState(emptyForm());
@@ -104,6 +114,7 @@ const StocksIpo = () => {
             ownerId: stockAccounts[0]?.ownerId || owners[0]?.id || '',
             accountId: stockAccounts[0]?.id || ''
         });
+        setIsFormOpen(false);
     };
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -135,6 +146,7 @@ const StocksIpo = () => {
 
             resetForm();
             await loadData();
+            setIsFormOpen(false);
         } catch (error: any) {
             alert(error?.response?.data?.error || 'Gagal menyimpan order IPO');
         } finally {
@@ -159,6 +171,7 @@ const StocksIpo = () => {
             soldAt: row.soldAt ? String(row.soldAt).slice(0, 10) : '',
             notes: row.notes || ''
         });
+        setIsFormOpen(true);
     };
 
     const handleDelete = async (id: string) => {
@@ -184,221 +197,451 @@ const StocksIpo = () => {
 
     return (
         <div className="p-4 md:p-8 pb-32 mx-auto w-full max-w-6xl space-y-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+
+            {/* Page Header */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <Link to="/stocks" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+                    <Link
+                        to="/stocks"
+                        className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-700 transition-colors"
+                    >
                         <ArrowLeft size={14} /> Kembali ke Saham
                     </Link>
-                    <h1 className="mt-3 text-2xl font-black text-slate-900">IPO</h1>
-                    <p className="mt-1 text-sm text-slate-500">Catat order IPO dan histori BUY/SELL hasil status jatah.</p>
+                    <h1 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">Pemesanan IPO</h1>
+                    <p className="mt-1 text-sm text-slate-500">Catat order IPO dan histori jatah secara terpusat.</p>
                 </div>
+                <button
+                    onClick={() => {
+                        resetForm();
+                        setIsFormOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 h-12 text-xs font-bold uppercase tracking-widest text-white hover:bg-emerald-500 transition-all hover:-translate-y-0.5 active:scale-95 shadow-lg shadow-emerald-500/25 shrink-0"
+                >
+                    <Plus size={16} /> Tambah Order IPO
+                </button>
             </div>
 
-            <div className="relative overflow-hidden rounded-[28px] bg-slate-900 p-5 sm:p-6 shadow-xl shadow-blue-900/5">
-                <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-blue-500/25 blur-3xl pointer-events-none"></div>
-                <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none"></div>
+            {/* Hero Stats Card */}
+            <div className="relative overflow-hidden rounded-[28px] bg-slate-900 p-6 sm:p-8 shadow-2xl shadow-slate-900/20">
+                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-500/20 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
+                <div className="pointer-events-none absolute top-1/2 right-1/3 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
 
-                <div className="relative z-10 flex justify-between divide-x divide-white/10">
+                <div className="relative z-10 grid grid-cols-4 divide-x divide-white/10">
                     {IPO_STATUS_OPTIONS.map((status, index) => (
-                        <div key={status} className={`flex flex-1 flex-col justify-center px-1 sm:px-4 text-center sm:text-left ${index === 0 ? 'sm:pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'sm:pr-0' : ''}`}>
-                            <p className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-white/60 mb-1">{status.replace('_', ' ')}</p>
-                            <p className="text-xl sm:text-3xl font-black text-white tracking-tight">{statusCount[status]}</p>
+                        <div
+                            key={status}
+                            className={`flex flex-col justify-center px-2 sm:px-5 ${index === 0 ? 'pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'pr-0' : ''}`}
+                        >
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                                <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_STYLE[status].dot}`} />
+                                <p className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 leading-none">
+                                    {STATUS_STYLE[status].label}
+                                </p>
+                            </div>
+                            <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                                {statusCount[status]}
+                            </p>
                         </div>
                     ))}
                 </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-lg font-bold text-slate-900">{editingId ? 'Edit order IPO' : isReservationStage ? 'Reservasi IPO' : 'Update status IPO'}</h2>
-                            <p className="text-xs text-slate-500">Pendanaan dilakukan dari menu Home/Rekening agar tidak terjadi pencatatan ganda.</p>
-                        </div>
-                        {editingId ? <button type="button" onClick={resetForm} className="text-xs font-bold uppercase tracking-widest text-slate-500">Batal</button> : null}
-                    </div>
-
-                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-700">
-                        Jika perlu tambah dana sekuritas, lakukan dari menu Home/Rekening. Halaman ini hanya untuk order IPO dan status jatahnya.
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Akun Sekuritas</span>
-                            <select
-                                className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50"
-                                value={form.accountId}
-                                onChange={(e) => {
-                                    const nextAccountId = e.target.value;
-                                    const account = stockAccounts.find((item) => item.id === nextAccountId);
-                                    setForm((current) => ({
-                                        ...current,
-                                        accountId: nextAccountId,
-                                        ownerId: account?.ownerId || current.ownerId
-                                    }));
-                                }}
+            {/* Filter Bar */}
+            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-4 space-y-3">
+                {/* Status pill segments */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Status:</span>
+                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
+                        <button
+                            onClick={() => setSelectedStatus('ALL')}
+                            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedStatus === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Semua
+                        </button>
+                        {IPO_STATUS_OPTIONS.map((status) => (
+                            <button
+                                key={status}
+                                onClick={() => setSelectedStatus(status)}
+                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedStatus === status ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                {stockAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                            </select>
-                        </label>
-                        <div className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Pemilik Otomatis</span>
-                            <div className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 flex items-center text-slate-700 font-semibold">
-                                {selectedOwner?.name || 'Mengikuti rekening sekuritas'}
+                                {STATUS_STYLE[status].label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Owner dropdown */}
+                <select
+                    className="rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium cursor-pointer w-full sm:w-64"
+                    value={selectedOwnerId}
+                    onChange={(e) => setSelectedOwnerId(e.target.value)}
+                >
+                    <option value="ALL">Semua Pemilik</option>
+                    {owners.map((owner) => (
+                        <option key={owner.id} value={owner.id}>{owner.name}</option>
+                    ))}
+                </select>
+            </div>
+
+            {/* Main Grid */}
+            <div className="grid gap-6 lg:grid-cols-2">
+
+                {/* Column 1: Daftar Pemesanan IPO */}
+                <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-50">
+                            <Wallet size={15} className="text-emerald-600" />
+                        </div>
+                        <h2 className="text-base font-black text-slate-900 tracking-tight">Daftar Pemesanan IPO</h2>
+                        {orders.length > 0 && (
+                            <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-500">
+                                {orders.length}
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="space-y-3">
+                        {orders.length === 0 ? (
+                            <div className="rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2 py-10 px-4 text-center">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+                                    <Wallet size={20} className="text-slate-400" />
+                                </div>
+                                <p className="text-sm font-bold text-slate-500">Belum ada order IPO</p>
+                                <p className="text-xs text-slate-400">Tekan tombol Tambah Order IPO untuk mulai mencatat.</p>
                             </div>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Kode Saham (Ticker)</span>
-                            <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-semibold uppercase bg-slate-50" placeholder="Contoh: GOTO" value={form.ticker} onChange={(e) => setForm((current) => ({ ...current, ticker: e.target.value.toUpperCase() }))} />
-                        </label>
-                        <label className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Broker / Underwriter</span>
-                            <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" placeholder="Contoh: YP, CC" value={form.broker} onChange={(e) => setForm((current) => ({ ...current, broker: e.target.value }))} />
-                        </label>
-                    </div>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                        <label className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Harga IPO (Rp)</span>
-                            <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" inputMode="numeric" placeholder="Contoh: 300" value={form.ipoPrice} onChange={(e) => setForm((current) => ({ ...current, ipoPrice: e.target.value.replace(/\D/g, '') }))} />
-                        </label>
-                        <label className="space-y-1 block">
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Status Pemesanan</span>
-                            <select className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-semibold text-blue-700" value={form.status} onChange={(e) => setForm((current) => ({ ...current, status: e.target.value as IpoOrderStatus }))}>
-                                {IPO_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status.replace('_', ' ')}</option>)}
-                            </select>
-                        </label>
-                    </div>
-
-                    <label className="space-y-1 block">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jumlah Pesan (Lot)</span>
-                        <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" inputMode="numeric" placeholder="Berapa lot dipesan?" value={form.lotRequested} onChange={(e) => setForm((current) => ({ ...current, lotRequested: e.target.value.replace(/\D/g, '') }))} />
-                    </label>
-
-                    {needsAllocationFields ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jatah Didapat (Lot)</span>
-                                <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" inputMode="numeric" placeholder="Berapa lot didapat?" value={form.lotAllocated} onChange={(e) => setForm((current) => ({ ...current, lotAllocated: e.target.value.replace(/\D/g, '') }))} />
-                            </label>
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Penjatahan</span>
-                                <input type="date" className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" value={form.allottedAt} onChange={(e) => setForm((current) => ({ ...current, allottedAt: e.target.value }))} />
-                            </label>
-                        </div>
-                    ) : null}
-
-                    <label className="space-y-1 block">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Pesan</span>
-                        <input type="date" className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" value={form.orderedAt} onChange={(e) => setForm((current) => ({ ...current, orderedAt: e.target.value }))} />
-                    </label>
-
-                    {needsSellFields ? (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Harga Jual (Rp)</span>
-                                <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" inputMode="numeric" placeholder="Contoh: 450" value={form.sellPrice} onChange={(e) => setForm((current) => ({ ...current, sellPrice: e.target.value.replace(/\D/g, '') }))} />
-                            </label>
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Jual</span>
-                                <input type="date" className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" value={form.soldAt} onChange={(e) => setForm((current) => ({ ...current, soldAt: e.target.value }))} />
-                            </label>
-                        </div>
-                    ) : null}
-
-                    <label className="space-y-1 block">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Catatan Tambahan (Opsional)</span>
-                        <textarea className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm min-h-[96px] bg-slate-50" placeholder="Tuliskan catatan terkait pemesanan ini..." value={form.notes} onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))} />
-                    </label>
-
-                    <button disabled={saving || stockAccounts.length === 0} className="w-full rounded-2xl bg-slate-900 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2">
-                        {editingId ? <Save size={16} /> : <Plus size={16} />}
-                        {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Order IPO'}
-                    </button>
-                </form>
-
-                <div className="space-y-6">
-                    <div className="rounded-3xl border border-slate-200 bg-white p-5 space-y-4">
-                        <div className="flex flex-col gap-3 lg:flex-row">
-                            <select className="rounded-2xl border border-slate-200 px-4 h-11 text-sm lg:w-56" value={selectedOwnerId} onChange={(e) => setSelectedOwnerId(e.target.value)}>
-                                <option value="ALL">Semua pemilik</option>
-                                {owners.map((owner) => <option key={owner.id} value={owner.id}>{owner.name}</option>)}
-                            </select>
-                            <select className="rounded-2xl border border-slate-200 px-4 h-11 text-sm lg:w-56" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value as 'ALL' | IpoOrderStatus)}>
-                                <option value="ALL">Semua status</option>
-                                {IPO_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="space-y-3">
-                            {orders.length === 0 ? (
-                                <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">Belum ada order IPO.</div>
-                            ) : orders.map((row) => (
-                                <div key={row.id} className="rounded-2xl border border-slate-200 p-4 space-y-3">
-                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-base font-bold text-slate-900">{row.ticker}</span>
-                                                <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-600">{row.status}</span>
+                        ) : orders.map((row) => {
+                            const style = STATUS_STYLE[row.status];
+                            const pnl = row.sellPrice && row.lotAllocated
+                                ? (row.sellPrice - row.ipoPrice) * row.lotAllocated * 100
+                                : null;
+                            return (
+                                <div
+                                    key={row.id}
+                                    className="rounded-2xl border border-slate-100 bg-white/80 p-4 hover:shadow-md hover:border-blue-100 transition-all space-y-3"
+                                >
+                                    {/* Top row: ticker + status + actions */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-lg font-black text-slate-900 tracking-tight">{row.ticker}</span>
+                                                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${style.badge}`}>
+                                                    {style.label}
+                                                </span>
+                                                {pnl !== null && (
+                                                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${pnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                                        {formatCurrency(pnl)}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <p className="mt-1 text-sm text-slate-500">
-                                                {row.broker} · {row.lotRequested} pesan / {row.lotAllocated} jatah · {formatCurrency(row.ipoPrice)}
+                                            <p className="mt-1 text-xs text-slate-500 font-medium">
+                                                {row.broker} &middot; {row.lotRequested} pesan / {row.lotAllocated} jatah &middot; {formatCurrency(row.ipoPrice)}
                                             </p>
-                                            <p className="mt-1 text-xs text-slate-400">
-                                                {row.account?.name} · Order {String(row.orderedAt).slice(0, 10)}
+                                            <p className="mt-0.5 text-[11px] text-slate-400">
+                                                {row.account?.name} &middot; Order {String(row.orderedAt).slice(0, 10)}
                                             </p>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <button type="button" onClick={() => handleEdit(row)} className="rounded-xl bg-slate-100 p-2 text-slate-600">
-                                                <Pencil size={15} />
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                            <button
+                                                type="button"
+                                                onClick={() => handleEdit(row)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                            >
+                                                <Pencil size={14} />
                                             </button>
-                                            <button type="button" disabled={saving} onClick={() => handleDelete(row.id)} className="rounded-xl bg-rose-50 p-2 text-rose-600 disabled:opacity-50">
-                                                <Trash2 size={15} />
+                                            <button
+                                                type="button"
+                                                disabled={saving}
+                                                onClick={() => handleDelete(row.id)}
+                                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                            >
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>
 
-                                    {row.transactions && row.transactions.length > 0 ? (
-                                        <div className="rounded-2xl bg-slate-50 p-3 space-y-2">
+                                    {/* Sub-transactions */}
+                                    {row.transactions && row.transactions.length > 0 && (
+                                        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-1.5">
                                             {row.transactions.map((tx) => (
-                                                <div key={tx.id} className="flex items-center justify-between text-sm">
-                                                    <span className="font-semibold text-slate-700">{tx.side} {tx.lot} lot</span>
-                                                    <span className="text-slate-500">{String(tx.tradedAt).slice(0, 10)} · {formatCurrency(tx.netValue)}</span>
+                                                <div key={tx.id} className="flex items-center justify-between text-xs">
+                                                    <span className="font-bold text-slate-700">{tx.side} {tx.lot} lot</span>
+                                                    <span className="text-slate-500 font-medium">{String(tx.tradedAt).slice(0, 10)} &middot; {formatCurrency(tx.netValue)}</span>
                                                 </div>
                                             ))}
                                         </div>
-                                    ) : (
-                                        <div className="rounded-2xl bg-slate-50 p-3 text-sm text-slate-500">Belum ada histori transaksi dari IPO ini.</div>
                                     )}
                                 </div>
-                            ))}
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Column 2: Histori Transaksi IPO */}
+                <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-5 space-y-4">
+                    <div className="flex items-center gap-2">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100">
+                            <Wallet size={15} className="text-slate-500" />
                         </div>
+                        <h2 className="text-base font-black text-slate-900 tracking-tight">Histori Transaksi IPO</h2>
+                        {transactions.length > 0 && (
+                            <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-bold text-slate-500">
+                                {transactions.length}
+                            </span>
+                        )}
                     </div>
 
-                    <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                        <h2 className="text-lg font-bold text-slate-900">Histori Transaksi IPO</h2>
-                        <div className="mt-4 space-y-3">
-                            {transactions.length === 0 ? (
-                                <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">Belum ada histori transaksi IPO.</div>
-                            ) : transactions.map((tx) => (
-                                <div key={tx.id} className="rounded-2xl border border-slate-200 p-4 flex items-center justify-between gap-3">
-                                    <div>
-                                        <p className="font-bold text-slate-900">{tx.ticker} · {tx.side}</p>
-                                        <p className="text-sm text-slate-500">{tx.lot} lot · {tx.ipoOrder?.broker || tx.account?.name}</p>
+                    <div className="space-y-3">
+                        {transactions.length === 0 ? (
+                            <div className="rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2 py-10 px-4 text-center">
+                                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
+                                    <Wallet size={20} className="text-slate-400" />
+                                </div>
+                                <p className="text-sm font-bold text-slate-500">Belum ada histori transaksi</p>
+                                <p className="text-xs text-slate-400">Transaksi IPO terkait akan tampil di sini.</p>
+                            </div>
+                        ) : transactions.map((tx) => (
+                            <div
+                                key={tx.id}
+                                className="rounded-2xl border border-slate-100 bg-white/80 p-4 hover:shadow-md hover:border-blue-100 transition-all"
+                            >
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base font-black text-slate-900">{tx.ticker}</span>
+                                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
+                                                {tx.side}
+                                            </span>
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-500 font-medium">
+                                            {tx.lot} lot &middot; {tx.ipoOrder?.broker || tx.account?.name}
+                                        </p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="font-semibold text-slate-900">{formatCurrency(tx.netValue)}</p>
-                                        <p className="text-xs text-slate-400">{String(tx.tradedAt).slice(0, 10)}</p>
+                                    <div className="text-right shrink-0">
+                                        <p className="text-sm font-black text-slate-900">{formatCurrency(tx.netValue)}</p>
+                                        <p className="mt-0.5 text-[11px] text-slate-400">{String(tx.tradedAt).slice(0, 10)}</p>
                                     </div>
                                 </div>
-                            ))}
-                        </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
+
+            {/* Modal Form */}
+            {isFormOpen && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center"
+                    onMouseDown={resetForm}
+                >
+                    <div
+                        className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        {/* Modal Header */}
+                        <div className="flex items-start justify-between mb-5">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                                    {editingId ? 'Edit Order IPO' : isReservationStage ? 'Reservasi IPO' : 'Update Status IPO'}
+                                </h3>
+                                <p className="mt-0.5 text-xs text-slate-500">Isi detail pesanan dan status jatah IPO.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={resetForm}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"
+                            >
+                                <X size={15} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* Info banner */}
+                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-700 font-medium leading-relaxed">
+                                Jika perlu tambah dana sekuritas, lakukan dari menu Home/Rekening. Halaman ini hanya untuk order IPO dan status jatahnya.
+                            </div>
+
+                            {/* Account + Owner */}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Akun Sekuritas</span>
+                                    <select
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                        value={form.accountId}
+                                        onChange={(e) => {
+                                            const nextAccountId = e.target.value;
+                                            const account = stockAccounts.find((item) => item.id === nextAccountId);
+                                            setForm((current) => ({
+                                                ...current,
+                                                accountId: nextAccountId,
+                                                ownerId: account?.ownerId || current.ownerId
+                                            }));
+                                        }}
+                                    >
+                                        {stockAccounts.map((account) => (
+                                            <option key={account.id} value={account.id}>{account.name}</option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Pemilik Otomatis</span>
+                                    <div className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 flex items-center text-slate-700 font-semibold">
+                                        {selectedOwner?.name || 'Mengikuti sekuritas'}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Ticker + Broker */}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Kode Saham (Ticker)</span>
+                                    <input
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-bold uppercase bg-slate-50 tracking-widest"
+                                        placeholder="Contoh: GOTO"
+                                        value={form.ticker}
+                                        onChange={(e) => setForm((current) => ({ ...current, ticker: e.target.value.toUpperCase() }))}
+                                    />
+                                </label>
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Broker / Underwriter</span>
+                                    <input
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                        placeholder="Contoh: YP, CC"
+                                        value={form.broker}
+                                        onChange={(e) => setForm((current) => ({ ...current, broker: e.target.value }))}
+                                    />
+                                </label>
+                            </div>
+
+                            {/* IPO Price + Status */}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Harga IPO (Rp)</span>
+                                    <input
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                        inputMode="numeric"
+                                        placeholder="Contoh: 300"
+                                        value={form.ipoPrice}
+                                        onChange={(e) => setForm((current) => ({ ...current, ipoPrice: e.target.value.replace(/\D/g, '') }))}
+                                    />
+                                </label>
+                                <div className="space-y-1.5">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Status Pemesanan</span>
+                                    <div className="flex gap-1.5 flex-wrap">
+                                        {IPO_STATUS_OPTIONS.map((status) => {
+                                            const s = STATUS_STYLE[status];
+                                            const isActive = form.status === status;
+                                            return (
+                                                <button
+                                                    key={status}
+                                                    type="button"
+                                                    onClick={() => setForm((current) => ({ ...current, status }))}
+                                                    className={`rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest border transition-all ${isActive ? s.badge + ' shadow-sm' : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-slate-300'}`}
+                                                >
+                                                    {s.label}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Lot requested */}
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jumlah Pesan (Lot)</span>
+                                <input
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                    inputMode="numeric"
+                                    placeholder="Berapa lot dipesan?"
+                                    value={form.lotRequested}
+                                    onChange={(e) => setForm((current) => ({ ...current, lotRequested: e.target.value.replace(/\D/g, '') }))}
+                                />
+                            </label>
+
+                            {/* Allocation fields */}
+                            {needsAllocationFields ? (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <label className="space-y-1.5 block">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jatah Didapat (Lot)</span>
+                                        <input
+                                            className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                            inputMode="numeric"
+                                            placeholder="Berapa lot didapat?"
+                                            value={form.lotAllocated}
+                                            onChange={(e) => setForm((current) => ({ ...current, lotAllocated: e.target.value.replace(/\D/g, '') }))}
+                                        />
+                                    </label>
+                                    <label className="space-y-1.5 block">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Penjatahan</span>
+                                        <input
+                                            type="date"
+                                            className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                            value={form.allottedAt}
+                                            onChange={(e) => setForm((current) => ({ ...current, allottedAt: e.target.value }))}
+                                        />
+                                    </label>
+                                </div>
+                            ) : null}
+
+                            {/* Order date */}
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Pesan</span>
+                                <input
+                                    type="date"
+                                    className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                    value={form.orderedAt}
+                                    onChange={(e) => setForm((current) => ({ ...current, orderedAt: e.target.value }))}
+                                />
+                            </label>
+
+                            {/* Sell fields */}
+                            {needsSellFields ? (
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <label className="space-y-1.5 block">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Harga Jual (Rp)</span>
+                                        <input
+                                            className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                            inputMode="numeric"
+                                            placeholder="Contoh: 450"
+                                            value={form.sellPrice}
+                                            onChange={(e) => setForm((current) => ({ ...current, sellPrice: e.target.value.replace(/\D/g, '') }))}
+                                        />
+                                    </label>
+                                    <label className="space-y-1.5 block">
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal Jual</span>
+                                        <input
+                                            type="date"
+                                            className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                            value={form.soldAt}
+                                            onChange={(e) => setForm((current) => ({ ...current, soldAt: e.target.value }))}
+                                        />
+                                    </label>
+                                </div>
+                            ) : null}
+
+                            {/* Notes */}
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Catatan Tambahan (Opsional)</span>
+                                <textarea
+                                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm min-h-[96px] bg-slate-50 font-medium resize-none"
+                                    placeholder="Tuliskan catatan terkait pemesanan ini..."
+                                    value={form.notes}
+                                    onChange={(e) => setForm((current) => ({ ...current, notes: e.target.value }))}
+                                />
+                            </label>
+
+                            {/* Submit */}
+                            <button
+                                disabled={saving || stockAccounts.length === 0}
+                                className="w-full rounded-2xl bg-emerald-600 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all hover:bg-emerald-500"
+                            >
+                                {editingId ? <Save size={16} /> : <Plus size={16} />}
+                                {saving ? 'Menyimpan...' : editingId ? 'Simpan Perubahan' : 'Tambah Order IPO'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
-import { fetchStockPositions, type StockPosition } from '../services/stocks';
+import { fetchStockPositions, fetchStockTransactions, type StockPosition } from '../services/stocks';
 import { fetchIpoOrders, type IpoOrder } from '../services/stocksIpo';
+import { downloadBackupBlob } from '../services/backup';
 import { Link } from 'react-router-dom';
 import Spinner from '../components/Spinner';
 import {
@@ -426,6 +427,80 @@ const Investment = () => {
         }
     };
 
+    const [exportingStocks, setExportingStocks] = useState(false);
+
+    const exportStocksExcel = async () => {
+        setExportingStocks(true);
+        try {
+            const XLSX = await import('xlsx');
+            const ownerFilter = selectedOwnerId !== 'ALL' ? selectedOwnerId : undefined;
+            const [positions, stockTxs, ipoOrderList] = await Promise.all([
+                fetchStockPositions({ ownerId: ownerFilter }),
+                fetchStockTransactions({ ownerId: ownerFilter }),
+                fetchIpoOrders({ ownerId: ownerFilter })
+            ]);
+
+            const positionRows = positions.map((p) => ({
+                Ticker: p.ticker,
+                'Total Lot': p.totalLots,
+                'Harga Avg Beli (Rp)': p.avgBuyPrice,
+                'Biaya Avg/Lembar (Rp)': p.avgCostPerShare,
+                'Total Modal (Rp)': p.totalCost,
+                'Realized PnL (Rp)': p.realizedPnl,
+                'Jumlah Beli': p.buyCount,
+                'Jumlah Jual': p.sellCount,
+                'Terakhir Diperdagangkan': new Date(p.lastTradedAt).toLocaleDateString('id-ID'),
+                Rekening: p.accountName || '-'
+            }));
+
+            const txRows = stockTxs.map((tx, i) => ({
+                No: i + 1,
+                Tanggal: new Date(tx.tradedAt).toLocaleDateString('id-ID'),
+                Ticker: tx.ticker,
+                Aksi: tx.side,
+                Lot: tx.lot,
+                'Harga/Lembar (Rp)': tx.pricePerShare,
+                'Nilai Bruto (Rp)': tx.grossValue,
+                'Fee Broker (Rp)': tx.brokerFee,
+                'Fee Levy (Rp)': tx.levyFee,
+                'Nilai Netto (Rp)': tx.netValue,
+                Rekening: tx.account?.name || '-',
+                Catatan: tx.notes || '-'
+            }));
+
+            const ipoRows = ipoOrderList.map((o, i) => ({
+                No: i + 1,
+                'Tanggal Pesan': new Date(o.orderedAt).toLocaleDateString('id-ID'),
+                Ticker: o.ticker,
+                Broker: o.broker,
+                Status: o.status.replace('_', ' '),
+                'Harga IPO (Rp)': o.ipoPrice,
+                'Lot Pesan': o.lotRequested,
+                'Lot Jatah': o.lotAllocated || 0,
+                'Harga Jual (Rp)': o.sellPrice || '-',
+                'Tgl Jatah': o.allottedAt ? new Date(o.allottedAt).toLocaleDateString('id-ID') : '-',
+                'Tgl Jual': o.soldAt ? new Date(o.soldAt).toLocaleDateString('id-ID') : '-',
+                Rekening: o.account?.name || '-',
+                Catatan: o.notes || '-'
+            }));
+
+            const workbook = XLSX.utils.book_new();
+            if (positionRows.length > 0) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(positionRows), 'Posisi Saham');
+            if (txRows.length > 0) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(txRows), 'Transaksi Saham');
+            if (ipoRows.length > 0) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ipoRows), 'Order IPO');
+
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+            const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            downloadBackupBlob(blob, `Portofolio Saham ${dateStr}.xlsx`);
+        } catch (error: any) {
+            alert('Gagal mengekspor data saham: ' + (error?.message || 'Terjadi kesalahan'));
+        } finally {
+            setExportingStocks(false);
+        }
+    };
+
     if (loading) return <Spinner message="Memuat Portofolio..." />;
 
     return (
@@ -449,6 +524,16 @@ const Investment = () => {
                             {owners.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                         </select>
                     </div>
+
+                    <button
+                        onClick={exportStocksExcel}
+                        disabled={exportingStocks}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-10 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50 shrink-0"
+                        title="Export Saham & IPO ke Excel"
+                    >
+                        <Download size={14} />
+                        {exportingStocks ? 'Mengekspor...' : 'Export Saham & IPO'}
+                    </button>
                 </div>
             </header>
 

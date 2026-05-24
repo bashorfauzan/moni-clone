@@ -6,6 +6,8 @@ import {
 import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
+import { fetchStockTransactions } from '../services/stocks';
+import { fetchIpoOrders } from '../services/stocksIpo';
 import api from '../services/api';
 import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
@@ -189,6 +191,7 @@ const Reports = () => {
     });
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
+    const [exportingStocks, setExportingStocks] = useState(false);
     const [restoringDelete, setRestoringDelete] = useState(false);
     const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
     const [lastDeletedTransactions, setLastDeletedTransactions] = useState<TransactionItem[]>([]);
@@ -381,6 +384,64 @@ const Reports = () => {
             }
         } finally {
             setExporting(false);
+        }
+    };
+
+    const exportStocksExcel = async () => {
+        setExportingStocks(true);
+        try {
+            const XLSX = await import('xlsx');
+            const [stockTxs, ipoOrderList] = await Promise.all([
+                fetchStockTransactions(),
+                fetchIpoOrders()
+            ]);
+
+            const txRows = stockTxs.map((tx, i) => ({
+                No: i + 1,
+                Tanggal: new Date(tx.tradedAt).toLocaleDateString('id-ID'),
+                Ticker: tx.ticker,
+                Aksi: tx.side,
+                Lot: tx.lot,
+                'Harga/Lembar (Rp)': tx.pricePerShare,
+                'Nilai Bruto (Rp)': tx.grossValue,
+                'Fee Broker (Rp)': tx.brokerFee,
+                'Fee Levy (Rp)': tx.levyFee,
+                'Nilai Netto (Rp)': tx.netValue,
+                Pemilik: tx.owner?.name || '-',
+                Rekening: tx.account?.name || '-',
+                Catatan: tx.notes || '-'
+            }));
+
+            const ipoRows = ipoOrderList.map((o, i) => ({
+                No: i + 1,
+                'Tanggal Pesan': new Date(o.orderedAt).toLocaleDateString('id-ID'),
+                Ticker: o.ticker,
+                Broker: o.broker,
+                Status: o.status.replace('_', ' '),
+                'Harga IPO (Rp)': o.ipoPrice,
+                'Lot Pesan': o.lotRequested,
+                'Lot Jatah': o.lotAllocated || 0,
+                'Harga Jual (Rp)': o.sellPrice || '-',
+                'Tgl Jatah': o.allottedAt ? new Date(o.allottedAt).toLocaleDateString('id-ID') : '-',
+                'Tgl Jual': o.soldAt ? new Date(o.soldAt).toLocaleDateString('id-ID') : '-',
+                Pemilik: o.owner?.name || '-',
+                Rekening: o.account?.name || '-',
+                Catatan: o.notes || '-'
+            }));
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(txRows.length > 0 ? txRows : [{ Keterangan: 'Belum ada data' }]), 'Transaksi Saham');
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ipoRows.length > 0 ? ipoRows : [{ Keterangan: 'Belum ada data' }]), 'Order IPO');
+
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+            const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            downloadBackupBlob(blob, `Data Saham & IPO ${dateStr}.xlsx`);
+        } catch (error: any) {
+            alert(getErrorMessage(error, 'Gagal export data saham & IPO'));
+        } finally {
+            setExportingStocks(false);
         }
     };
 
@@ -586,14 +647,24 @@ const Reports = () => {
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-400">Total Aset</span>
                         </div>
                     </div>
-                    <button
-                        onClick={exportExcel}
-                        disabled={exporting}
-                        className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-                        title="Download XLS"
-                    >
-                        {exporting ? <span className="text-xs font-bold">...</span> : <Download size={16} />}
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={exportStocksExcel}
+                            disabled={exportingStocks}
+                            className="flex items-center gap-1.5 h-10 px-3 rounded-full border border-slate-200 bg-white text-slate-600 text-xs font-bold shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap"
+                            title="Export Saham & IPO ke Excel"
+                        >
+                            {exportingStocks ? '...' : <><Download size={13} /> Saham & IPO</>}
+                        </button>
+                        <button
+                            onClick={exportExcel}
+                            disabled={exporting}
+                            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
+                            title="Download Laporan Keuangan XLS"
+                        >
+                            {exporting ? <span className="text-xs font-bold">...</span> : <Download size={16} />}
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-1.5 rounded-[20px] border border-slate-200 shadow-sm">
