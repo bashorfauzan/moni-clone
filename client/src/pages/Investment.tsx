@@ -469,27 +469,6 @@ const Investment = () => {
                 </div>
             )}
 
-            <div className="flex gap-3 mb-6">
-                <Link
-                    to="/stocks"
-                    className="flex flex-1 items-center justify-center rounded-[20px] bg-blue-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
-                >
-                    <div className="text-center">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Portofolio</p>
-                        <p className="text-base font-black text-white leading-tight mt-0.5">Saham</p>
-                    </div>
-                </Link>
-                <Link
-                    to="/stocks/ipo"
-                    className="flex flex-1 items-center justify-center rounded-[20px] bg-emerald-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
-                >
-                    <div className="text-center">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200">Pesanan</p>
-                        <p className="text-base font-black text-white leading-tight mt-0.5">IPO</p>
-                    </div>
-                </Link>
-            </div>
-
             {/* Summary Card */}
             <div className="app-hero-card rounded-[28px] p-5 mb-6 relative overflow-hidden shadow-sm">
                 <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-16 -mt-16" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.18 }}></div>
@@ -547,6 +526,27 @@ const Investment = () => {
                     </div>
 
                 </div>
+            </div>
+
+            <div className="flex gap-3 mb-6">
+                <Link
+                    to="/stocks"
+                    className="flex flex-1 items-center justify-center rounded-[20px] bg-blue-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
+                >
+                    <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Portofolio</p>
+                        <p className="text-base font-black text-white leading-tight mt-0.5">Saham</p>
+                    </div>
+                </Link>
+                <Link
+                    to="/stocks/ipo"
+                    className="flex flex-1 items-center justify-center rounded-[20px] bg-emerald-600 p-4 transition-transform hover:-translate-y-0.5 shadow-sm"
+                >
+                    <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200">Pesanan</p>
+                        <p className="text-base font-black text-white leading-tight mt-0.5">IPO</p>
+                    </div>
+                </Link>
             </div>
 
             {/* RDN List */}

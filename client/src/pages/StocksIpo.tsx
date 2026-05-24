@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRightLeft, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 import Spinner from '../components/Spinner';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
-import { createTransaction } from '../services/transactions';
 import {
     createIpoOrder,
     deleteIpoOrder,
@@ -23,7 +22,6 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 }).format(value || 0);
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
-const TOP_UP_SOURCE_ACCOUNT_TYPES = ['Bank', 'E-Wallet'];
 const IPO_STATUS_OPTIONS: IpoOrderStatus[] = ['PESAN', 'JATAH', 'TIDAK_JATAH', 'JUAL'];
 
 const emptyForm = () => ({
@@ -49,23 +47,13 @@ const StocksIpo = () => {
     const [transactions, setTransactions] = useState<IpoTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
-    const [isTopUpOpen, setIsTopUpOpen] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
     const [selectedStatus, setSelectedStatus] = useState<'ALL' | IpoOrderStatus>('ALL');
     const [form, setForm] = useState(emptyForm());
-    const [topUpForm, setTopUpForm] = useState({
-        bankId: '',
-        amount: '',
-        date: new Date().toISOString().slice(0, 10)
-    });
 
     const stockAccounts = useMemo(
         () => accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type)),
-        [accounts]
-    );
-    const topUpSourceAccounts = useMemo(
-        () => accounts.filter((account) => TOP_UP_SOURCE_ACCOUNT_TYPES.includes(account.type)),
         [accounts]
     );
     const selectedAccount = stockAccounts.find((account) => account.id === form.accountId) || null;
@@ -116,15 +104,6 @@ const StocksIpo = () => {
             ownerId: stockAccounts[0]?.ownerId || owners[0]?.id || '',
             accountId: stockAccounts[0]?.id || ''
         });
-    };
-
-    const openTopUpModal = () => {
-        setTopUpForm({
-            bankId: topUpSourceAccounts[0]?.id || '',
-            amount: '',
-            date: new Date().toISOString().slice(0, 10)
-        });
-        setIsTopUpOpen(true);
     };
 
     const handleSubmit = async (event: React.FormEvent) => {
@@ -196,33 +175,6 @@ const StocksIpo = () => {
         }
     };
 
-    const handleTopUpSubmit = async (event: React.FormEvent) => {
-        event.preventDefault();
-        if (!selectedAccount?.id) {
-            alert('Pilih akun sekuritas terlebih dahulu');
-            return;
-        }
-
-        setSaving(true);
-        try {
-            await createTransaction({
-                type: 'TRANSFER',
-                ownerId: selectedAccount.ownerId || form.ownerId,
-                sourceAccountId: topUpForm.bankId,
-                destinationAccountId: selectedAccount.id,
-                amount: Number(topUpForm.amount),
-                description: `Top up sekuritas ${selectedAccount.name}`,
-                date: topUpForm.date
-            });
-            setIsTopUpOpen(false);
-            await loadData();
-        } catch (error: any) {
-            alert(error?.response?.data?.error || error?.message || 'Gagal top up rekening sekuritas');
-        } finally {
-            setSaving(false);
-        }
-    };
-
     const statusCount = IPO_STATUS_OPTIONS.reduce<Record<IpoOrderStatus, number>>((acc, status) => {
         acc[status] = orders.filter((row) => row.status === status).length;
         return acc;
@@ -243,10 +195,9 @@ const StocksIpo = () => {
             </div>
 
             <div className="relative overflow-hidden rounded-[28px] bg-slate-900 p-5 sm:p-6 shadow-xl shadow-blue-900/5">
-                {/* Decorative background glow */}
                 <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-blue-500/25 blur-3xl pointer-events-none"></div>
                 <div className="absolute -bottom-12 -left-12 h-48 w-48 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none"></div>
-                
+
                 <div className="relative z-10 flex justify-between divide-x divide-white/10">
                     {IPO_STATUS_OPTIONS.map((status, index) => (
                         <div key={status} className={`flex flex-1 flex-col justify-center px-1 sm:px-4 text-center sm:text-left ${index === 0 ? 'sm:pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'sm:pr-0' : ''}`}>
@@ -261,22 +212,14 @@ const StocksIpo = () => {
                 <form onSubmit={handleSubmit} className="rounded-3xl border border-slate-200 bg-white p-5 space-y-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h2 className="text-lg font-bold text-slate-900">{editingId ? 'Edit order IPO' : isReservationStage ? 'Reservasi / Top Up IPO' : 'Update status IPO'}</h2>
-                            <p className="text-xs text-slate-500">
-                                {isReservationStage
-                                    ? 'Tahap PESAN diperlakukan sebagai reservasi dana IPO. Field lanjutan baru muncul saat status naik.'
-                                    : 'Perubahan status akan sinkronkan histori transaksi IPO otomatis.'}
-                            </p>
+                            <h2 className="text-lg font-bold text-slate-900">{editingId ? 'Edit order IPO' : isReservationStage ? 'Reservasi IPO' : 'Update status IPO'}</h2>
+                            <p className="text-xs text-slate-500">Pendanaan dilakukan dari menu Home/Rekening agar tidak terjadi pencatatan ganda.</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                            {topUpSourceAccounts.length > 0 ? (
-                                <button type="button" onClick={openTopUpModal} className="inline-flex h-9 items-center gap-2 rounded-2xl bg-emerald-50 px-3 text-[10px] font-bold uppercase tracking-widest text-emerald-700">
-                                    <ArrowRightLeft size={14} />
-                                    Top Up Sekuritas
-                                </button>
-                            ) : null}
-                            {editingId ? <button type="button" onClick={resetForm} className="text-xs font-bold uppercase tracking-widest text-slate-500">Batal</button> : null}
-                        </div>
+                        {editingId ? <button type="button" onClick={resetForm} className="text-xs font-bold uppercase tracking-widest text-slate-500">Batal</button> : null}
+                    </div>
+
+                    <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-700">
+                        Jika perlu tambah dana sekuritas, lakukan dari menu Home/Rekening. Halaman ini hanya untuk order IPO dan status jatahnya.
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -456,53 +399,6 @@ const StocksIpo = () => {
                     </div>
                 </div>
             </div>
-
-            {isTopUpOpen ? (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
-                    <div className="w-full max-w-md rounded-[28px] bg-white p-5 shadow-2xl">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <h2 className="text-lg font-bold text-slate-900">Top Up Sekuritas</h2>
-                                <p className="mt-1 text-xs text-slate-500">Tambah dana rekening IPO langsung dari Bank atau E-Wallet.</p>
-                            </div>
-                            <button type="button" onClick={() => setIsTopUpOpen(false)} className="rounded-xl bg-slate-100 p-2 text-slate-500">
-                                <X size={16} />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleTopUpSubmit} className="mt-5 space-y-4">
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Tujuan</p>
-                                <p className="mt-1 text-sm font-semibold text-slate-900">{selectedAccount?.name || 'Pilih rekening sekuritas'}</p>
-                                <p className="mt-1 text-xs text-slate-500">{selectedOwner?.name || 'Pemilik otomatis mengikuti rekening'}</p>
-                            </div>
-
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Sumber Dana</span>
-                                <select className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" value={topUpForm.bankId} onChange={(e) => setTopUpForm((current) => ({ ...current, bankId: e.target.value }))}>
-                                    <option value="">Pilih bank atau e-wallet</option>
-                                    {topUpSourceAccounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                                </select>
-                            </label>
-
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jumlah Top Up</span>
-                                <input className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" inputMode="numeric" placeholder="Contoh: 1000000" value={topUpForm.amount} onChange={(e) => setTopUpForm((current) => ({ ...current, amount: e.target.value.replace(/\D/g, '') }))} />
-                            </label>
-
-                            <label className="space-y-1 block">
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Tanggal</span>
-                                <input type="date" className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50" value={topUpForm.date} onChange={(e) => setTopUpForm((current) => ({ ...current, date: e.target.value }))} />
-                            </label>
-
-                            <button disabled={saving || !selectedAccount?.id || !topUpForm.bankId} className="w-full rounded-2xl bg-emerald-600 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2">
-                                <ArrowRightLeft size={16} />
-                                {saving ? 'Memproses...' : 'Simpan Top Up'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            ) : null}
         </div>
     );
 };
