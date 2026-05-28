@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+﻿import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 // Transation types hardcoded to avoid Prisma dependency
@@ -44,7 +44,7 @@ const ACCOUNT_HINTS = ['bca', 'bsya', 'bni', 'wondr', 'bri', 'brimo', 'mandiri',
 const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
-const TRANSFER_OUT_KEYWORDS = ['telah dikirim', 'dikirim ke', 'dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'pindah ke', 'ditransfer ke', 'pembayaran'];
+const TRANSFER_OUT_KEYWORDS = ['telah dikirim', 'dikirim ke', 'dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'transfer dana ke rekening', 'pindah ke', 'ditransfer ke', 'pembayaran'];
 const TRANSFER_IN_KEYWORDS = ['diterima', 'menerima', 'transfer masuk', 'dana masuk', 'masuk dari', 'ditransfer dari'];
 const STRONG_INCOME_KEYWORDS = ['masuk', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'penerimaan', 'pemasukan', 'setor tunai'];
 const STRONG_EXPENSE_KEYWORDS = ['bayar', 'membayar', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya admin', 'biaya layanan'];
@@ -340,7 +340,8 @@ const needsDestinationReview = (text: string) => {
         'sesama bca syariah',
         'ke rekening sesama',
         'antar rekening',
-        'transfer dana ke rekening sesama'
+        'transfer dana ke rekening sesama',
+        'grup bca'
     ]);
 };
 

@@ -41,15 +41,15 @@ const emptyForm = () => ({
 });
 
 // Status badge styling map
-const STATUS_STYLE: Record<IpoOrderStatus, { badge: string; dot: string; label: string }> = {
-    PESAN:      { badge: 'bg-blue-50 text-blue-600 border border-blue-100',    dot: 'bg-blue-500',    label: 'Pesan' },
-    JATAH:      { badge: 'bg-emerald-50 text-emerald-600 border border-emerald-100', dot: 'bg-emerald-500', label: 'Jatah' },
-    TIDAK_JATAH:{ badge: 'bg-rose-50 text-rose-500 border border-rose-100',    dot: 'bg-rose-500',    label: 'Tidak Jatah' },
-    JUAL:       { badge: 'bg-amber-50 text-amber-600 border border-amber-100', dot: 'bg-amber-500',   label: 'Jual' },
+const STATUS_STYLE: Record<IpoOrderStatus, { badge: string; dot: string; label: string; border: string }> = {
+    PESAN:      { badge: 'bg-blue-50 text-blue-600 border-blue-100',    dot: 'bg-blue-500',    label: 'Pesan',       border: 'border-l-blue-500' },
+    JATAH:      { badge: 'bg-emerald-50 text-emerald-600 border-emerald-100', dot: 'bg-emerald-500', label: 'Jatah',       border: 'border-l-emerald-500' },
+    TIDAK_JATAH:{ badge: 'bg-rose-50 text-rose-500 border-rose-100',    dot: 'bg-rose-500',    label: 'Tidak Jatah', border: 'border-l-rose-400' },
+    JUAL:       { badge: 'bg-amber-50 text-amber-600 border-amber-100', dot: 'bg-amber-500',   label: 'Jual',        border: 'border-l-amber-500' },
 };
 
 const StocksIpo = () => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [owners, setOwners] = useState<Owner[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [orders, setOrders] = useState<IpoOrder[]>([]);
@@ -144,6 +144,10 @@ const StocksIpo = () => {
                 await createIpoOrder(payload);
             }
 
+            if (searchParams.get('newOrder')) {
+                setSearchParams({}, { replace: true });
+            }
+
             resetForm();
             await loadData();
             setIsFormOpen(false);
@@ -208,7 +212,6 @@ const StocksIpo = () => {
                         <ArrowLeft size={14} /> Kembali ke Saham
                     </Link>
                     <h1 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">Pemesanan IPO</h1>
-                    <p className="mt-1 text-sm text-slate-500">Catat order IPO dan histori jatah secara terpusat.</p>
                 </div>
                 <button
                     onClick={() => {
@@ -231,17 +234,18 @@ const StocksIpo = () => {
                     {IPO_STATUS_OPTIONS.map((status, index) => (
                         <div
                             key={status}
-                            className={`flex flex-col justify-center px-2 sm:px-5 ${index === 0 ? 'pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'pr-0' : ''}`}
+                            className={`flex flex-col justify-center min-w-0 px-2 sm:px-5 ${index === 0 ? 'pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'pr-0' : ''}`}
                         >
                             <div className="flex items-center gap-1.5 mb-1.5">
                                 <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_STYLE[status].dot}`} />
-                                <p className="text-[8px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 leading-none">
+                                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 leading-none truncate">
                                     {STATUS_STYLE[status].label}
                                 </p>
                             </div>
-                            <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none">
+                            <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
                                 {statusCount[status]}
                             </p>
+                            <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">order</p>
                         </div>
                     ))}
                 </div>
@@ -249,6 +253,28 @@ const StocksIpo = () => {
 
             {/* Filter Bar */}
             <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-4 space-y-3">
+                {/* Owner pill segments */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Pemilik:</span>
+                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
+                        <button
+                            onClick={() => setSelectedOwnerId('ALL')}
+                            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                        >
+                            Semua
+                        </button>
+                        {owners.map((owner) => (
+                            <button
+                                key={owner.id}
+                                onClick={() => setSelectedOwnerId(owner.id)}
+                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === owner.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                {owner.name}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
                 {/* Status pill segments */}
                 <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Status:</span>
@@ -270,18 +296,6 @@ const StocksIpo = () => {
                         ))}
                     </div>
                 </div>
-
-                {/* Owner dropdown */}
-                <select
-                    className="rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium cursor-pointer w-full sm:w-64"
-                    value={selectedOwnerId}
-                    onChange={(e) => setSelectedOwnerId(e.target.value)}
-                >
-                    <option value="ALL">Semua Pemilik</option>
-                    {owners.map((owner) => (
-                        <option key={owner.id} value={owner.id}>{owner.name}</option>
-                    ))}
-                </select>
             </div>
 
             {/* Main Grid */}
@@ -318,27 +332,24 @@ const StocksIpo = () => {
                             return (
                                 <div
                                     key={row.id}
-                                    className="rounded-2xl border border-slate-100 bg-white/80 p-4 hover:shadow-md hover:border-blue-100 transition-all space-y-3"
+                                    className={`rounded-2xl border bg-white/80 p-4 hover:shadow-md transition-all space-y-3 border-l-4 ${style.border} border-slate-100 hover:border-blue-100`}
                                 >
                                     {/* Top row: ticker + status + actions */}
-                                    <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-lg font-black text-slate-900 tracking-tight">{row.ticker}</span>
-                                                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest ${style.badge}`}>
+                                                <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${style.badge}`}>
                                                     {style.label}
                                                 </span>
                                                 {pnl !== null && (
-                                                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${pnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${pnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
                                                         {formatCurrency(pnl)}
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="mt-1 text-xs text-slate-500 font-medium">
+                                            <p className="mt-0.5 text-xs text-slate-500 font-medium">
                                                 {row.broker} &middot; {row.lotRequested} pesan / {row.lotAllocated} jatah &middot; {formatCurrency(row.ipoPrice)}
-                                            </p>
-                                            <p className="mt-0.5 text-[11px] text-slate-400">
-                                                {row.account?.name} &middot; Order {String(row.orderedAt).slice(0, 10)}
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-1.5 shrink-0">
@@ -359,10 +370,13 @@ const StocksIpo = () => {
                                             </button>
                                         </div>
                                     </div>
-
+                                    <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                        <span className="text-slate-500">{row.account?.name}</span>
+                                        <span className="text-slate-500">Order {String(row.orderedAt).slice(0, 10)}</span>
+                                    </div>
                                     {/* Sub-transactions */}
                                     {row.transactions && row.transactions.length > 0 && (
-                                        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-1.5">
+                                        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-3 space-y-1.5 mt-2">
                                             {row.transactions.map((tx) => (
                                                 <div key={tx.id} className="flex items-center justify-between text-xs">
                                                     <span className="font-bold text-slate-700">{tx.side} {tx.lot} lot</span>
@@ -398,28 +412,27 @@ const StocksIpo = () => {
                                     <Wallet size={20} className="text-slate-400" />
                                 </div>
                                 <p className="text-sm font-bold text-slate-500">Belum ada histori transaksi</p>
-                                <p className="text-xs text-slate-400">Transaksi IPO terkait akan tampil di sini.</p>
+                                <p className="text-xs text-slate-400">Transaksi saham hasil IPO akan tampil di sini.</p>
                             </div>
-                        ) : transactions.map((tx) => (
+                        ) : transactions.map((row) => (
                             <div
-                                key={tx.id}
+                                key={row.id}
                                 className="rounded-2xl border border-slate-100 bg-white/80 p-4 hover:shadow-md hover:border-blue-100 transition-all"
                             >
                                 <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-base font-black text-slate-900">{tx.ticker}</span>
-                                            <span className="rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200">
-                                                {tx.side}
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className="text-base font-black text-slate-900">{row.ticker}</span>
+                                            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${row.side === 'BUY' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                                {row.side}
                                             </span>
                                         </div>
                                         <p className="mt-1 text-xs text-slate-500 font-medium">
-                                            {tx.lot} lot &middot; {tx.ipoOrder?.broker || tx.account?.name}
+                                            {row.lot} lot &middot; {row.ipoOrder?.broker || row.account?.name}
                                         </p>
-                                    </div>
-                                    <div className="text-right shrink-0">
-                                        <p className="text-sm font-black text-slate-900">{formatCurrency(tx.netValue)}</p>
-                                        <p className="mt-0.5 text-[11px] text-slate-400">{String(tx.tradedAt).slice(0, 10)}</p>
+                                        <p className="mt-0.5 text-[11px] text-slate-400">
+                                            {String(row.tradedAt).slice(0, 10)} &middot; Netto {formatCurrency(row.netValue)}
+                                        </p>
                                     </div>
                                 </div>
                             </div>

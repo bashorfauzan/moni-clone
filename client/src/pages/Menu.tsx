@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
     User,
     Wallet,
@@ -866,19 +866,7 @@ const MenuPage = () => {
 
             if (mode === 'manual') {
                 alert('Backup berhasil dibuat. File disimpan ke folder unduhan perangkat/browser.');
-                exportedAt: payload?.meta?.exportedAt ?? null,
-                includeNotifications: payload?.meta?.includeNotifications,
-                counts: {
-                    owners: Array.isArray(data.owners) ? data.owners.length : 0,
-                    accounts: Array.isArray(data.accounts) ? data.accounts.length : 0,
-                    activities: Array.isArray(data.activities) ? data.activities.length : 0,
-                    budgets: Array.isArray(data.budgets) ? data.budgets.length : 0,
-                    targets: Array.isArray(data.targets) ? data.targets.length : 0,
-                    notifications: Array.isArray(data.notifications) ? data.notifications.length : 0,
-                    transactions: Array.isArray(data.transactions) ? data.transactions.length : 0
-                },
-                payload
-            });
+        }
         } catch (error: any) {
             const message = getErrorMessage(error, 'Gagal membaca file backup.');
             setRestoreError(message);

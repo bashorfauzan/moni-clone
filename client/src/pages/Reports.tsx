@@ -1,15 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as ChartTooltip } from 'recharts';
 import {
-    PieChart, Pie, Cell, ResponsiveContainer,
-    BarChart, Bar, XAxis, Tooltip as ChartTooltip, AreaChart, Area
-} from 'recharts';
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
+    ChevronRight, ChevronLeft, ChevronDown,
+    Download, Pencil, Trash2, CheckCircle2, Info,
+} from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
-import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
+import {
+    createTransaction, fetchTransactions,
+    type TransactionItem, bulkDeleteTransactions,
+} from '../services/transactions';
 import { fetchStockTransactions } from '../services/stocks';
 import { fetchIpoOrders } from '../services/stocksIpo';
-import api from '../services/api';
-import { fetchMasterMeta } from '../services/masterData';
 import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
@@ -18,1034 +19,765 @@ import {
     isInvestmentLiquidation,
     isInvestmentTransfer,
     isTopUpLikeTransfer,
-    normalizeTransactionType
+    normalizeTransactionType,
 } from '../lib/transactionRules';
 
-const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
-type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
-
-const toDateKey = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+// ─── Category icon map ────────────────────────────────────────────────────────
+const ICON_MAP: Record<string, { emoji: string; color: string; bg: string }> = {
+    'Transfer':               { emoji: '⇄',  color: '#f97316', bg: '#fff7ed' },
+    'Withdraw':               { emoji: '↑',  color: '#9333ea', bg: '#faf5ff' },
+    'Income':                 { emoji: '↓',  color: '#16a34a', bg: '#f0fdf4' },
+    'Expense':                { emoji: '⬆',  color: '#dc2626', bg: '#fef2f2' },
+    'Lainnya':                { emoji: '···', color: '#6366f1', bg: '#eef2ff' },
+    'Gaji UMM':               { emoji: '💼', color: '#0d9488', bg: '#f0fdfa' },
+    'THR':                    { emoji: '🎁', color: '#d97706', bg: '#fffbeb' },
+    'Tabungan':               { emoji: '🏦', color: '#2563eb', bg: '#eff6ff' },
+    'Tabungan Kaltim':        { emoji: '🏦', color: '#2563eb', bg: '#eff6ff' },
+    'Zakat':                  { emoji: '☾',  color: '#16a34a', bg: '#f0fdf4' },
+    'Sangu':                  { emoji: '💝', color: '#ec4899', bg: '#fdf2f8' },
+    'Setoran Investasi':      { emoji: '📈', color: '#7c3aed', bg: '#f5f3ff' },
+    'Pencairan Investasi':    { emoji: '📉', color: '#be185d', bg: '#fdf2f8' },
+    'Pengantaran':            { emoji: '🚗', color: '#0284c7', bg: '#f0f9ff' },
+    'Gaji 13':                { emoji: '💰', color: '#15803d', bg: '#f0fdf4' },
+    'Buka Tabungan':          { emoji: '🏦', color: '#2563eb', bg: '#eff6ff' },
+    'km genap ke-1':          { emoji: '📋', color: '#64748b', bg: '#f8fafc' },
+    'Lab':                    { emoji: '🔬', color: '#0891b2', bg: '#ecfeff' },
+    'Penelitian tahap 2':     { emoji: '🔬', color: '#0891b2', bg: '#ecfeff' },
+    'Hardiknas':              { emoji: '🎓', color: '#7c3aed', bg: '#f5f3ff' },
+    'HR Wali':                { emoji: '👨‍🏫', color: '#d97706', bg: '#fffbeb' },
+    'HR koreksi UAS':         { emoji: '📝', color: '#64748b', bg: '#f8fafc' },
 };
 
-const getReportTransactionKind = (tx: TransactionItem) => {
-    if (isInvestmentTransfer(tx)) return 'INVESTMENT_TOP_UP';
+const getIconConf = (name: string) =>
+    ICON_MAP[name] ?? {
+        emoji: name ? name.charAt(0).toUpperCase() : '?',
+        color: '#2563eb',
+        bg: '#eff6ff',
+    };
+
+// ─── Color palettes ───────────────────────────────────────────────────────────
+const INCOME_COLORS  = ['#f5a623', '#2563eb', '#10b981', '#8b5cf6', '#06b6d4', '#ec4899', '#f59e0b'];
+const EXPENSE_COLORS = ['#c0392b', '#9b59b6', '#e67e22', '#e91e63', '#1565c0', '#2e7d32', '#ad1457'];
+
+// ─── Transaction kind helpers ─────────────────────────────────────────────────
+const getKind = (tx: TransactionItem) => {
+    if (isInvestmentTransfer(tx))    return 'INVESTMENT_TOP_UP';
     if (isInvestmentLiquidation(tx)) return 'INVESTMENT_LIQUIDATION';
-    if (isTopUpLikeTransfer(tx)) return 'TOP_UP';
+    if (isTopUpLikeTransfer(tx))     return 'TOP_UP';
     return normalizeTransactionType(tx.type) || tx.type;
 };
 
-const getWealthDelta = (tx: TransactionItem) => {
-    const kind = getReportTransactionKind(tx);
-    if (kind === 'INCOME') return tx.amount;
-    if (kind === 'EXPENSE') return -tx.amount;
-    return 0;
+type ModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
+
+const getModalType = (tx: TransactionItem): ModalType => {
+    if (isInvestmentTransfer(tx) || isInvestmentLiquidation(tx)) return 'INVESTMENT';
+    const k = normalizeTransactionType(tx.type);
+    if (k === 'INCOME')   return 'INCOME';
+    if (k === 'EXPENSE')  return 'EXPENSE';
+    if (k === 'TRANSFER') return 'TRANSFER';
+    return 'INCOME';
 };
 
-const getLiquidCashDelta = (tx: TransactionItem) => {
-    const kind = getReportTransactionKind(tx);
-    if (kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION') return tx.amount;
-    if (kind === 'EXPENSE' || kind === 'INVESTMENT_TOP_UP') return -tx.amount;
-    return 0;
+const getAmountColor = (tx: TransactionItem) => {
+    const k = getKind(tx);
+    if (k === 'INCOME' || k === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
+    if (k === 'EXPENSE' || k === 'INVESTMENT_TOP_UP')     return 'text-rose-600';
+    return 'text-slate-700';
 };
 
-const getPeriodBounds = (currentDate: Date, viewMode: 'MONTHLY' | 'YEARLY') => {
-    const today = new Date();
-    const periodStart = viewMode === 'MONTHLY'
-        ? new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        : new Date(currentDate.getFullYear(), 0, 1);
-    const periodEnd = viewMode === 'MONTHLY'
-        ? new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-        : new Date(currentDate.getFullYear(), 11, 31);
-    const cappedEnd = periodEnd > today ? today : periodEnd;
-    return { periodStart, cappedEnd };
-};
-
-const estimateEndingBalanceForPeriod = ({
-    transactions,
-    currentBalance,
-    currentDate,
-    viewMode,
-    getDelta,
-}: {
+// ─── Category aggregation ─────────────────────────────────────────────────────
+type CatEntry = {
+    name: string;
+    amount: number;
+    percent: number;
     transactions: TransactionItem[];
-    currentBalance: number;
-    currentDate: Date;
-    viewMode: 'MONTHLY' | 'YEARLY';
-    getDelta: (tx: TransactionItem) => number;
-}) => {
-    const { periodStart, cappedEnd } = getPeriodBounds(currentDate, viewMode);
-    const deltaByDate = new Map<string, number>();
-
-    transactions.forEach((tx) => {
-        const delta = getDelta(tx);
-        if (!delta) return;
-        const key = toDateKey(new Date(tx.date));
-        deltaByDate.set(key, (deltaByDate.get(key) || 0) + delta);
-    });
-
-    let reverseBalance = currentBalance;
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
-
-    while (cursor >= periodStart) {
-        if (toDateKey(cursor) === toDateKey(cappedEnd)) {
-            return reverseBalance;
-        }
-        reverseBalance -= deltaByDate.get(toDateKey(cursor)) || 0;
-        cursor.setDate(cursor.getDate() - 1);
-    }
-
-    return 0;
 };
 
-const buildWealthHistoryData = ({
-    transactions,
-    totalWealth,
-    currentDate,
-    viewMode
-}: {
-    transactions: TransactionItem[];
-    totalWealth: number;
-    currentDate: Date;
-    viewMode: 'MONTHLY' | 'YEARLY';
-}) => {
-    const { periodStart, cappedEnd } = getPeriodBounds(currentDate, viewMode);
-    const today = new Date();
-
-    const deltaByDate = new Map<string, number>();
-    transactions.forEach((tx) => {
-        const delta = getWealthDelta(tx);
-        if (!delta) return;
-        const key = toDateKey(new Date(tx.date));
-        deltaByDate.set(key, (deltaByDate.get(key) || 0) + delta);
+const aggregate = (txs: TransactionItem[], keyFn: (tx: TransactionItem) => string, total: number): CatEntry[] => {
+    const map: Record<string, { transactions: TransactionItem[]; amount: number }> = {};
+    txs.forEach(tx => {
+        const k = keyFn(tx) || 'Lainnya';
+        if (!map[k]) map[k] = { transactions: [], amount: 0 };
+        map[k].transactions.push(tx);
+        map[k].amount += tx.amount;
     });
-
-    const dailySnapshot = new Map<string, number>();
-    let reverseWealth = totalWealth;
-    const cursor = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    while (cursor >= periodStart) {
-        const key = toDateKey(cursor);
-        if (cursor <= cappedEnd) {
-            dailySnapshot.set(key, reverseWealth);
-        }
-        reverseWealth -= deltaByDate.get(key) || 0;
-        cursor.setDate(cursor.getDate() - 1);
-    }
-
-    if (viewMode === 'MONTHLY') {
-        const rows: Array<{ label: string; wealth: number }> = [];
-        const dayCursor = new Date(periodStart);
-        while (dayCursor <= cappedEnd) {
-            const key = toDateKey(dayCursor);
-            rows.push({
-                label: dayCursor.getDate().toString(),
-                wealth: dailySnapshot.get(key) ?? 0
-            });
-            dayCursor.setDate(dayCursor.getDate() + 1);
-        }
-        return rows;
-    }
-
-    const rows: Array<{ label: string; wealth: number }> = [];
-    const monthCursor = new Date(periodStart.getFullYear(), 0, 1);
-    while (monthCursor <= cappedEnd) {
-        const monthEnd = new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 0);
-        const snapshotDate = monthEnd > cappedEnd ? cappedEnd : monthEnd;
-        rows.push({
-            label: snapshotDate.toLocaleDateString('id-ID', { month: 'short' }),
-            wealth: dailySnapshot.get(toDateKey(snapshotDate)) ?? 0
-        });
-        monthCursor.setMonth(monthCursor.getMonth() + 1);
-    }
-    return rows;
+    return Object.entries(map)
+        .map(([name, { transactions, amount }]) => ({
+            name,
+            amount,
+            percent: total > 0 ? Math.round((amount / total) * 100) : 0,
+            transactions,
+        }))
+        .sort((a, b) => b.amount - a.amount);
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 const Reports = () => {
     const { openEditModal } = useTransaction();
     const { verifySecurity } = useSecurity();
-    const [viewMode, setViewMode] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
-    const [currentDate, setCurrentDate] = useState(new Date());
-    const [txPage, setTxPage] = useState(1);
-    const TX_PER_PAGE = 10;
-    const [data, setData] = useState<any>({
-        totalIncome: 0,
-        totalExpense: 0,
-        totalVolume: 0,
-        totalWealth: 0,
-        zakatAmount: 0,
-        snapshotData: {
-            investmentTopUp: 0,
-            investmentLiquidation: 0,
-            endingLiquidCash: 0,
-            netCashFlow: 0
-        },
-        categoryData: [],
-        trendData: [],
-        wealthHistoryData: [],
-        transactionsData: [],
-    });
-    const [loading, setLoading] = useState(true);
-    const [exporting, setExporting] = useState(false);
-    const [exportingStocks, setExportingStocks] = useState(false);
-    const [restoringDelete, setRestoringDelete] = useState(false);
-    const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
-    const [lastDeletedTransactions, setLastDeletedTransactions] = useState<TransactionItem[]>([]);
-    const longPressTimerRef = useRef<number | null>(null);
-    const longPressTriggeredRef = useRef(false);
 
-    const toggleSelectTx = (id: string) => {
-        const next = new Set(selectedTx);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
-        setSelectedTx(next);
+    // Period
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    // Remote data
+    const [allTransactions, setAllTransactions] = useState<TransactionItem[]>([]);
+    const [loading, setLoading]   = useState(true);
+    const [exporting, setExporting] = useState(false);
+
+    // Selection / deletion
+    const [selectedTx, setSelectedTx]               = useState<Set<string>>(new Set());
+    const [lastDeleted, setLastDeleted]              = useState<TransactionItem[]>([]);
+    const [restoringDelete, setRestoringDelete]      = useState(false);
+    const longPressTimerRef                          = useRef<number | null>(null);
+    const longPressTriggeredRef                      = useRef(false);
+
+    // Cashflow UI navigation
+    const [cashflowTab, setCashflowTab] = useState<'INCOME' | 'EXPENSE'>('INCOME');
+    const [drillLevel,  setDrillLevel]  = useState(0);   // 0=L1 list, 1=L2 list, 2=L3 txns
+    const [selectedL1,  setSelectedL1]  = useState<string | null>(null);
+    const [selectedL2,  setSelectedL2]  = useState<string | null>(null);
+
+    // ─ Month options (last 24 months) ─
+    const monthOptions = useMemo(() => {
+        const opts: { value: string; label: string }[] = [];
+        const now = new Date();
+        for (let i = 0; i <= 23; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            opts.push({
+                value: `${d.getFullYear()}-${d.getMonth()}`,
+                label: d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }),
+            });
+        }
+        return opts;
+    }, []);
+
+    // ─ Format helpers ─
+    const fmtCurrency = (val: number) =>
+        new Intl.NumberFormat('id-ID', {
+            style: 'currency', currency: 'IDR',
+            minimumFractionDigits: 0, maximumFractionDigits: 0,
+        }).format(val).replace('Rp', 'Rp ');
+
+    const fmtNumber = (val: number) =>
+        new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
+
+    // ─ Fetch ─
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            const txs = await fetchTransactions({ validated: true });
+            const filtered = (txs as TransactionItem[]).filter(tx => {
+                const d = new Date(tx.date);
+                return d.getMonth() === currentDate.getMonth()
+                    && d.getFullYear() === currentDate.getFullYear();
+            });
+            setAllTransactions(
+                filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+            );
+        } catch (e) {
+            console.error('Error fetching reports:', e);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const clearLongPressTimer = () => {
+    useEffect(() => { void fetchData(); }, [currentDate]);
+
+    useEffect(() => {
+        const h = () => void fetchData();
+        window.addEventListener('nova:data-changed', h);
+        return () => {
+            window.removeEventListener('nova:data-changed', h);
+            clearLongPress();
+        };
+    }, [currentDate]);
+
+    // ─ Long-press ─
+    const clearLongPress = () => {
         if (longPressTimerRef.current) {
             window.clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
         }
     };
 
-    const startLongPressSelection = (id: string) => {
-        clearLongPressTimer();
+    const startLongPress = (id: string) => {
+        clearLongPress();
         longPressTriggeredRef.current = false;
         longPressTimerRef.current = window.setTimeout(() => {
             longPressTriggeredRef.current = true;
-            setSelectedTx((prev) => {
-                const next = new Set(prev);
-                next.add(id);
-                return next;
-            });
+            setSelectedTx(prev => { const n = new Set(prev); n.add(id); return n; });
         }, 450);
     };
 
-    const cancelLongPressSelection = () => {
-        clearLongPressTimer();
-    };
-
-    const handleTransactionPress = (tx: TransactionItem) => {
-        if (longPressTriggeredRef.current) {
-            longPressTriggeredRef.current = false;
-            return;
-        }
-
+    const handleTxPress = (tx: TransactionItem) => {
+        if (longPressTriggeredRef.current) { longPressTriggeredRef.current = false; return; }
         if (selectedTx.size > 0) {
-            toggleSelectTx(tx.id);
+            setSelectedTx(prev => {
+                const n = new Set(prev);
+                n.has(tx.id) ? n.delete(tx.id) : n.add(tx.id);
+                return n;
+            });
             return;
         }
-
-        openEditModal(tx.id, getEditableModalType(tx), {
+        openEditModal(tx.id, getModalType(tx), {
             amount: tx.amount,
             description: tx.description || tx.activity?.name,
             ownerId: tx.ownerId,
             activityId: tx.activityId,
             sourceAccountId: tx.sourceAccountId,
-            destinationAccountId: tx.destinationAccountId
+            destinationAccountId: tx.destinationAccountId,
         });
     };
 
+    // ─ Bulk delete ─
     const handleBulkDelete = async () => {
-        if (selectedTx.size === 0) return;
-        const authorized = await verifySecurity(`Hapus ${selectedTx.size} Transaksi`);
-        if (!authorized) return;
-
+        if (!selectedTx.size) return;
+        const ok = await verifySecurity(`Hapus ${selectedTx.size} Transaksi`);
+        if (!ok) return;
         try {
-            const deletedSnapshot = data.transactionsData.filter((tx: TransactionItem) => selectedTx.has(tx.id));
+            const snap = allTransactions.filter(tx => selectedTx.has(tx.id));
             await bulkDeleteTransactions(Array.from(selectedTx));
-            setLastDeletedTransactions(deletedSnapshot);
+            setLastDeleted(snap);
             setSelectedTx(new Set());
-            await fetchReportData();
+            await fetchData();
             window.dispatchEvent(new Event('nova:data-changed'));
-        } catch (error: any) {
-            alert(getErrorMessage(error, 'Gagal menghapus transaksi terpilih'));
+        } catch (err: any) {
+            alert(getErrorMessage(err, 'Gagal menghapus transaksi'));
         }
     };
 
-    const handleUndoLastDelete = async () => {
-        if (lastDeletedTransactions.length === 0 || restoringDelete) return;
-
+    const handleUndoDelete = async () => {
+        if (!lastDeleted.length || restoringDelete) return;
         setRestoringDelete(true);
         try {
-            const sortedTransactions = [...lastDeletedTransactions].sort((a, b) =>
-                new Date(a.date).getTime() - new Date(b.date).getTime()
+            const sorted = [...lastDeleted].sort(
+                (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
             );
-
-            for (const tx of sortedTransactions) {
-                const restoredType = normalizeTransactionType(tx.type) || 'INCOME';
+            for (const tx of sorted) {
                 await createTransaction({
                     amount: tx.amount,
                     description: tx.description || tx.activity?.name,
                     ownerId: tx.ownerId || '',
-                    type: restoredType,
+                    type: normalizeTransactionType(tx.type) || 'INCOME',
                     sourceAccountId: tx.sourceAccountId,
                     destinationAccountId: tx.destinationAccountId,
                     activityId: tx.activityId,
-                    date: tx.date
+                    date: tx.date,
                 });
             }
-
-            setLastDeletedTransactions([]);
-            await fetchReportData();
+            setLastDeleted([]);
+            await fetchData();
             window.dispatchEvent(new Event('nova:data-changed'));
-        } catch (error: any) {
-            alert(getErrorMessage(error, 'Gagal membatalkan hapus transaksi terakhir'));
+        } catch (err: any) {
+            alert(getErrorMessage(err, 'Gagal memulihkan transaksi'));
         } finally {
             setRestoringDelete(false);
         }
     };
 
+    // ─ Export ─
     const exportExcel = async () => {
         setExporting(true);
         try {
-            const res = await api.get('/master/export-excel', { responseType: 'blob' });
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
-            const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            downloadBackupBlob(blob, `Catatan Keuangan Pribadi ${dateStr}.xlsx`);
-        } catch (error: any) {
-            try {
-                const XLSX = await import('xlsx');
-                const now = new Date();
-                const dateStr = `${now.getFullYear()}-${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}.${String(now.getMinutes()).padStart(2, '0')}`;
-                const workbook = XLSX.utils.book_new();
+            const XLSX = await import('xlsx');
+            const now   = new Date();
+            const label = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}.${String(now.getMinutes()).padStart(2,'0')}`;
 
-                const summaryRows = [
-                    { Metrik: 'Periode', Nilai: periodLabel },
-                    { Metrik: 'Pemasukan', Nilai: data.totalIncome },
-                    { Metrik: 'Pengeluaran', Nilai: data.totalExpense },
-                    { Metrik: 'Transfer ke Investasi', Nilai: data.snapshotData?.investmentTopUp || 0 },
-                    { Metrik: 'Pencairan Investasi', Nilai: data.snapshotData?.investmentLiquidation || 0 },
-                    { Metrik: 'Sisa Kas Akhir Periode', Nilai: data.snapshotData?.endingLiquidCash || 0 },
-                    { Metrik: 'Arus Kas Bersih', Nilai: data.snapshotData?.netCashFlow || 0 },
-                    { Metrik: 'Perputaran', Nilai: data.totalVolume },
-                    { Metrik: 'Total Kekayaan', Nilai: data.totalWealth },
-                    { Metrik: 'Estimasi Zakat', Nilai: data.zakatAmount }
-                ];
+            const [stockTxs, ipoOrders] = await Promise.all([fetchStockTransactions(), fetchIpoOrders()]);
+            const wb = XLSX.utils.book_new();
 
-                const wealthRows = (data.wealthHistoryData || []).map((row: any) => ({
-                    Periode: row.label,
-                    'Kekayaan Tercatat': row.wealth
-                }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+                allTransactions.map((tx, i) => ({
+                    No: i + 1,
+                    Tanggal: new Date(tx.date).toLocaleDateString('id-ID'),
+                    Tipe: tx.type,
+                    Pemilik: tx.owner?.name || '-',
+                    Kategori: tx.activity?.name || '-',
+                    Nominal: tx.amount,
+                    Catatan: tx.description || '-',
+                }))
+            ), 'Transaksi');
 
-                const categoryRows = (data.categoryData || []).map((row: any) => ({
-                    Kategori: row.name,
-                    Nilai: row.value
-                }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+                stockTxs.length > 0
+                    ? stockTxs.map((tx, i) => ({
+                        No: i + 1, Tanggal: new Date(tx.tradedAt).toLocaleDateString('id-ID'),
+                        Ticker: tx.ticker, Aksi: tx.side, Lot: tx.lot,
+                        'Harga/Lembar': tx.pricePerShare, 'Nilai Bruto': tx.grossValue,
+                        'Fee Broker': tx.brokerFee, 'Nilai Netto': tx.netValue,
+                    }))
+                    : [{ Keterangan: 'Belum ada data' }]
+            ), 'Saham');
 
-                const trendRows = (data.trendData || []).map((row: any) => ({
-                    Label: row.label,
-                    Pemasukan: row.Pemasukan,
-                    Pengeluaran: row.Pengeluaran
-                }));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+                ipoOrders.length > 0
+                    ? ipoOrders.map((o, i) => ({
+                        No: i + 1, Ticker: o.ticker, Status: o.status,
+                        'Harga IPO': o.ipoPrice, 'Lot Pesan': o.lotRequested,
+                        'Lot Jatah': o.lotAllocated,
+                    }))
+                    : [{ Keterangan: 'Belum ada data' }]
+            ), 'IPO');
 
-                const transactionRows = (data.transactionsData || []).map((tx: TransactionItem, index: number) => {
-                    const kind = getReportTransactionKind(tx);
-                    const typeLabel = kind === 'INCOME'
-                        ? 'Pemasukan'
-                        : kind === 'EXPENSE'
-                            ? 'Pengeluaran'
-                            : kind === 'TOP_UP'
-                                ? 'Top Up'
-                                : kind === 'INVESTMENT_TOP_UP'
-                                    ? 'Setoran Investasi'
-                                    : kind === 'INVESTMENT_LIQUIDATION'
-                                        ? 'Pencairan Investasi'
-                                        : 'Transfer';
-
-                    return {
-                        No: index + 1,
-                        Tanggal: new Date(tx.date).toLocaleDateString('id-ID'),
-                        Tipe: typeLabel,
-                        Pemilik: tx.owner?.name || '-',
-                        Kategori: tx.activity?.name || tx.description || '-',
-                        Nominal: tx.amount,
-                        Catatan: tx.description || '-'
-                    };
-                });
-
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summaryRows), 'Ringkasan');
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(wealthRows), 'Riwayat Saldo');
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(categoryRows), 'Komposisi');
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(trendRows), 'Tren');
-                XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(transactionRows), 'Transaksi');
-
-                const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
-                const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-                downloadBackupBlob(blob, `Catatan Keuangan Pribadi ${dateStr}.xlsx`);
-                alert('Export backend gagal, jadi file Excel dibuat langsung dari data laporan yang sedang tampil.');
-            } catch (fallbackError: any) {
-                alert(getErrorMessage(fallbackError, getErrorMessage(error, 'Gagal export data')));
-            }
+            const out  = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+            const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            downloadBackupBlob(blob, `Cashflow ${label}.xlsx`);
+        } catch (err: any) {
+            alert(getErrorMessage(err, 'Gagal export data'));
         } finally {
             setExporting(false);
         }
     };
 
-    const exportStocksExcel = async () => {
-        setExportingStocks(true);
-        try {
-            const XLSX = await import('xlsx');
-            const [stockTxs, ipoOrderList] = await Promise.all([
-                fetchStockTransactions(),
-                fetchIpoOrders()
-            ]);
-
-            const txRows = stockTxs.map((tx, i) => ({
-                No: i + 1,
-                Tanggal: new Date(tx.tradedAt).toLocaleDateString('id-ID'),
-                Ticker: tx.ticker,
-                Aksi: tx.side,
-                Lot: tx.lot,
-                'Harga/Lembar (Rp)': tx.pricePerShare,
-                'Nilai Bruto (Rp)': tx.grossValue,
-                'Fee Broker (Rp)': tx.brokerFee,
-                'Fee Levy (Rp)': tx.levyFee,
-                'Nilai Netto (Rp)': tx.netValue,
-                Pemilik: tx.owner?.name || '-',
-                Rekening: tx.account?.name || '-',
-                Catatan: tx.notes || '-'
-            }));
-
-            const ipoRows = ipoOrderList.map((o, i) => ({
-                No: i + 1,
-                'Tanggal Pesan': new Date(o.orderedAt).toLocaleDateString('id-ID'),
-                Ticker: o.ticker,
-                Broker: o.broker,
-                Status: o.status.replace('_', ' '),
-                'Harga IPO (Rp)': o.ipoPrice,
-                'Lot Pesan': o.lotRequested,
-                'Lot Jatah': o.lotAllocated || 0,
-                'Harga Jual (Rp)': o.sellPrice || '-',
-                'Tgl Jatah': o.allottedAt ? new Date(o.allottedAt).toLocaleDateString('id-ID') : '-',
-                'Tgl Jual': o.soldAt ? new Date(o.soldAt).toLocaleDateString('id-ID') : '-',
-                Pemilik: o.owner?.name || '-',
-                Rekening: o.account?.name || '-',
-                Catatan: o.notes || '-'
-            }));
-
-            const workbook = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(txRows.length > 0 ? txRows : [{ Keterangan: 'Belum ada data' }]), 'Transaksi Saham');
-            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ipoRows.length > 0 ? ipoRows : [{ Keterangan: 'Belum ada data' }]), 'Order IPO');
-
-            const now = new Date();
-            const dateStr = now.toISOString().slice(0, 10);
-            const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
-            const blob = new Blob([output], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            downloadBackupBlob(blob, `Data Saham & IPO ${dateStr}.xlsx`);
-        } catch (error: any) {
-            alert(getErrorMessage(error, 'Gagal export data saham & IPO'));
-        } finally {
-            setExportingStocks(false);
-        }
-    };
-
-    const fetchReportData = async () => {
-        setLoading(true);
-        try {
-            const [transactions, meta] = await Promise.all([
-                fetchTransactions({ validated: true }),
-                fetchMasterMeta()
-            ]);
-
-            const liquidBalance = (meta.accounts || [])
-                .filter((acc: any) => acc.type === 'Bank' || acc.type === 'E-Wallet')
-                .reduce((sum: number, acc: any) => sum + Number(acc.balance || 0), 0);
-
-            const totalRdnAssets = (meta.accounts || [])
-                .filter((account: any) => account.type === 'RDN' || account.type === 'Sekuritas')
-                .reduce((sum: number, account: any) => sum + Math.abs(Number(account.balance || 0)), 0);
-
-            const filtered = transactions.filter((tx: any) => {
-                const txDate = new Date(tx.date);
-                if (viewMode === 'MONTHLY') {
-                    return txDate.getMonth() === currentDate.getMonth()
-                        && txDate.getFullYear() === currentDate.getFullYear();
-                }
-                return txDate.getFullYear() === currentDate.getFullYear();
-            });
-
-            const totalIncome = filtered
-                .filter((tx: TransactionItem) => {
-                    const kind = getReportTransactionKind(tx);
-                    return kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_IN';
-                })
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const totalExpense = filtered
-                .filter((tx: TransactionItem) => {
-                    const kind = getReportTransactionKind(tx);
-                    return kind === 'EXPENSE' || kind === 'INVESTMENT_OUT';
-                })
-                .reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const investmentTopUp = filtered
-                .filter((tx: TransactionItem) => getReportTransactionKind(tx) === 'INVESTMENT_TOP_UP')
-                .reduce((acc: number, tx: TransactionItem) => acc + tx.amount, 0);
-            const investmentLiquidation = filtered
-                .filter((tx: TransactionItem) => getReportTransactionKind(tx) === 'INVESTMENT_LIQUIDATION')
-                .reduce((acc: number, tx: TransactionItem) => acc + tx.amount, 0);
-            const zakatAmount = totalIncome * 0.025;
-
-            const totalWealth = liquidBalance + totalRdnAssets;
-            const totalVolume = filtered.reduce((acc: number, tx: any) => acc + tx.amount, 0);
-            const endingLiquidCash = estimateEndingBalanceForPeriod({
-                transactions,
-                currentBalance: liquidBalance,
-                currentDate,
-                viewMode,
-                getDelta: getLiquidCashDelta
-            });
-            const netCashFlow = totalIncome - totalExpense - investmentTopUp;
-            const wealthHistoryData = buildWealthHistoryData({
-                transactions,
-                totalWealth,
-                currentDate,
-                viewMode
-            });
-
-            const catMap: any = {};
-            filtered.forEach((tx: TransactionItem) => {
-                let name = tx.activity?.name;
-                if (!name) {
-                    const kind = getReportTransactionKind(tx);
-                    if (kind === 'INCOME') name = 'Pemasukan';
-                    else if (kind === 'TRANSFER') name = 'Transfer';
-                    else if (kind === 'TOP_UP') name = 'Top Up';
-                    else if (kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_IN') name = 'Setoran Investasi';
-                    else if (kind === 'INVESTMENT_LIQUIDATION' || kind === 'INVESTMENT_OUT') name = 'Pencairan Investasi';
-                    else name = 'Lainnya';
-                }
-                catMap[name] = (catMap[name] || 0) + tx.amount;
-            });
-            const categoryData = Object.keys(catMap).map(name => ({
-                name,
-                value: catMap[name]
-            })).sort((a, b) => b.value - a.value);
-
-            const trendMap: any = {};
-            filtered.forEach((tx: TransactionItem) => {
-                const date = new Date(tx.date);
-                const label = viewMode === 'MONTHLY' ? date.getDate().toString() : (date.getMonth() + 1).toString();
-                if (!trendMap[label]) {
-                    trendMap[label] = { label: viewMode === 'MONTHLY' ? `Tgl ${label}` : `Bln ${label}`, Pemasukan: 0, Pengeluaran: 0 };
-                }
-                const kind = getReportTransactionKind(tx);
-                if (kind === 'INCOME' || kind === 'INVESTMENT_IN' || kind === 'INVESTMENT_LIQUIDATION') {
-                    trendMap[label].Pemasukan += tx.amount;
-                } else if (kind === 'EXPENSE' || kind === 'INVESTMENT_OUT') {
-                    trendMap[label].Pengeluaran += tx.amount;
-                }
-            });
-            const trendData = Object.values(trendMap).sort((a: any, b: any) => parseInt(a.label.split(' ')[1]) - parseInt(b.label.split(' ')[1]));
-
-            setData({
-                totalIncome,
-                totalExpense,
-                totalVolume,
-                totalWealth,
-                zakatAmount,
-                snapshotData: {
-                    investmentTopUp,
-                    investmentLiquidation,
-                    endingLiquidCash,
-                    netCashFlow
-                },
-                categoryData,
-                trendData,
-                wealthHistoryData,
-                transactionsData: filtered.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            });
-            setTxPage(1);
-        } catch (error) {
-            console.error('Error fetching reports:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        void fetchReportData();
-        setSelectedTx(new Set());
-    }, [viewMode, currentDate]);
-
-    useEffect(() => {
-        const handleDataChanged = () => void fetchReportData();
-        window.addEventListener('nova:data-changed', handleDataChanged);
-        return () => {
-            window.removeEventListener('nova:data-changed', handleDataChanged);
-            clearLongPressTimer();
-        };
-    }, [viewMode, currentDate]);
-
-    const formatCurrency = (val: number) =>
-        new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 })
-            .format(val).replace('Rp', 'Rp ');
-
-    const changeDate = (offset: number) => {
-        const next = new Date(currentDate);
-        if (viewMode === 'MONTHLY') next.setMonth(next.getMonth() + offset);
-        else next.setFullYear(next.getFullYear() + offset);
-        setCurrentDate(next);
-    };
-
-    const getEditableModalType = (tx: TransactionItem): TransactionModalType => {
-        if (isInvestmentTransfer(tx) || isInvestmentLiquidation(tx)) return 'INVESTMENT';
-        if (normalizeTransactionType(tx.type) === 'INCOME') return 'INCOME';
-        if (normalizeTransactionType(tx.type) === 'EXPENSE') return 'EXPENSE';
-        if (normalizeTransactionType(tx.type) === 'TRANSFER') return 'TRANSFER';
-        return 'INCOME';
-    };
-
-    const getTypeBadge = (tx: TransactionItem) => {
-        const kind = getReportTransactionKind(tx);
-        if (kind === 'INCOME') return { label: 'Masuk', cls: 'bg-emerald-50 text-emerald-700' };
-        if (kind === 'EXPENSE') return { label: 'Keluar', cls: 'bg-rose-50 text-rose-700' };
-        if (kind === 'TRANSFER') return { label: 'Transfer', cls: 'bg-blue-50 text-blue-700' };
-        if (kind === 'TOP_UP') return { label: 'Top Up', cls: 'bg-fuchsia-50 text-fuchsia-700' };
-        if (kind === 'INVESTMENT_TOP_UP') return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
-        if (kind === 'INVESTMENT_LIQUIDATION') return { label: 'Cair', cls: 'bg-violet-50 text-violet-700' };
-        return { label: 'Invest', cls: 'bg-amber-50 text-amber-700' };
-    };
-
-    const getAmountColor = (tx: TransactionItem) => {
-        const kind = getReportTransactionKind(tx);
-        if (kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
-        if (kind === 'EXPENSE' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
-        if (kind === 'TOP_UP') return 'text-fuchsia-600';
-        return 'text-slate-900';
-    };
-
-    const getOriginBadge = (tx: TransactionItem) => (
-        tx.notificationInboxId
-            ? { label: 'Notif', cls: 'bg-blue-50 text-blue-600' }
-            : { label: 'Manual', cls: 'bg-slate-100 text-slate-500' }
+    // ─ Cashflow computed data ─────────────────────────────────────────────────
+    const tabTxs = useMemo(() =>
+        allTransactions.filter(tx => {
+            const k = getKind(tx);
+            return cashflowTab === 'INCOME'
+                ? ['INCOME', 'INVESTMENT_LIQUIDATION', 'INVESTMENT_IN'].includes(k)
+                : ['EXPENSE', 'INVESTMENT_TOP_UP', 'INVESTMENT_OUT', 'TRANSFER', 'TOP_UP'].includes(k);
+        }),
+        [allTransactions, cashflowTab]
     );
 
-    const periodLabel = viewMode === 'MONTHLY'
-        ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()
-        : currentDate.getFullYear().toString();
+    const tabTotal = useMemo(() =>
+        tabTxs.reduce((s, tx) => s + tx.amount, 0),
+        [tabTxs]
+    );
 
-    const visibleTx = data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE);
-    const totalPages = Math.max(1, Math.ceil(data.transactionsData.length / TX_PER_PAGE));
+    const l1Cats = useMemo(() =>
+        aggregate(tabTxs, tx => tx.activity?.name || 'Lainnya', tabTotal),
+        [tabTxs, tabTotal]
+    );
 
-    if (loading) return <Spinner message="Menganalisis Laporan..." />;
+    const l1Selected = useMemo(() =>
+        l1Cats.find(c => c.name === selectedL1),
+        [l1Cats, selectedL1]
+    );
 
-    return (
-        <div className="mx-auto w-full max-w-4xl space-y-6 px-5 pb-32 pt-6">
+    const l2Cats = useMemo(() => {
+        if (!l1Selected) return [] as CatEntry[];
+        return aggregate(l1Selected.transactions, tx => tx.description || 'Lainnya', l1Selected.amount);
+    }, [l1Selected]);
 
-            {/* ─── Header & Controls ─── */}
-            <header className="space-y-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Laporan</h1>
-                        <div className="mt-1 flex items-center gap-2">
-                            <p className="text-sm font-bold text-slate-500">{formatCurrency(data.totalWealth)}</p>
-                            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-400">Total Aset</span>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={exportStocksExcel}
-                            disabled={exportingStocks}
-                            className="flex items-center gap-1.5 h-10 px-3 rounded-full border border-slate-200 bg-white text-slate-600 text-xs font-bold shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50 whitespace-nowrap"
-                            title="Export Saham & IPO ke Excel"
-                        >
-                            {exportingStocks ? '...' : <><Download size={13} /> Saham & IPO</>}
-                        </button>
-                        <button
-                            onClick={exportExcel}
-                            disabled={exporting}
-                            className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50"
-                            title="Download Laporan Keuangan XLS"
-                        >
-                            {exporting ? <span className="text-xs font-bold">...</span> : <Download size={16} />}
-                        </button>
-                    </div>
+    const l2Selected = useMemo(() =>
+        l2Cats.find(c => c.name === selectedL2),
+        [l2Cats, selectedL2]
+    );
+
+    const l3Txs = useMemo(() =>
+        (l2Selected?.transactions ?? [])
+            .slice()
+            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+        [l2Selected]
+    );
+
+    // Donut
+    const donutData = useMemo(() => {
+        if (drillLevel === 0) return l1Cats.map(c => ({ name: c.name, value: c.amount }));
+        if (drillLevel === 1) return l2Cats.map(c => ({ name: c.name, value: c.amount }));
+        return [];
+    }, [drillLevel, l1Cats, l2Cats]);
+
+    const donutLabel  = drillLevel === 0
+        ? (cashflowTab === 'INCOME' ? 'Total\nPemasukan' : 'Total\nPengeluaran')
+        : (selectedL1 ?? '');
+
+    const donutAmount = drillLevel === 0 ? tabTotal : (l1Selected?.amount ?? 0);
+    const donutColors = cashflowTab === 'INCOME' ? INCOME_COLORS : EXPENSE_COLORS;
+
+    // ─ Navigation ─
+    const goBack = () => {
+        if (drillLevel === 2) { setDrillLevel(1); setSelectedL2(null); }
+        else if (drillLevel === 1) { setDrillLevel(0); setSelectedL1(null); }
+    };
+
+    const handleMonthChange = (val: string) => {
+        const [y, m] = val.split('-').map(Number);
+        setCurrentDate(new Date(y, m, 1));
+        setDrillLevel(0); setSelectedL1(null); setSelectedL2(null);
+    };
+
+    const switchTab = (tab: 'INCOME' | 'EXPENSE') => {
+        setCashflowTab(tab);
+        setDrillLevel(0); setSelectedL1(null); setSelectedL2(null);
+    };
+
+    if (loading) return <Spinner message="Menganalisis Cashflow..." />;
+
+    // ─── Category row renderer ────────────────────────────────────────────────
+    const CategoryRow = ({
+        name, amount, percent, colorIndex, onClick,
+    }: {
+        name: string; amount: number; percent: number; colorIndex: number; onClick: () => void;
+    }) => {
+        const ic = getIconConf(name);
+        return (
+            <button
+                onClick={onClick}
+                className="flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left transition-colors hover:bg-slate-50/80 active:bg-slate-100"
+            >
+                <div
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-bold"
+                    style={{ backgroundColor: ic.bg, color: ic.color }}
+                >
+                    {ic.emoji}
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold" style={{ color: '#1a3d6b' }}>{name}</p>
+                    <p className="mt-0.5 text-sm text-slate-500">
+                        IDR {fmtNumber(amount)}
+                        {percent > 0 && (
+                            <span
+                                className="ml-2 font-bold"
+                                style={{ color: donutColors[colorIndex % donutColors.length] }}
+                            >
+                                {percent}%
+                            </span>
+                        )}
+                    </p>
+                </div>
+                <ChevronRight size={18} className="shrink-0 text-slate-300" />
+            </button>
+        );
+    };
+
+    // ─── Sub-header (drill-down breadcrumb) ───────────────────────────────────
+    const DrillHeader = ({ label }: { label: string }) => {
+        const ic = getIconConf(label);
+        return (
+            <div className="flex items-center gap-3 border-b border-slate-200 px-5 py-3.5">
+                <button onClick={goBack} className="shrink-0 text-slate-400 hover:text-slate-600">
+                    <ChevronLeft size={20} />
+                </button>
+                <div
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm"
+                    style={{ backgroundColor: ic.bg, color: ic.color }}
+                >
+                    {ic.emoji}
+                </div>
+                <p className="truncate text-sm font-bold" style={{ color: '#1a3d6b' }}>{label}</p>
+            </div>
+        );
+    };
+
+    // ─── Transaction row (L3) ─────────────────────────────────────────────────
+    const TxRow = ({ tx }: { tx: TransactionItem }) => {
+        const isSelected = selectedTx.has(tx.id);
+        const d       = new Date(tx.date);
+        const dateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return (
+            <div
+                className={`flex items-start gap-3 border-b border-slate-100 px-5 py-4 transition-colors ${
+                    isSelected ? 'bg-rose-50 shadow-[inset_4px_0_0_#dc2626]' : 'hover:bg-slate-50'
+                }`}
+                onTouchStart={() => startLongPress(tx.id)}
+                onTouchEnd={clearLongPress}
+                onTouchCancel={clearLongPress}
+                onMouseDown={() => startLongPress(tx.id)}
+                onMouseUp={clearLongPress}
+                onMouseLeave={clearLongPress}
+                onClick={() => handleTxPress(tx)}
+            >
+                {/* Date */}
+                <div className="w-9 shrink-0 pt-0.5 text-center">
+                    <p className="text-[11px] font-bold text-slate-400">{dateStr}</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-1.5 rounded-[20px] border border-slate-200 shadow-sm">
-                    <div className="flex w-full sm:w-auto bg-slate-100 rounded-2xl p-1">
-                        {(['MONTHLY', 'YEARLY'] as const).map(mode => (
+                {/* Info */}
+                <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold" style={{ color: '#1a3d6b' }}>
+                        {tx.description || tx.activity?.name || 'Transaksi'}
+                    </p>
+                    <p className={`mt-0.5 text-sm font-bold ${getAmountColor(tx)}`}>
+                        IDR {fmtNumber(tx.amount)}
+                    </p>
+                    {tx.owner?.name && (
+                        <p className="mt-0.5 truncate text-[11px] text-slate-400">
+                            {tx.owner.name}
+                        </p>
+                    )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex shrink-0 items-center gap-1.5">
+                    {isSelected && <CheckCircle2 size={16} className="text-rose-600" />}
+                    <button
+                        onClick={e => {
+                            e.stopPropagation();
+                            openEditModal(tx.id, getModalType(tx), {
+                                amount: tx.amount,
+                                description: tx.description || tx.activity?.name,
+                                ownerId: tx.ownerId,
+                                activityId: tx.activityId,
+                                sourceAccountId: tx.sourceAccountId,
+                                destinationAccountId: tx.destinationAccountId,
+                            });
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 text-blue-600 transition-colors hover:bg-blue-100"
+                    >
+                        <Pencil size={12} />
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // ─── Main render ──────────────────────────────────────────────────────────
+    return (
+        <div className="mx-auto w-full max-w-2xl pb-32">
+
+            {/* ═══ Blue header ═══ */}
+            <div style={{ backgroundColor: '#1a3d6b' }}>
+                {/* Top bar */}
+                <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                    {drillLevel > 0
+                        ? (
                             <button
-                                key={mode}
-                                onClick={() => setViewMode(mode)}
-                                className={`flex-1 sm:flex-none rounded-xl px-5 py-2 text-[10px] font-bold uppercase tracking-widest transition-all ${viewMode === mode ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                onClick={goBack}
+                                className="flex h-8 w-8 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white"
                             >
-                                {mode === 'MONTHLY' ? 'Bulan' : 'Tahun'}
+                                <ChevronLeft size={20} />
+                            </button>
+                        )
+                        : <div className="w-8" />
+                    }
+                    <h1 className="text-base font-bold tracking-wide text-white">Cashflow</h1>
+                    <button
+                        onClick={exportExcel}
+                        disabled={exporting}
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20 disabled:opacity-40"
+                        title="Export Excel"
+                    >
+                        {exporting
+                            ? <span className="text-[10px] font-black">...</span>
+                            : <Download size={15} />
+                        }
+                    </button>
+                </div>
+
+                {/* Tab bar — only at root level */}
+                {drillLevel === 0 && (
+                    <div className="flex px-2 pb-0">
+                        {(['EXPENSE', 'INCOME'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                onClick={() => switchTab(tab)}
+                                className={`flex-1 border-b-2 py-3 text-sm font-semibold transition-all ${
+                                    cashflowTab === tab
+                                        ? 'border-white text-white'
+                                        : 'border-transparent text-white/40 hover:text-white/65'
+                                }`}
+                            >
+                                {tab === 'EXPENSE' ? 'Pengeluaran' : 'Pemasukan'}
                             </button>
                         ))}
                     </div>
-                    <div className="flex items-center justify-between w-full sm:w-auto px-2">
-                        <button onClick={() => changeDate(-1)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-colors">
-                            <ChevronLeft size={18} />
-                        </button>
-                        <span className="text-[11px] font-bold uppercase tracking-widest text-slate-800 min-w-[100px] text-center">{periodLabel}</span>
-                        <button onClick={() => changeDate(1)} className="p-2 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-700 transition-colors">
-                            <ChevronRight size={18} />
-                        </button>
-                    </div>
-                </div>
-            </header>
-
-            {/* ─── Summary Card ─── */}
-            <div className="app-hero-card rounded-3xl p-4 sm:p-5 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
-                <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-20 -mt-20" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.25 }}></div>
-                <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.15 }}></div>
-                <div className="relative z-10">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70 mb-3">Ringkasan Arus Kas</p>
-
-                    <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                        {[
-                            { label: 'Pemasukan', value: data.totalIncome, icon: '↘', color: 'text-emerald-300', iconBg: 'bg-emerald-400/20 text-emerald-300' },
-                            { label: 'Pengeluaran', value: data.totalExpense, icon: '↗', color: 'text-rose-300', iconBg: 'bg-rose-400/20 text-rose-300' },
-                            { label: 'Perputaran', value: data.totalVolume, icon: '⇄', color: 'text-sky-300', iconBg: 'bg-sky-400/20 text-sky-300' },
-                            { label: 'Est. Zakat', value: data.zakatAmount, icon: '🙏', color: 'text-amber-300', iconBg: 'bg-amber-400/20 text-amber-300' },
-                            { label: 'Ke Investasi', value: data.snapshotData.investmentTopUp, icon: '↑', color: 'text-orange-200', iconBg: 'bg-orange-300/20 text-orange-200' },
-                            { label: 'Sisa Kas', value: data.snapshotData.endingLiquidCash, icon: '◌', color: 'text-cyan-200', iconBg: 'bg-cyan-300/20 text-cyan-200' },
-                        ].map(stat => (
-                            <div
-                                key={stat.label}
-                                className="rounded-2xl border border-white/10 bg-white/8 backdrop-blur-md px-3 py-2.5 flex flex-col justify-center min-w-0"
-                            >
-                                <div className="flex items-center gap-1.5 mb-1">
-                                    <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center ${stat.iconBg}`}>
-                                        <span className="text-[7px]">{stat.icon}</span>
-                                    </div>
-                                    <p className="text-[9px] font-bold uppercase tracking-wider text-white/70 truncate">{stat.label}</p>
-                                </div>
-                                <p className={`text-sm font-bold truncate ${stat.color}`}>
-                                    {formatCurrency(stat.value).replace('Rp', 'Rp ')}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="mt-3 flex flex-col gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-[10px] text-white/75">
-                        <div className="flex justify-between items-center">
-                            <span>Dana investasi kembali:</span>
-                            <span className="font-bold text-white">{formatCurrency(data.snapshotData.investmentLiquidation)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span>Arus kas bersih:</span>
-                            <span className={`font-bold ${data.snapshotData.netCashFlow >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(data.snapshotData.netCashFlow)}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
-                <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Riwayat Saldo</h2>
-                        <p className="mt-1 text-[11px] text-slate-500">
-                            {viewMode === 'MONTHLY' ? 'setiap hari' : 'setiap bulan'}.
-                        </p>
-                    </div>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">
-                        {data.wealthHistoryData.length} titik
-                    </span>
-                </div>
-                {data.wealthHistoryData.length > 0 ? (
-                    <div className="h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data.wealthHistoryData}>
-                                <defs>
-                                    <linearGradient id="wealthFill" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#2563eb" stopOpacity={0.24} />
-                                        <stop offset="95%" stopColor="#2563eb" stopOpacity={0.02} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
-                                <Area
-                                    type="monotone"
-                                    dataKey="wealth"
-                                    stroke="#2563eb"
-                                    strokeWidth={3}
-                                    fill="url(#wealthFill)"
-                                />
-                                <ChartTooltip
-                                    formatter={(value) => formatCurrency(Number(value || 0))}
-                                    contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '11px' }}
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
-                        <p className="text-sm font-bold text-slate-600">Belum ada riwayat saldo untuk periode ini</p>
-                    </div>
                 )}
             </div>
 
-            {/* ─── Category Donut ─── */}
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Komposisi Transaksi</h2>
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.categoryData.length} kategori</span>
+            {/* ═══ White body ═══ */}
+            <div className="bg-white min-h-screen">
+
+                {/* Month dropdown */}
+                <div className="px-4 pt-4 pb-2">
+                    <div className="relative">
+                        <select
+                            value={`${currentDate.getFullYear()}-${currentDate.getMonth()}`}
+                            onChange={e => handleMonthChange(e.target.value)}
+                            className="w-full cursor-pointer appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm font-semibold text-slate-700 transition-colors focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                            {monthOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                            ))}
+                        </select>
+                        <ChevronDown
+                            size={16}
+                            className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        />
+                    </div>
                 </div>
 
-                {data.categoryData.length > 0 ? (
-                    <div className="grid gap-5 lg:grid-cols-[260px_1fr] lg:items-center">
-                        <div className="relative h-52">
+                {/* Donut chart (L0 & L1 only) */}
+                {drillLevel < 2 && (
+                    donutData.length > 0 ? (
+                        <div className="relative mx-auto my-2 h-56 w-56">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
-                                    <Pie data={data.categoryData} cx="50%" cy="50%" innerRadius="52%" outerRadius="76%" paddingAngle={4} dataKey="value">
-                                        {data.categoryData.map((_: unknown, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                    <Pie
+                                        data={donutData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius="60%"
+                                        outerRadius="84%"
+                                        paddingAngle={donutData.length > 1 ? 2 : 0}
+                                        dataKey="value"
+                                        startAngle={90}
+                                        endAngle={-270}
+                                        strokeWidth={0}
+                                    >
+                                        {donutData.map((_, i) => (
+                                            <Cell key={i} fill={donutColors[i % donutColors.length]} />
+                                        ))}
                                     </Pie>
-                                    <ChartTooltip contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px' }} />
+                                    <ChartTooltip
+                                        formatter={(val) => fmtCurrency(Number(val))}
+                                        contentStyle={{
+                                            borderRadius: '12px',
+                                            fontSize: '12px',
+                                            border: '1px solid #e2e8f0',
+                                        }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
-                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</span>
-                                <span className="mt-1 max-w-[8rem] break-words text-sm font-black text-slate-900">{formatCurrency(data.totalVolume)}</span>
+                            {/* Center label */}
+                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
+                                <p className="whitespace-pre-line text-[11px] leading-snug text-slate-400">
+                                    {donutLabel}
+                                </p>
+                                <p className="mt-2 text-[11px] font-semibold text-slate-400">IDR</p>
+                                <p className="text-lg font-black leading-tight text-slate-900">
+                                    {fmtNumber(donutAmount)}
+                                </p>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            {data.categoryData.map((item: { name: string; value: number }, i: number) => (
-                                <div key={i} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
-                                    <div className="flex min-w-0 items-center gap-2.5">
-                                        <div className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                        <p className="truncate text-sm font-semibold text-slate-700">{item.name}</p>
-                                    </div>
-                                    <p className="shrink-0 text-sm font-black text-slate-900">{formatCurrency(item.value)}</p>
-                                </div>
-                            ))}
+                    ) : (
+                        <div className="flex h-56 items-center justify-center">
+                            <p className="text-sm text-slate-400">Tidak ada data periode ini</p>
                         </div>
-                    </div>
-                ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
-                        <p className="text-sm font-bold text-slate-600">Belum ada transaksi pada periode ini</p>
-                    </div>
+                    )
                 )}
-            </div>
 
-            {/* ─── Trend Bar Chart ─── */}
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm p-5">
-                <div className="mb-4 flex flex-wrap items-center gap-4">
-                    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Tren Arus Kas</h2>
-                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600"><span className="h-2 w-2 rounded-full bg-emerald-500" />Pemasukan</span>
-                    <span className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-600"><span className="h-2 w-2 rounded-full bg-rose-500" />Pengeluaran</span>
+                {/* Info banner */}
+                <div className="mx-4 mb-3 flex items-center gap-3 rounded-2xl bg-blue-50 px-4 py-3">
+                    <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                        style={{ backgroundColor: '#1a3d6b' }}
+                    >
+                        <Info size={14} className="text-white" />
+                    </div>
+                    <p className="text-xs font-semibold" style={{ color: '#1a3d6b' }}>
+                        Tentang Catatan Keuangan — Cashflow
+                    </p>
                 </div>
-                {data.trendData.length > 0 ? (
-                    <div className="h-44 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.trendData} barGap={4}>
-                                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
-                                <Bar dataKey="Pemasukan" fill="#10b981" radius={[5, 5, 0, 0]} barSize={viewMode === 'MONTHLY' ? 8 : 18} />
-                                <Bar dataKey="Pengeluaran" fill="#f43f5e" radius={[5, 5, 0, 0]} barSize={viewMode === 'MONTHLY' ? 8 : 18} />
-                                <ChartTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '11px' }} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
-                        <p className="text-sm font-bold text-slate-600">Belum ada data tren untuk ditampilkan</p>
+
+                {/* Undo delete banner */}
+                {lastDeleted.length > 0 && (
+                    <div className="mx-4 mb-3 flex flex-col gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs font-semibold text-amber-800">
+                            {lastDeleted.length} transaksi siap dipulihkan
+                        </p>
+                        <button
+                            onClick={handleUndoDelete}
+                            disabled={restoringDelete}
+                            className="rounded-full bg-amber-500 px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-600 disabled:opacity-60"
+                        >
+                            {restoringDelete ? 'Memulihkan...' : 'Undo Hapus'}
+                        </button>
                     </div>
                 )}
-            </div>
 
-            {/* ─── Transactions List ─── */}
-            <div className="rounded-2xl bg-white border border-slate-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Semua Transaksi</h2>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.transactionsData.length} data</span>
-                        {selectedTx.size > 0 && (
-                            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-600">
-                                {selectedTx.size} dipilih
-                            </span>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        {selectedTx.size > 0 && (
+                {/* Bulk delete bar */}
+                {selectedTx.size > 0 && (
+                    <div className="sticky top-0 z-10 mx-4 mb-3 flex items-center justify-between rounded-2xl bg-rose-600 px-4 py-2.5 shadow-lg">
+                        <span className="text-xs font-bold text-white">{selectedTx.size} dipilih</span>
+                        <div className="flex gap-2">
                             <button
                                 onClick={() => setSelectedTx(new Set())}
-                                className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500 shadow-sm transition-colors hover:bg-slate-200"
+                                className="rounded-full bg-white/20 px-3 py-1 text-[10px] font-bold text-white hover:bg-white/30"
                             >
                                 Batal
                             </button>
-                        )}
-                        {selectedTx.size > 0 && (
                             <button
                                 onClick={handleBulkDelete}
-                                className="flex items-center gap-1.5 rounded-full bg-rose-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-rose-600 shadow-sm transition-colors hover:bg-rose-100"
+                                className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50"
                             >
-                                <Trash2 size={13} /> Hapus ({selectedTx.size})
+                                <Trash2 size={11} /> Hapus ({selectedTx.size})
                             </button>
-                        )}
-                    </div>
-                </div>
-
-                {lastDeletedTransactions.length > 0 && (
-                    <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                            <p className="text-sm font-bold text-amber-900">
-                                {lastDeletedTransactions.length} transaksi terakhir siap dipulihkan
-                            </p>
-                            <p className="mt-1 text-[11px] text-amber-700">
-                                Undo akan membuat ulang transaksi yang baru saja dihapus, lengkap dengan tanggal dan rekeningnya.
-                            </p>
                         </div>
-                        <button
-                            onClick={handleUndoLastDelete}
-                            disabled={restoringDelete}
-                            className="rounded-full bg-amber-500 px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {restoringDelete ? 'Memulihkan...' : 'Undo Hapus Terakhir'}
-                        </button>
                     </div>
                 )}
 
-                {data.transactionsData.length === 0 ? (
-                    <div className="py-10 text-center">
-                        <p className="text-sm text-slate-500">Tidak ada transaksi pada periode ini</p>
+                {/* ════ Level 0 — L1 Category list ════ */}
+                {drillLevel === 0 && (
+                    <div>
+                        <div className="border-b border-slate-200 px-5 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                Kategori
+                            </p>
+                        </div>
+                        {l1Cats.length === 0 ? (
+                            <div className="py-20 text-center">
+                                <p className="text-sm text-slate-400">Tidak ada transaksi pada periode ini</p>
+                            </div>
+                        ) : (
+                            l1Cats.map((cat, i) => (
+                                <CategoryRow
+                                    key={cat.name}
+                                    name={cat.name}
+                                    amount={cat.amount}
+                                    percent={cat.percent}
+                                    colorIndex={i}
+                                    onClick={() => { setSelectedL1(cat.name); setDrillLevel(1); }}
+                                />
+                            ))
+                        )}
                     </div>
-                ) : (
-                    <>
-                        {/* Mobile card list */}
-                        <div className="divide-y divide-slate-100 lg:hidden">
-                            <div className="px-4 py-3 bg-slate-50/50">
-                                <p className="text-[11px] font-bold text-slate-500">
-                                    Tahan transaksi untuk mulai memilih, lalu tap transaksi lain untuk menambah pilihan.
+                )}
+
+                {/* ════ Level 1 — L2 Sub-category list ════ */}
+                {drillLevel === 1 && (
+                    <div>
+                        <DrillHeader label={selectedL1 ?? ''} />
+                        {l2Cats.length === 0 ? (
+                            <div className="py-20 text-center">
+                                <p className="text-sm text-slate-400">Tidak ada sub-kategori</p>
+                            </div>
+                        ) : (
+                            l2Cats.map((cat, i) => (
+                                <CategoryRow
+                                    key={cat.name}
+                                    name={cat.name}
+                                    amount={cat.amount}
+                                    percent={cat.percent}
+                                    colorIndex={i}
+                                    onClick={() => { setSelectedL2(cat.name); setDrillLevel(2); }}
+                                />
+                            ))
+                        )}
+                    </div>
+                )}
+
+                {/* ════ Level 2 — L3 Transaction list ════ */}
+                {drillLevel === 2 && (
+                    <div>
+                        <DrillHeader label={selectedL2 ?? ''} />
+
+                        {/* Selected L2 summary */}
+                        {l2Selected && (
+                            <div className="border-b border-slate-100 px-5 py-3">
+                                <p className="text-xs text-slate-500">
+                                    Total:{' '}
+                                    <span className="font-bold text-slate-800">
+                                        {fmtCurrency(l2Selected.amount)}
+                                    </span>
+                                    <span className="ml-2 text-[11px] font-semibold" style={{ color: donutColors[0] }}>
+                                        {l2Selected.percent}% dari {selectedL1}
+                                    </span>
                                 </p>
                             </div>
-                            {visibleTx.map((tx: TransactionItem) => {
-                                const badge = getTypeBadge(tx);
-                                const origin = getOriginBadge(tx);
-                                const isSelected = selectedTx.has(tx.id);
-                                return (
-                                    <div
-                                        key={tx.id}
-                                        className={`relative flex items-center gap-2.5 px-4 py-3.5 transition-colors ${
-                                            isSelected
-                                                ? 'bg-rose-100/95 shadow-[inset_5px_0_0_#e11d48,inset_0_0_0_1px_rgba(225,29,72,0.18)]'
-                                                : 'hover:bg-slate-50/60'
-                                        }`}
-                                        onTouchStart={() => startLongPressSelection(tx.id)}
-                                        onTouchEnd={cancelLongPressSelection}
-                                        onTouchCancel={cancelLongPressSelection}
-                                        onMouseDown={() => startLongPressSelection(tx.id)}
-                                        onMouseUp={cancelLongPressSelection}
-                                        onMouseLeave={cancelLongPressSelection}
-                                        onClick={() => handleTransactionPress(tx)}
-                                    >
-                                        {isSelected && (
-                                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-600 text-white shadow-sm">
-                                                <CheckCircle2 size={16} />
-                                            </span>
-                                        )}
-                                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
-                                        <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <p className="truncate text-sm font-bold text-slate-800">{tx.activity?.name || tx.description || 'Transaksi'}</p>
-                                                {isSelected && (
-                                                    <span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
-                                                        Dipilih
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-                                                <p className="text-[11px] text-slate-400">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                                                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider ${origin.cls}`}>{origin.label}</span>
-                                            </div>
-                                        </div>
-                                        <p className={`shrink-0 text-sm font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</p>
-                                        <div className="flex gap-1 shrink-0">
-                                            <button
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
-                                                }}
-                                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                                            ><Pencil size={13} /></button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-
-                        {/* Desktop table */}
-                        <div className="hidden overflow-x-auto lg:block">
-                            <table className="w-full min-w-[760px] text-left text-sm">
-                                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
-                                    <tr>
-                                        <th className="px-5 py-3.5">Tanggal</th>
-                                        <th className="px-5 py-3.5">Tipe</th>
-                                        <th className="px-5 py-3.5">Pemilik</th>
-                                        <th className="px-5 py-3.5">Kategori</th>
-                                        <th className="px-5 py-3.5 text-right">Nominal</th>
-                                        <th className="px-5 py-3.5 text-center">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-50">
-                                    {visibleTx.map((tx: TransactionItem) => {
-                                        const badge = getTypeBadge(tx);
-                                        const origin = getOriginBadge(tx);
-                                        const isSelected = selectedTx.has(tx.id);
-                                        return (
-                                            <tr
-                                                key={tx.id}
-                                                className={`transition-colors hover:bg-slate-50/60 ${isSelected ? 'bg-rose-50 shadow-[inset_5px_0_0_#e11d48]' : ''}`}
-                                                onMouseDown={() => startLongPressSelection(tx.id)}
-                                                onMouseUp={cancelLongPressSelection}
-                                                onMouseLeave={cancelLongPressSelection}
-                                                onClick={() => handleTransactionPress(tx)}
-                                            >
-                                                <td className="px-5 py-4 whitespace-nowrap">
-                                                    <p className="font-bold text-slate-700">{new Date(tx.date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</p>
-                                                    <p className="text-[10px] text-slate-400">{new Date(tx.date).getFullYear()}</p>
-                                                </td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${badge.cls}`}>{badge.label}</span>
-                                                        <span className={`rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider ${origin.cls}`}>{origin.label}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-5 py-4 font-semibold text-slate-600">{tx.owner?.name || '-'}</td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex max-w-[220px] items-center gap-2">
-                                                        {isSelected && <CheckCircle2 size={16} className="shrink-0 text-rose-600" />}
-                                                        <p className="truncate font-semibold text-slate-800">{tx.activity?.name || '-'}</p>
-                                                        {isSelected && (
-                                                            <span className="shrink-0 rounded-full bg-rose-600 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
-                                                                Dipilih
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    {tx.description && <p className="max-w-[180px] truncate text-[11px] text-slate-400">{tx.description}</p>}
-                                                </td>
-                                                <td className={`px-5 py-4 text-right font-black ${getAmountColor(tx)}`}>{formatCurrency(tx.amount)}</td>
-                                                <td className="px-5 py-4">
-                                                    <div className="flex items-center justify-center gap-1.5">
-                                                        <button
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
-                                                            }}
-                                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
-                                                            title="Edit"
-                                                        ><Pencil size={13} /></button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3">
-                                <button disabled={txPage === 1} onClick={() => setTxPage(p => p - 1)} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Sebelumnya</button>
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Hal {txPage} / {totalPages}</span>
-                                <button disabled={txPage >= totalPages} onClick={() => setTxPage(p => p + 1)} className="rounded-xl px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors">Selanjutnya</button>
-                            </div>
                         )}
-                    </>
+
+                        {l3Txs.length === 0 ? (
+                            <div className="py-20 text-center">
+                                <p className="text-sm text-slate-400">Tidak ada transaksi</p>
+                            </div>
+                        ) : (
+                            l3Txs.map(tx => <TxRow key={tx.id} tx={tx} />)
+                        )}
+                    </div>
                 )}
+
             </div>
         </div>
     );
