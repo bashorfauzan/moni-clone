@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download, History, Plus, Wallet, BarChart2 } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
@@ -96,6 +96,7 @@ const Investment = () => {
     // Modals
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+    const [fabOpen, setFabOpen] = useState(false);
     const [selectedRdn, setSelectedRdn] = useState<any>(null);
     const [detailAccount, setDetailAccount] = useState<any | null>(null);
     const [historyAccount, setHistoryAccount] = useState<any | null>(null);
