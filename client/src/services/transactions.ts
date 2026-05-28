@@ -344,12 +344,24 @@ const ensureSourceFunds = async (
 
     if (!needsSourceCheck || !payload.sourceAccountId) return;
 
-    const { data: account, error } = await ensureSupabase()
+    // Verify ownership of source account
+    const { data: srcAccount, error: srcError } = await ensureSupabase()
         .from('Account')
-        .select('name, balance')
+        .select('ownerId, name, balance')
         .eq('id', payload.sourceAccountId)
         .limit(1)
         .maybeSingle();
+    if (srcError) throw srcError;
+    if (!srcAccount) {
+        throw new Error('Rekening sumber tidak ditemukan');
+    }
+    if (srcAccount.ownerId && srcAccount.ownerId !== payload.ownerId) {
+        throw new Error(`Rekening sumber (${srcAccount.name || 'tanpa nama'}) tidak dimiliki oleh pemilik yang dipilih`);
+    }
+
+    // Use fetched source account data for balance check
+    const account = srcAccount;
+    const error = srcError;
 
     if (error) throw error;
 
