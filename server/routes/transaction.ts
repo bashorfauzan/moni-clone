@@ -1,7 +1,7 @@
 import express from 'express';
 import { Prisma, TransactionType } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { syncAccountBalances } from '../lib/accountBalances.js';
+import { syncAccountBalances, getOwnerAccountBalance } from '../lib/accountBalances.js';
 import {
     getDefaultActivityName,
     isDualAccountTransactionType,
@@ -117,36 +117,27 @@ const ensureSourceAccountHasFunds = async (
     const requiresSourceBalance = isSourceOnlyTransactionType(type)
         || isDualAccountTransactionType(type);
 
-    if (!requiresSourceBalance || !sourceAccountId) return null;
+    if (!requiresSourceBalance || !sourceAccountId || !ownerId) return null;
 
     const sourceAccount = await trx.account.findUnique({
         where: { id: sourceAccountId },
-        select: { balance: true, name: true, ownerId: true }
+        select: { name: true }
     });
 
     if (!sourceAccount) {
         return 'Rekening sumber tidak ditemukan';
     }
 
-    if (ownerId && sourceAccount.ownerId !== ownerId) {
-        return `Rekening ${sourceAccount.name} bukan milik pemilik yang dipilih, tidak dapat digunakan untuk transaksi ini`;
-    }
-
-    let availableBalance = Number(sourceAccount.balance || 0);
-
-    if (excludeTransactionId) {
-        const existingTx = await trx.transaction.findUnique({
-            where: { id: excludeTransactionId },
-            select: { amount: true, sourceAccountId: true }
-        });
-
-        if (existingTx?.sourceAccountId === sourceAccountId) {
-            availableBalance += Number(existingTx.amount || 0);
-        }
-    }
+    // Hitung saldo pemilik di rekening sumber ini
+    const availableBalance = await getOwnerAccountBalance(
+        trx,
+        sourceAccountId,
+        ownerId,
+        excludeTransactionId
+    );
 
     if (availableBalance < amount) {
-        return `Saldo rekening ${sourceAccount.name} tidak cukup (Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`;
+        return `Saldo rekening ${sourceAccount.name} tidak cukup untuk pemilik ini (Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`;
     }
 
     return null;

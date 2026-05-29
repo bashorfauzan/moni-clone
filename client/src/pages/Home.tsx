@@ -432,26 +432,7 @@ const Home = () => {
     const wealthDistribution = meta.owners.map(owner => {
         const ownedAccounts = trackedAccounts
             .map((account) => {
-                let amount = 0;
-
-                validatedTransactions.forEach((tx) => {
-                    if (tx.ownerId !== owner.id) return;
-                    if (shouldHideLegacyInvestmentTransactionType(tx.type)) return;
-
-                    if (normalizeTransactionType(tx.type) === 'INCOME' && tx.destinationAccountId === account.id) {
-                        amount += tx.amount;
-                    }
-
-                    if (normalizeTransactionType(tx.type) === 'EXPENSE' && tx.sourceAccountId === account.id) {
-                        amount -= tx.amount;
-                    }
-
-                    if (normalizeTransactionType(tx.type) === 'TRANSFER') {
-                        if (tx.destinationAccountId === account.id) amount += tx.amount;
-                        if (tx.sourceAccountId === account.id) amount -= tx.amount;
-                    }
-                });
-
+                const amount = (account as any).ownerBalances?.[owner.id] ?? 0;
                 return {
                     ...account,
                     balance: amount

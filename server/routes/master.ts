@@ -1,6 +1,6 @@
 import express from 'express';
 import { prisma } from '../lib/prisma.js';
-import { computeValidatedAccountBalances, syncAccountBalances } from '../lib/accountBalances.js';
+import { computeValidatedAccountBalances, syncAccountBalances, computeOwnerAccountBalances } from '../lib/accountBalances.js';
 import XLSX from 'xlsx';
 import { normalizeTransactionType } from '../lib/transactionRules.js';
 
@@ -25,17 +25,19 @@ const asDate = (value: unknown) => {
 router.get('/meta', async (_req, res) => {
     try {
         await ensurePrimaryOwner();
-        const [owners, accounts, activities, balanceMap] = await Promise.all([
+        const [owners, accounts, activities, balanceMap, ownerBalancesMap] = await Promise.all([
             prisma.owner.findMany({ orderBy: { createdAt: 'asc' } }),
             prisma.account.findMany({ orderBy: { createdAt: 'desc' } }),
             prisma.activity.findMany({ orderBy: { createdAt: 'desc' } }),
-            computeValidatedAccountBalances(prisma)
+            computeValidatedAccountBalances(prisma),
+            computeOwnerAccountBalances(prisma)
         ]);
         res.json({
             owners,
             accounts: accounts.map((account) => ({
                 ...account,
-                balance: balanceMap.get(account.id) ?? 0
+                balance: balanceMap.get(account.id) ?? 0,
+                ownerBalances: ownerBalancesMap.get(account.id) ?? {}
             })),
             activities
         });

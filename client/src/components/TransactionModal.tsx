@@ -147,11 +147,20 @@ const TransactionModal = () => {
     const selectedSourceAccount = accountById(form.sourceAccountId);
     const selectedDestinationAccount = accountById(form.destinationAccountId);
     const enteredAmount = Number(form.amount || 0);
+
+    const getOwnerBalance = (account?: any) => {
+        if (!account || !form.ownerId) return 0;
+        return account.ownerBalances?.[form.ownerId] ?? 0;
+    };
+
+    const sourceOwnerBalance = getOwnerBalance(selectedSourceAccount);
+    const destinationOwnerBalance = getOwnerBalance(selectedDestinationAccount);
+
     const projectedSourceBalance = selectedSourceAccount
-        ? Math.max(0, selectedSourceAccount.balance - enteredAmount)
+        ? Math.max(0, sourceOwnerBalance - enteredAmount)
         : null;
     const projectedDestinationBalance = selectedDestinationAccount
-        ? selectedDestinationAccount.balance + enteredAmount
+        ? destinationOwnerBalance + enteredAmount
         : null;
     const impactSummary = (() => {
         if (!enteredAmount) return null;
@@ -241,9 +250,9 @@ const TransactionModal = () => {
         if (
             showSource
             && selectedSourceAccount
-            && additionalAmountRequired > selectedSourceAccount.balance
+            && additionalAmountRequired > sourceOwnerBalance
         ) {
-            alert(`Saldo rekening sumber tidak cukup. Maksimal penambahan saldo keluar: ${formatCurrency(selectedSourceAccount.balance)}`);
+            alert(`Saldo rekening sumber tidak cukup. Maksimal penambahan saldo keluar: ${formatCurrency(sourceOwnerBalance)}`);
             return;
         }
 
@@ -416,7 +425,7 @@ const TransactionModal = () => {
                                     </button>
                                     {selectedSourceAccount && (
                                         <p className="mt-2 px-1 text-[11px] font-medium text-slate-400">
-                                            Sisa saldo: {formatCurrency(selectedSourceAccount.balance)}
+                                            Sisa saldo: {formatCurrency(sourceOwnerBalance)}
                                         </p>
                                     )}
                                 </div>
@@ -466,7 +475,7 @@ const TransactionModal = () => {
                                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Sumber</p>
                                         <p className="mt-1 text-sm font-bold text-slate-100">{selectedSourceAccount.name}</p>
                                         <p className="mt-2 text-[11px] text-slate-400">
-                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(selectedSourceAccount.balance)}</span>
+                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(sourceOwnerBalance)}</span>
                                         </p>
                                         {projectedSourceBalance !== null && enteredAmount > 0 ? (
                                             <p className="mt-1 text-[11px] text-rose-300">
@@ -481,7 +490,7 @@ const TransactionModal = () => {
                                         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Tujuan</p>
                                         <p className="mt-1 text-sm font-bold text-slate-100">{selectedDestinationAccount.name}</p>
                                         <p className="mt-2 text-[11px] text-slate-400">
-                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(selectedDestinationAccount.balance)}</span>
+                                            Sekarang: <span className="font-semibold text-slate-200">{formatCurrency(destinationOwnerBalance)}</span>
                                         </p>
                                         {projectedDestinationBalance !== null && enteredAmount > 0 ? (
                                             <p className="mt-1 text-[11px] text-emerald-300">
@@ -552,8 +561,7 @@ const TransactionModal = () => {
                                 >
                                     <p className="text-sm font-semibold text-slate-100">{item.name}</p>
                                     <p className="text-[11px] text-slate-400">
-                                        {item.type}
-                                        {pickerType === 'source' ? ` · ${formatCurrency(item.balance)}` : ''}
+                                        {item.type} · {formatCurrency(item.ownerBalances?.[form.ownerId] ?? 0)}
                                     </p>
                                 </button>
                             ))}
