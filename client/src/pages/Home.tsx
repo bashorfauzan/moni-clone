@@ -21,14 +21,10 @@ import { canonicalizeAccountAlias } from '../lib/accountAliases';
 import { readStorage, writeStorage } from '../lib/storage';
 import { getErrorMessage } from '../services/errors';
 import {
-    inferNotificationCategoryLabel,
     isInvestmentIncome,
     isInvestmentTransfer,
-    isTopUpLikeTransfer,
     normalizeTransactionType,
-    requiresDestinationAccount,
-    requiresSourceAccount,
-    shouldHideLegacyInvestmentTransactionType
+    isLegacyInvestmentTransactionType
 } from '../lib/transactionRules';
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
@@ -178,7 +174,7 @@ const Home = () => {
             };
 
             const nextRecentTransactions = (recentResult.status === 'fulfilled' ? recentResult.value : []).filter((tx: any) => isCurrentMonth(tx.date));
-            const allValidatedTransactions = validatedResult.status === 'fulfilled' ? validatedResult.value : [];
+            const allValidatedTransactions = (validatedResult.status === 'fulfilled' ? validatedResult.value : []).filter((tx: any) => !isLegacyInvestmentTransactionType(tx.type));
             const nextPendingTransactions = pendingResult.status === 'fulfilled' ? pendingResult.value : [];
 
             const liquidBalance = nextMeta.accounts

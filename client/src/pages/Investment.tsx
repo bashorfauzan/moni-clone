@@ -12,7 +12,7 @@ import {
     isInvestmentIncome,
     isInvestmentTransfer,
     normalizeTransactionType,
-    shouldHideLegacyInvestmentTransactionType
+    isLegacyInvestmentTransactionType
 } from '../lib/transactionRules';
 
 const formatCurrency = (val: number) => {
