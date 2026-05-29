@@ -11,8 +11,8 @@ import Spinner from '../components/Spinner';
 import {
     isInvestmentIncome,
     isInvestmentTransfer,
+    isLegacyInvestmentTransactionType,
     normalizeTransactionType,
-    isLegacyInvestmentTransactionType
 } from '../lib/transactionRules';
 
 const formatCurrency = (val: number) => {
@@ -177,7 +177,7 @@ const Investment = () => {
     }, [selectedOwnerId]);
 
     // Derived Metrics
-    const validatedTransactions = transactions.filter((tx: any) => tx.isValidated && !shouldHideLegacyInvestmentTransactionType(tx.type));
+    const validatedTransactions = transactions.filter((tx: any) => tx.isValidated && !isLegacyInvestmentTransactionType(tx.type));
     const scopedTransactions = selectedOwnerId === 'ALL'
         ? validatedTransactions
         : validatedTransactions.filter((tx: any) => tx.ownerId === selectedOwnerId);

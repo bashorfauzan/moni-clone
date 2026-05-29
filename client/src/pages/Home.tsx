@@ -23,8 +23,12 @@ import { getErrorMessage } from '../services/errors';
 import {
     isInvestmentIncome,
     isInvestmentTransfer,
+    isTopUpLikeTransfer,
     normalizeTransactionType,
-    isLegacyInvestmentTransactionType
+    isLegacyInvestmentTransactionType,
+    inferNotificationCategoryLabel,
+    requiresSourceAccount,
+    requiresDestinationAccount
 } from '../lib/transactionRules';
 
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
