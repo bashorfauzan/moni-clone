@@ -192,6 +192,7 @@ const Reports = () => {
     const [restoringDelete, setRestoringDelete] = useState(false);
     const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
     const [lastDeletedTransactions, setLastDeletedTransactions] = useState<TransactionItem[]>([]);
+    const [txCategory, setTxCategory] = useState<'SEMUA' | 'INVESTASI' | 'TRANSFER' | 'BELANJA' | 'LAINNYA'>('SEMUA');
     const longPressTimerRef = useRef<number | null>(null);
     const longPressTriggeredRef = useRef(false);
 
@@ -509,6 +510,7 @@ const Reports = () => {
     useEffect(() => {
         void fetchReportData();
         setSelectedTx(new Set());
+        setTxCategory('SEMUA');
     }, [viewMode, currentDate]);
 
     useEffect(() => {
@@ -568,8 +570,18 @@ const Reports = () => {
         ? currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()
         : currentDate.getFullYear().toString();
 
-    const visibleTx = data.transactionsData.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE);
-    const totalPages = Math.max(1, Math.ceil(data.transactionsData.length / TX_PER_PAGE));
+    const filteredByCategory = txCategory === 'SEMUA'
+        ? data.transactionsData
+        : data.transactionsData.filter((tx: TransactionItem) => {
+            const kind = getReportTransactionKind(tx);
+            if (txCategory === 'INVESTASI') return kind === 'INVESTMENT_TOP_UP' || kind === 'INVESTMENT_LIQUIDATION';
+            if (txCategory === 'TRANSFER') return kind === 'TRANSFER' || kind === 'TOP_UP';
+            if (txCategory === 'BELANJA') return kind === 'EXPENSE';
+            if (txCategory === 'LAINNYA') return kind === 'INCOME';
+            return true;
+        });
+    const visibleTx = filteredByCategory.slice((txPage - 1) * TX_PER_PAGE, txPage * TX_PER_PAGE);
+    const totalPages = Math.max(1, Math.ceil(filteredByCategory.length / TX_PER_PAGE));
 
     if (loading) return <Spinner message="Menganalisis Laporan..." />;
 
@@ -580,7 +592,7 @@ const Reports = () => {
             <header className="space-y-4">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Laporan</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Cashflow</h1>
                         <div className="mt-1 flex items-center gap-2">
                             <p className="text-sm font-bold text-slate-500">{formatCurrency(data.totalWealth)}</p>
                             <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-widest text-slate-400">Total Aset</span>
@@ -781,7 +793,7 @@ const Reports = () => {
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                     <div className="flex items-center gap-3">
                         <h2 className="text-xs font-bold uppercase tracking-widest text-slate-400">Semua Transaksi</h2>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{data.transactionsData.length} data</span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-500">{filteredByCategory.length} data</span>
                         {selectedTx.size > 0 && (
                             <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-600">
                                 {selectedTx.size} dipilih
@@ -808,6 +820,28 @@ const Reports = () => {
                     </div>
                 </div>
 
+                <div className="flex gap-1.5 overflow-x-auto px-5 py-3 border-b border-slate-100 scrollbar-none">
+                    {([
+                        { key: 'SEMUA', label: 'Semua' },
+                        { key: 'INVESTASI', label: 'Investasi' },
+                        { key: 'TRANSFER', label: 'Transfer' },
+                        { key: 'BELANJA', label: 'Belanja' },
+                        { key: 'LAINNYA', label: 'Lain-lain' },
+                    ] as const).map(cat => (
+                        <button
+                            key={cat.key}
+                            onClick={() => { setTxCategory(cat.key); setTxPage(1); }}
+                            className={`shrink-0 rounded-full px-3.5 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                txCategory === cat.key
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                            }`}
+                        >
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+
                 {lastDeletedTransactions.length > 0 && (
                     <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -828,9 +862,13 @@ const Reports = () => {
                     </div>
                 )}
 
-                {data.transactionsData.length === 0 ? (
+                {filteredByCategory.length === 0 ? (
                     <div className="py-10 text-center">
-                        <p className="text-sm text-slate-500">Tidak ada transaksi pada periode ini</p>
+                        <p className="text-sm text-slate-500">
+                            {data.transactionsData.length === 0
+                                ? 'Tidak ada transaksi pada periode ini'
+                                : 'Tidak ada transaksi pada kategori ini'}
+                        </p>
                     </div>
                 ) : (
                     <>

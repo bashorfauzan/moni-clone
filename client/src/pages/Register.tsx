@@ -83,7 +83,7 @@ const Register = () => {
                                 <p className="mt-2 text-lg font-bold text-white">Terkelola</p>
                             </div>
                             <div className="rounded-3xl border border-white/10 bg-black/10 p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Laporan</p>
+                                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Cashflow</p>
                                 <p className="mt-2 text-lg font-bold text-white">Siap Pakai</p>
                             </div>
                         </div>

@@ -121,11 +121,15 @@ const ensureSourceAccountHasFunds = async (
 
     const sourceAccount = await trx.account.findUnique({
         where: { id: sourceAccountId },
-        select: { balance: true, name: true }
+        select: { balance: true, name: true, ownerId: true }
     });
 
     if (!sourceAccount) {
         return 'Rekening sumber tidak ditemukan';
+    }
+
+    if (ownerId && sourceAccount.ownerId !== ownerId) {
+        return `Rekening ${sourceAccount.name} bukan milik pemilik yang dipilih, tidak dapat digunakan untuk transaksi ini`;
     }
 
     let availableBalance = Number(sourceAccount.balance || 0);

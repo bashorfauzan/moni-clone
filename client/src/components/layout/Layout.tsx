@@ -13,7 +13,7 @@ const Layout = () => {
 
     const navItems = [
         { path: '/', label: 'Home', mobileLabel: 'Home', icon: <HomeIcon size={20} /> },
-        { path: '/reports', label: 'Laporan', mobileLabel: 'Lapor', icon: <PieChart size={20} /> },
+        { path: '/reports', label: 'Cashflow', mobileLabel: 'Cash', icon: <PieChart size={20} /> },
         { path: '/investment', label: 'Investasi', mobileLabel: 'Invest', icon: <TrendingUp size={20} /> },
         { path: '/targets', label: 'Target', mobileLabel: 'Target', icon: <Target size={20} /> },
         { path: '/menu', label: 'Setting', mobileLabel: 'Setting', icon: <Menu size={20} /> },
