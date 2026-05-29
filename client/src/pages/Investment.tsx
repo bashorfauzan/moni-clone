@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download, History, Plus, Wallet, BarChart2 } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
+import { getErrorMessage } from '../services/errors';
 import { fetchStockPositions, fetchStockTransactions, type StockPosition } from '../services/stocks';
 import { fetchIpoOrders, type IpoOrder } from '../services/stocksIpo';
 import { downloadBackupBlob } from '../services/backup';
@@ -315,7 +316,7 @@ const Investment = () => {
             setTransferForm((prev) => ({ ...prev, amount: '' }));
             await loadData();
         } catch (error: any) {
-            alert(error.response?.data?.error || 'Gagal memproses transfer');
+            alert(getErrorMessage(error, 'Gagal memproses transfer'));
         } finally {
             setSubmitting(false);
         }
@@ -379,7 +380,7 @@ const Investment = () => {
             }));
             await loadData();
         } catch (error: any) {
-            alert(error.response?.data?.error || 'Gagal mencatat pemasukan investasi');
+            alert(getErrorMessage(error, 'Gagal mencatat pemasukan investasi'));
         } finally {
             setSubmitting(false);
         }
@@ -424,7 +425,7 @@ const Investment = () => {
             await deleteTransaction(tx.id);
             await loadData();
         } catch (error: any) {
-            alert(error.response?.data?.error || 'Gagal menghapus transaksi investasi');
+            alert(getErrorMessage(error, 'Gagal menghapus transaksi investasi'));
         } finally {
             setSubmitting(false);
         }

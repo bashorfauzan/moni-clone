@@ -67,6 +67,13 @@ export type InvestmentIncomePayload = {
     date?: string;
 };
 
+class TransactionValidationError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'TransactionValidationError';
+    }
+}
+
 const DB_SAFE_TRANSFER_TYPES = ['TRANSFER'];
 
 const toDbSafeTransactionType = (type: TransactionTypeValue): TransactionTypeValue =>
@@ -173,28 +180,28 @@ const ensureSupabase = () => {
 
 const validatePayload = (payload: TransactionWritePayload) => {
     if (!Number.isFinite(payload.amount) || payload.amount <= 0) {
-        throw new Error('Jumlah transaksi harus lebih dari 0');
+        throw new TransactionValidationError('Jumlah transaksi harus lebih dari 0');
     }
 
     if (!payload.ownerId) {
-        throw new Error('Pemilik wajib diisi');
+        throw new TransactionValidationError('Pemilik wajib diisi');
     }
 
     if (requiresDestinationAccount(payload.type) && !payload.destinationAccountId) {
-        throw new Error('Rekening tujuan wajib dipilih untuk pemasukan');
+        throw new TransactionValidationError('Rekening tujuan wajib dipilih untuk pemasukan');
     }
 
     if (requiresSourceAccount(payload.type) && !payload.sourceAccountId) {
-        throw new Error('Rekening sumber wajib dipilih untuk pengeluaran');
+        throw new TransactionValidationError('Rekening sumber wajib dipilih untuk pengeluaran');
     }
 
     if (normalizeTransactionType(payload.type) === 'TRANSFER') {
         if (!payload.sourceAccountId || !payload.destinationAccountId) {
-            throw new Error('Transfer harus memiliki rekening sumber dan tujuan');
+            throw new TransactionValidationError('Transfer harus memiliki rekening sumber dan tujuan');
         }
 
         if (payload.sourceAccountId === payload.destinationAccountId) {
-            throw new Error('Rekening sumber dan tujuan transfer tidak boleh sama');
+            throw new TransactionValidationError('Rekening sumber dan tujuan transfer tidak boleh sama');
         }
     }
 };
@@ -353,19 +360,13 @@ const ensureSourceFunds = async (
         .maybeSingle();
     if (srcError) throw srcError;
     if (!srcAccount) {
-        throw new Error('Rekening sumber tidak ditemukan');
+        throw new TransactionValidationError('Rekening sumber tidak ditemukan');
     }
     if (srcAccount.ownerId && srcAccount.ownerId !== payload.ownerId) {
-        throw new Error(`Rekening sumber (${srcAccount.name || 'tanpa nama'}) tidak dimiliki oleh pemilik yang dipilih`);
+        throw new TransactionValidationError(`Rekening sumber (${srcAccount.name || 'tanpa nama'}) tidak dimiliki oleh pemilik yang dipilih`);
     }
 
-    // Use fetched source account data for balance check
-    const account = srcAccount;
-    const error = srcError;
-
-    if (error) throw error;
-
-    let availableBalance = Number(account?.balance || 0);
+    let availableBalance = Number(srcAccount.balance || 0);
 
     if (excludeTransactionId) {
         const { data: existingTx, error: existingTxError } = await ensureSupabase()
@@ -383,8 +384,8 @@ const ensureSourceFunds = async (
     }
 
     if (availableBalance < payload.amount) {
-        throw new Error(
-            `Saldo rekening ${account?.name || 'sumber'} tidak cukup ` +
+        throw new TransactionValidationError(
+            `Saldo rekening ${srcAccount.name || 'sumber'} tidak cukup ` +
             `(Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`
         );
     }
@@ -781,6 +782,7 @@ export const createTransaction = async (payload: TransactionWritePayload): Promi
         try {
             return await createTransactionDirect(payload);
         } catch (error) {
+            if (error instanceof TransactionValidationError) throw error;
             console.warn('Supabase transaction create failed, falling back to backend API.', error);
             recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Create transaksi fallback ke backend API.'));
         }
@@ -796,6 +798,7 @@ export const updateTransaction = async (id: string, payload: TransactionWritePay
         try {
             return await updateTransactionDirect(id, payload);
         } catch (error) {
+            if (error instanceof TransactionValidationError) throw error;
             console.warn('Supabase transaction update failed, falling back to backend API.', error);
             recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Update transaksi fallback ke backend API.'));
         }
@@ -811,6 +814,7 @@ export const validateTransaction = async (id: string, payload: ValidateTransacti
         try {
             return await validateTransactionDirect(id, payload);
         } catch (error) {
+            if (error instanceof TransactionValidationError) throw error;
             console.warn('Supabase transaction validation failed, falling back to backend API.', error);
             recordTransactionsMode('supabase-fallback-to-api', getErrorMessage(error, 'Validasi transaksi fallback ke backend API.'));
         }
