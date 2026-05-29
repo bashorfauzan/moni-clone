@@ -1200,7 +1200,7 @@ const Investment = () => {
                                 <select
                                     className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={transferForm.ownerId}
-                                    onChange={e => setTransferForm({ ...transferForm, ownerId: e.target.value })}
+                                    onChange={e => setTransferForm({ ...transferForm, ownerId: e.target.value, bankId: '' })}
                                     required
                                 >
                                     <option value="" disabled>Pilih kepemilikan...</option>
@@ -1224,11 +1224,18 @@ const Investment = () => {
                                     <option value="" disabled>
                                         {transferForm.type === 'DEPOSIT' ? 'Pilih rekening sumber...' : 'Pilih rekening tujuan...'}
                                     </option>
-                                    {bankAccounts.map(b => (
-                                        <option key={b.id} value={b.id}>{b.name} ({formatCurrency(b.balance)})</option>
-                                    ))}
+                                    {bankAccounts
+                                        .filter((b: any) => !transferForm.ownerId || !b.ownerId || b.ownerId === transferForm.ownerId)
+                                        .map((b: any) => (
+                                            <option key={b.id} value={b.id}>{b.name} ({formatCurrency(b.balance)})</option>
+                                        ))}
                                 </select>
-                                {bankAccounts.length === 0 && (
+                                {bankAccounts.filter((b: any) => !transferForm.ownerId || !b.ownerId || b.ownerId === transferForm.ownerId).length === 0 && transferForm.ownerId && (
+                                    <p className="mt-1 text-[11px] text-amber-600 ml-1">
+                                        Pemilik ini belum memiliki rekening bank atau e-wallet.
+                                    </p>
+                                )}
+                                {bankAccounts.length === 0 && !transferForm.ownerId && (
                                     <p className="mt-1 text-[11px] text-amber-600 ml-1">
                                         Belum ada rekening bank atau e-wallet yang tersedia.
                                     </p>

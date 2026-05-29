@@ -163,6 +163,9 @@ const TransactionModal = () => {
     })();
 
     const filteredAccounts = useMemo(() => {
+        const ownerMatches = (acc: { ownerId?: string }) =>
+            !form.ownerId || !acc.ownerId || acc.ownerId === form.ownerId;
+
         const accounts = meta.accounts.filter((acc) => {
             const matchesQuery = acc.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
                 acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
@@ -170,13 +173,13 @@ const TransactionModal = () => {
             if (!matchesQuery) return false;
             if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
             if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
-            if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
-            if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
+            if (isInvestment && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
+            if (isInvestment && pickerType === 'destination') return (acc.type === 'RDN' || acc.type === 'Sekuritas') && ownerMatches(acc);
             if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet';
-            if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet';
-            if (isTopUp && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isExpense) return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
+            if (isTopUp && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
             if (isTopUp && pickerType === 'destination') return acc.type === 'E-Wallet' || acc.type === 'RDN' || acc.type === 'Sekuritas';
-            if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTransfer && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
             if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
 
             return true;
@@ -345,7 +348,7 @@ const TransactionModal = () => {
                             <select
                                 className="w-full h-12 rounded-2xl border border-slate-700 bg-slate-800/60 px-4 text-sm text-slate-100"
                                 value={form.ownerId}
-                                onChange={(e) => setForm((prev) => ({ ...prev, ownerId: e.target.value }))}
+                                onChange={(e) => setForm((prev) => ({ ...prev, ownerId: e.target.value, sourceAccountId: '', destinationAccountId: '' }))}
                             >
                                 {meta.owners.map((owner) => (
                                     <option key={owner.id} value={owner.id}>{owner.name}</option>
