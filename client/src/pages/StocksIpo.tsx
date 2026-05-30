@@ -21,6 +21,15 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
     maximumFractionDigits: 0
 }).format(value || 0);
 
+const formatThousands = (raw: string) => {
+    if (!raw) return '';
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric)) return '';
+    return new Intl.NumberFormat('id-ID').format(numeric);
+};
+
+const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
+
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
 const IPO_STATUS_OPTIONS: IpoOrderStatus[] = ['PESAN', 'JATAH', 'TIDAK_JATAH', 'JUAL'];
 
@@ -534,8 +543,8 @@ const StocksIpo = () => {
                                         className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                         inputMode="numeric"
                                         placeholder="Contoh: 300"
-                                        value={form.ipoPrice}
-                                        onChange={(e) => setForm((current) => ({ ...current, ipoPrice: e.target.value.replace(/\D/g, '') }))}
+                                        value={formatThousands(form.ipoPrice)}
+                                        onChange={(e) => setForm((current) => ({ ...current, ipoPrice: sanitizeAmount(e.target.value) }))}
                                     />
                                 </label>
                                 <div className="space-y-1.5">
@@ -565,9 +574,9 @@ const StocksIpo = () => {
                                 <input
                                     className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     inputMode="numeric"
-                                    placeholder="Berapa lot dipesan?"
-                                    value={form.lotRequested}
-                                    onChange={(e) => setForm((current) => ({ ...current, lotRequested: e.target.value.replace(/\D/g, '') }))}
+                                    placeholder="Contoh: 10.000"
+                                    value={formatThousands(form.lotRequested)}
+                                    onChange={(e) => setForm((current) => ({ ...current, lotRequested: sanitizeAmount(e.target.value) }))}
                                 />
                             </label>
 
@@ -579,9 +588,9 @@ const StocksIpo = () => {
                                         <input
                                             className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                             inputMode="numeric"
-                                            placeholder="Berapa lot didapat?"
-                                            value={form.lotAllocated}
-                                            onChange={(e) => setForm((current) => ({ ...current, lotAllocated: e.target.value.replace(/\D/g, '') }))}
+                                            placeholder="Contoh: 10.000"
+                                            value={formatThousands(form.lotAllocated)}
+                                            onChange={(e) => setForm((current) => ({ ...current, lotAllocated: sanitizeAmount(e.target.value) }))}
                                         />
                                     </label>
                                     <label className="space-y-1.5 block">
@@ -616,8 +625,8 @@ const StocksIpo = () => {
                                             className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                             inputMode="numeric"
                                             placeholder="Contoh: 450"
-                                            value={form.sellPrice}
-                                            onChange={(e) => setForm((current) => ({ ...current, sellPrice: e.target.value.replace(/\D/g, '') }))}
+                                            value={formatThousands(form.sellPrice)}
+                                            onChange={(e) => setForm((current) => ({ ...current, sellPrice: sanitizeAmount(e.target.value) }))}
                                         />
                                     </label>
                                     <label className="space-y-1.5 block">

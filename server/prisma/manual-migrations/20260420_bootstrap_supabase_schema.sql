@@ -96,6 +96,7 @@ CREATE TABLE "Budget" (
 CREATE TABLE "Target" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
+    "notes" TEXT,
     "totalAmount" DOUBLE PRECISION NOT NULL,
     "remainingAmount" DOUBLE PRECISION NOT NULL,
     "remainingMonths" INTEGER NOT NULL,

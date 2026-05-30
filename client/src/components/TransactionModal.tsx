@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, ChevronDown, Search } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTransaction } from '../context/TransactionContext';
-import { fetchMasterMeta, type Activity } from '../services/masterData';
+import { fetchMasterMeta, type Account, type Activity } from '../services/masterData';
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { createTransaction, fetchTransactions, updateTransaction, validateTransaction, type TransactionTypeValue } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
@@ -12,9 +13,17 @@ type PickerType = 'source' | 'destination' | null;
 
 interface ModalMeta {
     owners: Array<{ id: string; name: string }>;
-    accounts: Array<{ id: string; name: string; type: string; balance: number; ownerId?: string }>;
+    accounts: Account[];
     activities: Activity[];
 }
+
+const ACTIVITY_NAME_ALIASES: Record<TransactionType, string[]> = {
+    INCOME: ['income', 'pemasukan'],
+    EXPENSE: ['expense', 'pengeluaran', 'withdraw'],
+    TRANSFER: ['transfer'],
+    TOP_UP: ['top up', 'topup', 'transfer'],
+    INVESTMENT: ['investasi', 'investment', 'transfer']
+};
 
 const initialForm = {
     amount: '',
@@ -42,6 +51,7 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
 
 const TransactionModal = () => {
     const { isModalOpen, modalType, modalPayload, editTransactionId, setModalType, closeModal } = useTransaction();
+    const navigate = useNavigate();
     const [meta, setMeta] = useState<ModalMeta>({ owners: [], accounts: [], activities: [] });
     const [accountUsage, setAccountUsage] = useState<AccountUsageFrequency>({});
     const [form, setForm] = useState(initialForm);
@@ -49,6 +59,12 @@ const TransactionModal = () => {
     const [pickerType, setPickerType] = useState<PickerType>(null);
     const [pickerQuery, setPickerQuery] = useState('');
     const isEditing = Boolean(editTransactionId);
+
+    const findDefaultActivityId = (activities: Activity[], type: TransactionType, fallbackId?: string) => {
+        const aliases = ACTIVITY_NAME_ALIASES[type] || [];
+        const match = activities.find((activity) => aliases.includes(activity.name.toLowerCase()));
+        return match?.id || fallbackId || activities[0]?.id || '';
+    };
 
     const typeConfig = useMemo(() => {
         const config: Record<TransactionType, { title: string; accent: string; submit: string; helper: string }> = {
@@ -114,11 +130,12 @@ const TransactionModal = () => {
                 const matchedActivity = suggestedActivityLabel
                     ? payload.activities.find((activity) => activity.name.toLowerCase() === suggestedActivityLabel.toLowerCase())
                     : undefined;
+                const defaultActivityId = findDefaultActivityId(payload.activities, modalType, payload.activities[0]?.id);
                 setAccountUsage(buildAccountUsageFrequency(transactions));
                 setForm((prev) => ({
                     ...initialForm,
                     ownerId: modalPayload?.ownerId || payload.owners[0]?.id || prev.ownerId,
-                    activityId: modalPayload?.activityId || matchedActivity?.id || payload.activities[0]?.id || prev.activityId,
+                    activityId: modalPayload?.activityId || matchedActivity?.id || defaultActivityId || prev.activityId,
                     amount: modalPayload?.amount ? String(modalPayload.amount) : initialForm.amount,
                     description: modalPayload?.description || initialForm.description,
                     sourceAccountId: modalPayload?.sourceAccountId || initialForm.sourceAccountId,
@@ -134,6 +151,18 @@ const TransactionModal = () => {
         };
     }, [isModalOpen, modalPayload, modalType]);
 
+    useEffect(() => {
+        if (!isModalOpen) return;
+        if (isEditing) return;
+        if (modalPayload?.activityId) return;
+        if (meta.activities.length === 0) return;
+
+        const defaultActivityId = findDefaultActivityId(meta.activities, modalType, meta.activities[0]?.id);
+        if (!defaultActivityId || form.activityId === defaultActivityId) return;
+
+        setForm((prev) => ({ ...prev, activityId: defaultActivityId }));
+    }, [form.activityId, isEditing, isModalOpen, meta.activities, modalPayload?.activityId, modalType]);
+
     const isIncome = modalType === 'INCOME';
     const isExpense = modalType === 'EXPENSE';
     const isTransfer = modalType === 'TRANSFER';
@@ -147,14 +176,15 @@ const TransactionModal = () => {
     const selectedSourceAccount = accountById(form.sourceAccountId);
     const selectedDestinationAccount = accountById(form.destinationAccountId);
     const enteredAmount = Number(form.amount || 0);
-
-    const getOwnerBalance = (account?: any) => {
-        if (!account || !form.ownerId) return 0;
-        return account.ownerBalances?.[form.ownerId] ?? 0;
+    const getAccountOwnerBalance = (account?: Account) => {
+        if (!account) return 0;
+        if (form.ownerId && account.ownerBalances) {
+            return Number(account.ownerBalances[form.ownerId] ?? 0);
+        }
+        return Number(account.balance ?? 0);
     };
-
-    const sourceOwnerBalance = getOwnerBalance(selectedSourceAccount);
-    const destinationOwnerBalance = getOwnerBalance(selectedDestinationAccount);
+    const sourceOwnerBalance = getAccountOwnerBalance(selectedSourceAccount);
+    const destinationOwnerBalance = getAccountOwnerBalance(selectedDestinationAccount);
 
     const projectedSourceBalance = selectedSourceAccount
         ? Math.max(0, sourceOwnerBalance - enteredAmount)
@@ -172,9 +202,6 @@ const TransactionModal = () => {
     })();
 
     const filteredAccounts = useMemo(() => {
-        const ownerMatches = (acc: { ownerId?: string }) =>
-            !form.ownerId || !acc.ownerId || acc.ownerId === form.ownerId;
-
         const accounts = meta.accounts.filter((acc) => {
             const matchesQuery = acc.name.toLowerCase().includes(pickerQuery.toLowerCase()) ||
                 acc.type.toLowerCase().includes(pickerQuery.toLowerCase());
@@ -182,21 +209,28 @@ const TransactionModal = () => {
             if (!matchesQuery) return false;
             if (isEditing && pickerType === 'source' && form.sourceAccountId === acc.id) return true;
             if (isEditing && pickerType === 'destination' && form.destinationAccountId === acc.id) return true;
-            if (isInvestment && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
-            if (isInvestment && pickerType === 'destination') return (acc.type === 'RDN' || acc.type === 'Sekuritas') && ownerMatches(acc);
+            if (isInvestment && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isInvestment && pickerType === 'destination') return acc.type === 'RDN' || acc.type === 'Sekuritas';
             if (isIncome) return acc.type === 'Bank' || acc.type === 'E-Wallet';
-            if (isExpense) return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
-            if (isTopUp && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
+            if (isExpense) return acc.type === 'Bank' || acc.type === 'E-Wallet';
+            if (isTopUp && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
             if (isTopUp && pickerType === 'destination') return acc.type === 'E-Wallet' || acc.type === 'RDN' || acc.type === 'Sekuritas';
-            if (isTransfer && pickerType === 'source') return (acc.type === 'Bank' || acc.type === 'E-Wallet') && ownerMatches(acc);
+            if (isTransfer && pickerType === 'source') return acc.type === 'Bank' || acc.type === 'E-Wallet';
             if (isTransfer && pickerType === 'destination') return acc.type !== 'RDN' && acc.type !== 'Sekuritas';
 
             return true;
         });
 
-        return sortAccountsByUsage(accounts, accountUsage);
+        const filteredByBalance = accounts.filter((acc) => {
+            if (pickerType !== 'source') return true;
+            if (isEditing && form.sourceAccountId === acc.id) return true;
+            return getAccountOwnerBalance(acc) > 0;
+        });
+
+        return sortAccountsByUsage(filteredByBalance, accountUsage);
     }, [
         accountUsage,
+        form.ownerId,
         form.destinationAccountId,
         form.sourceAccountId,
         isEditing,
@@ -298,8 +332,23 @@ const TransactionModal = () => {
                 await createTransaction(payload);
             }
 
-            closeModal();
             window.dispatchEvent(new Event('nova:data-changed'));
+            if (modalPayload?.returnTo === 'stocks') {
+                const nextParams = new URLSearchParams();
+                nextParams.set('action', modalPayload.returnAction || 'buy');
+                if (modalPayload.returnAccountId) nextParams.set('accountId', modalPayload.returnAccountId);
+                if (modalPayload.returnOwnerId) nextParams.set('ownerId', modalPayload.returnOwnerId);
+                if (modalPayload.returnTicker) nextParams.set('ticker', modalPayload.returnTicker);
+                if (modalPayload.returnLot) nextParams.set('lot', modalPayload.returnLot);
+                if (modalPayload.returnPricePerShare) nextParams.set('pricePerShare', modalPayload.returnPricePerShare);
+                if (modalPayload.returnTradedAt) nextParams.set('tradedAt', modalPayload.returnTradedAt);
+                if (modalPayload.returnNotes) nextParams.set('notes', modalPayload.returnNotes);
+                closeModal();
+                navigate(`/stocks?${nextParams.toString()}`);
+                return;
+            }
+
+            closeModal();
         } catch (error: any) {
             console.error('Error creating transaction:', error);
             alert(getErrorMessage(error, 'Gagal menyimpan transaksi'));

@@ -42,6 +42,20 @@ const Layout = () => {
             onClick: () => { openModal('TRANSFER'); setFabOpen(false); },
         },
         {
+            label: 'Investasi',
+            icon: <TrendingUp size={20} />,
+            gradient: 'from-amber-500 to-orange-400',
+            shadow: 'rgba(245,158,11,0.4)',
+            onClick: () => { openModal('INVESTMENT'); setFabOpen(false); },
+        },
+        {
+            label: 'Order Saham',
+            icon: <BarChart2 size={20} />,
+            gradient: 'from-indigo-500 to-violet-400',
+            shadow: 'rgba(99,102,241,0.4)',
+            onClick: () => { navigate('/stocks?action=buy'); setFabOpen(false); },
+        },
+        {
             label: 'Order IPO',
             icon: <BarChart2 size={20} />,
             gradient: 'from-violet-500 to-purple-400',
@@ -68,7 +82,7 @@ const Layout = () => {
                     />
 
                     {/* Speed Dial Actions */}
-                    <div className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
+                    <div className="fixed bottom-[176px] sm:bottom-[188px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
                         {fabActions.map((action, idx) => (
                             <div
                                 key={idx}

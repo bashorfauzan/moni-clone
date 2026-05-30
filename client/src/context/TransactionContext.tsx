@@ -12,6 +12,15 @@ export interface TransactionModalPayload {
     destinationAccountId?: string;
     notificationInboxId?: string;
     pendingTransactionId?: string;
+    returnTo?: 'stocks';
+    returnAccountId?: string;
+    returnOwnerId?: string;
+    returnAction?: 'buy' | 'sell';
+    returnTicker?: string;
+    returnLot?: string;
+    returnPricePerShare?: string;
+    returnTradedAt?: string;
+    returnNotes?: string;
 }
 
 interface TransactionContextType {

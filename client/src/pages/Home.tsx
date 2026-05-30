@@ -22,10 +22,12 @@ import { readStorage, writeStorage } from '../lib/storage';
 import { getErrorMessage } from '../services/errors';
 import {
     isInvestmentIncome,
+    isInvestmentLiquidation,
     isInvestmentTransfer,
     isTopUpLikeTransfer,
     normalizeTransactionType,
     isLegacyInvestmentTransactionType,
+    isTransferTransaction,
     inferNotificationCategoryLabel,
     requiresSourceAccount,
     requiresDestinationAccount
@@ -324,27 +326,41 @@ const Home = () => {
 
     const getRecentTransactionTitle = (tx: TransactionItem) => {
         if (isInvestmentTransfer(tx)) return 'Investasi';
+        if (isInvestmentLiquidation(tx)) return 'Pencairan Investasi';
         return tx.description || tx.activity?.name || 'Detail Transaksi';
     };
 
     const getRecentTransactionVisual = (tx: TransactionItem) => {
+        if (isInvestmentLiquidation(tx)) {
+            return {
+                iconWrap: 'bg-violet-50 text-violet-600',
+                icon: '↙',
+                amountClass: 'text-violet-600',
+                amountPrefix: '',
+                badge: 'Cair',
+                badgeClass: 'bg-violet-50 text-violet-700'
+            };
+        }
+
         if (isInvestmentTransfer(tx)) {
             return {
                 iconWrap: 'bg-amber-50 text-amber-600',
                 icon: '↗',
-                amountClass: 'text-slate-800',
+                amountClass: 'text-amber-600',
                 amountPrefix: '',
-                badge: 'Investasi'
+                badge: 'Investasi',
+                badgeClass: 'bg-amber-50 text-amber-700'
             };
         }
 
         if (isTopUpLikeTransfer(tx)) {
             return {
-                iconWrap: 'bg-rose-50 text-rose-600',
+                iconWrap: 'bg-fuchsia-50 text-fuchsia-600',
                 icon: '↗',
-                amountClass: 'text-slate-800',
+                amountClass: 'text-fuchsia-600',
                 amountPrefix: '-',
-                badge: 'Top Up'
+                badge: 'Top Up',
+                badgeClass: 'bg-fuchsia-50 text-fuchsia-700'
             };
         }
 
@@ -354,7 +370,8 @@ const Home = () => {
                 icon: '↘',
                 amountClass: 'text-emerald-500',
                 amountPrefix: '',
-                badge: 'Masuk'
+                badge: 'Masuk',
+                badgeClass: 'bg-emerald-50 text-emerald-700'
             };
         }
 
@@ -362,9 +379,10 @@ const Home = () => {
             return {
                 iconWrap: 'bg-rose-50 text-rose-600',
                 icon: '↗',
-                amountClass: 'text-slate-800',
+                amountClass: 'text-rose-600',
                 amountPrefix: '-',
-                badge: 'Keluar'
+                badge: 'Keluar',
+                badgeClass: 'bg-rose-50 text-rose-700'
             };
         }
 
@@ -372,9 +390,10 @@ const Home = () => {
             return {
                 iconWrap: 'bg-blue-50 text-blue-600',
                 icon: '⇄',
-                amountClass: 'text-slate-800',
+                amountClass: 'text-blue-600',
                 amountPrefix: '',
-                badge: 'Transfer'
+                badge: 'Transfer',
+                badgeClass: 'bg-blue-50 text-blue-700'
             };
         }
 
@@ -383,7 +402,8 @@ const Home = () => {
             icon: '⇄',
             amountClass: 'text-slate-800',
             amountPrefix: '',
-            badge: 'Investasi'
+            badge: 'Investasi',
+            badgeClass: 'bg-amber-50 text-amber-700'
         };
     };
 
@@ -429,22 +449,53 @@ const Home = () => {
         ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(account.type)
     );
 
+    const derivedOwnerBalanceByAccount = validatedTransactions.reduce<Record<string, Record<string, number>>>((acc, tx) => {
+        if (!tx.ownerId) return acc;
+
+        const adjust = (accountId: string | undefined, delta: number) => {
+            if (!accountId || delta === 0) return;
+            const accountBalances = acc[accountId] ?? {};
+            accountBalances[tx.ownerId!] = (accountBalances[tx.ownerId!] ?? 0) + delta;
+            acc[accountId] = accountBalances;
+        };
+
+        if (normalizeTransactionType(tx.type) === 'INCOME') {
+            adjust(tx.destinationAccountId, tx.amount);
+        } else if (normalizeTransactionType(tx.type) === 'EXPENSE') {
+            adjust(tx.sourceAccountId, -tx.amount);
+        } else if (isTransferTransaction(tx)) {
+            adjust(tx.sourceAccountId, -tx.amount);
+            adjust(tx.destinationAccountId, tx.amount);
+        }
+
+        return acc;
+    }, {});
+
+    const getOwnerAccountAmount = (account: Account, ownerId: string) => {
+        const explicitOwnerBalance = account.ownerBalances?.[ownerId];
+        if (typeof explicitOwnerBalance === 'number') return explicitOwnerBalance;
+
+        const derivedOwnerBalance = derivedOwnerBalanceByAccount[account.id]?.[ownerId];
+        if (typeof derivedOwnerBalance === 'number' && derivedOwnerBalance !== 0) return derivedOwnerBalance;
+
+        if (!account.ownerBalances && account.ownerId === ownerId) {
+            return account.balance;
+        }
+
+        return derivedOwnerBalance ?? 0;
+    };
+
     const wealthDistribution = meta.owners.map(owner => {
-        const ownedAccounts = trackedAccounts
-            .map((account) => {
-                const amount = (account as any).ownerBalances?.[owner.id] ?? 0;
-                return {
-                    ...account,
-                    balance: amount
-                };
-            })
-            .filter((account) => account.balance !== 0);
         const ownerAccounts = sortAccountsByUsage(
-            ownedAccounts,
+            trackedAccounts
+                .map((account) => ({
+                    ...account,
+                    ownerShareBalance: getOwnerAccountAmount(account, owner.id)
+                }))
+                .filter((account) => account.ownerShareBalance !== 0),
             accountFreq
         );
-
-        const total = ownerAccounts.reduce((sum, acc) => sum + acc.balance, 0);
+        const total = ownerAccounts.reduce((sum, acc) => sum + acc.ownerShareBalance, 0);
         return { ...owner, total, accountCount: ownerAccounts.length, accounts: ownerAccounts };
     }).sort((a, b) => b.total - a.total);
 
@@ -637,7 +688,7 @@ const Home = () => {
                                                         <p className="text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">{acc.type}</p>
                                                     </div>
                                                     <div className="flex items-center gap-3 shrink-0">
-                                                        <span className="text-xs text-slate-900 font-bold">{displayCurrency(acc.balance)}</span>
+                                                        <span className="text-xs text-slate-900 font-bold">{displayCurrency(acc.ownerShareBalance)}</span>
                                                         {canLaunchAccountApp(acc) && (
                                                             <button
                                                                 type="button"
@@ -686,6 +737,18 @@ const Home = () => {
                     </button>
                 ))}
             </div>
+
+            <button
+                type="button"
+                onClick={() => navigate('/accounts/cash')}
+                className="mb-10 flex w-full items-center justify-between rounded-[24px] border border-slate-100 bg-white px-4 py-4 text-left shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)] transition-colors hover:bg-slate-50"
+            >
+                <div>
+                    <p className="text-sm font-bold text-slate-900">Lihat Isi Rekening Kas</p>
+                    <p className="mt-1 text-[11px] text-slate-500">Buka daftar saldo Bank dan E-Wallet.</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Buka</span>
+            </button>
 
             {needsInitialSetup && (
                 <section className="mb-10 rounded-[28px] border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-emerald-50 p-5 shadow-[0_8px_24px_-14px_rgba(37,99,235,0.18)]">
@@ -838,7 +901,7 @@ const Home = () => {
                                         </div>
                                     </div>
                                     <div className="flex shrink-0 flex-col items-end">
-                                        <span className="mb-1 rounded-full bg-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-widest text-slate-500">
+                                        <span className={`mb-1 rounded-full px-2 py-1 text-[9px] font-bold uppercase tracking-widest ${visual.badgeClass}`}>
                                             {visual.badge}
                                         </span>
                                         <p className={`ml-1 shrink-0 text-sm font-bold ${visual.amountClass}`}>
@@ -907,9 +970,9 @@ const Home = () => {
                     >
                         <div className="flex items-start justify-between gap-3">
                             <div>
-                                <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-400">
+                                <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${getRecentTransactionVisual(selectedTransaction).badgeClass}`}>
                                     {getRecentTransactionVisual(selectedTransaction).badge}
-                                </p>
+                                </span>
                                 <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-widest ${getTransactionOriginMeta(selectedTransaction).cls}`}>
                                     {getTransactionOriginMeta(selectedTransaction).label}
                                 </span>
@@ -929,7 +992,7 @@ const Home = () => {
 
                         <div className="mt-5 rounded-2xl bg-slate-50 p-4">
                             <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">Nominal</p>
-                            <p className="mt-2 text-2xl font-black text-slate-900">
+                            <p className={`mt-2 text-2xl font-black ${getRecentTransactionVisual(selectedTransaction).amountClass}`}>
                                 {getRecentTransactionVisual(selectedTransaction).amountPrefix}{formatCurrency(selectedTransaction.amount)}
                             </p>
                         </div>

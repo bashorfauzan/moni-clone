@@ -338,6 +338,59 @@ const syncDerivedDataDirect = async () => {
     await syncTargetsDirect();
 };
 
+const getOwnerAccountBalanceDirect = async (
+    ownerId: string,
+    accountId: string,
+    excludeTransactionId?: string
+) => {
+    const sb = ensureSupabase();
+    let transactionQuery = sb
+        .from('Transaction')
+        .select('id, type, amount, sourceAccountId, destinationAccountId')
+        .eq('ownerId', ownerId)
+        .eq('isValidated', true)
+        .or(`sourceAccountId.eq.${accountId},destinationAccountId.eq.${accountId}`);
+
+    if (excludeTransactionId) {
+        transactionQuery = transactionQuery.neq('id', excludeTransactionId);
+    }
+
+    const [transactionsRes, stockRes, ipoRes] = await Promise.all([
+        transactionQuery,
+        sb.from('StockTransaction').select('side, netValue').eq('ownerId', ownerId).eq('accountId', accountId),
+        sb.from('IpoTransaction').select('side, netValue').eq('ownerId', ownerId).eq('accountId', accountId)
+    ]);
+
+    if (transactionsRes.error) throw transactionsRes.error;
+    if (stockRes.error) throw stockRes.error;
+    if (ipoRes.error) throw ipoRes.error;
+
+    let balance = 0;
+
+    for (const tx of transactionsRes.data || []) {
+        const amount = Number(tx.amount || 0);
+        const type = normalizeTransactionType(tx.type) ?? tx.type;
+        if (type === 'INCOME' && tx.destinationAccountId === accountId) {
+            balance += amount;
+        } else if (type === 'EXPENSE' && tx.sourceAccountId === accountId) {
+            balance -= amount;
+        } else if (type === 'TRANSFER') {
+            if (tx.destinationAccountId === accountId) balance += amount;
+            if (tx.sourceAccountId === accountId) balance -= amount;
+        }
+    }
+
+    for (const tx of stockRes.data || []) {
+        balance += Number(tx.netValue || 0) * (tx.side === 'BUY' ? -1 : 1);
+    }
+
+    for (const tx of ipoRes.data || []) {
+        balance += Number(tx.netValue || 0) * (tx.side === 'BUY' ? -1 : 1);
+    }
+
+    return balance;
+};
+
 const ensureSourceFunds = async (
     payload: TransactionWritePayload,
     excludeTransactionId?: string
@@ -362,30 +415,15 @@ const ensureSourceFunds = async (
     if (!srcAccount) {
         throw new TransactionValidationError('Rekening sumber tidak ditemukan');
     }
-    if (srcAccount.ownerId && srcAccount.ownerId !== payload.ownerId) {
-        throw new TransactionValidationError(`Rekening sumber (${srcAccount.name || 'tanpa nama'}) tidak dimiliki oleh pemilik yang dipilih`);
-    }
-
-    let availableBalance = Number(srcAccount.balance || 0);
-
-    if (excludeTransactionId) {
-        const { data: existingTx, error: existingTxError } = await ensureSupabase()
-            .from('Transaction')
-            .select('amount, sourceAccountId')
-            .eq('id', excludeTransactionId)
-            .limit(1)
-            .maybeSingle();
-
-        if (existingTxError) throw existingTxError;
-
-        if (existingTx?.sourceAccountId === payload.sourceAccountId) {
-            availableBalance += Number(existingTx.amount || 0);
-        }
-    }
+    const availableBalance = await getOwnerAccountBalanceDirect(
+        payload.ownerId,
+        payload.sourceAccountId,
+        excludeTransactionId
+    );
 
     if (availableBalance < payload.amount) {
         throw new TransactionValidationError(
-            `Saldo rekening ${srcAccount.name || 'sumber'} tidak cukup ` +
+            `Saldo kepemilikan pada rekening ${srcAccount.name || 'sumber'} tidak cukup ` +
             `(Hanya ada Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`
         );
     }

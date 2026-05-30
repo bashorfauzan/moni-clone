@@ -159,6 +159,7 @@ model Budget {
 model Target {
   id              String       @id @default(uuid())
   title           String
+  notes           String?
   totalAmount     Float
   remainingAmount Float
   remainingMonths Int

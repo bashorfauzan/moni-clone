@@ -60,7 +60,7 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { title, totalAmount, period, ownerId, dueDate, monthCount } = req.body;
+    const { title, notes, totalAmount, period, ownerId, dueDate, monthCount } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -95,6 +95,7 @@ router.post('/', async (req, res) => {
         const target = await prisma.target.create({
             data: {
                 title: String(title),
+                notes: notes ? String(notes).trim() : null,
                 totalAmount: parsedAmount,
                 remainingMonths: parsedMonthCount || 1,
                 remainingAmount: parsedAmount * (parsedMonthCount || 1),
@@ -164,7 +165,7 @@ router.post('/:id/mark-progress', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-    const { title, totalAmount, period, dueDate, monthCount } = req.body;
+    const { title, notes, totalAmount, period, dueDate, monthCount } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -198,6 +199,7 @@ router.put('/:id', async (req, res) => {
             where: { id: req.params.id },
             data: {
                 title: String(title),
+                notes: notes ? String(notes).trim() : null,
                 totalAmount: parsedAmount,
                 remainingMonths: nextRemainingMonths,
                 remainingAmount: parsedAmount * nextRemainingMonths,

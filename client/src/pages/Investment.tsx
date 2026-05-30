@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download, History, Plus, Wallet, BarChart2 } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Download, History, Plus, Wallet, BarChart2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
@@ -101,6 +101,9 @@ const Investment = () => {
     const [selectedRdn, setSelectedRdn] = useState<any>(null);
     const [detailAccount, setDetailAccount] = useState<any | null>(null);
     const [historyAccount, setHistoryAccount] = useState<any | null>(null);
+    const [historyRange, setHistoryRange] = useState<'CURRENT_MONTH' | 'ALL'>('CURRENT_MONTH');
+    const [historyMonthCursor, setHistoryMonthCursor] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    const [historyPage, setHistoryPage] = useState(1);
     const [submitting, setSubmitting] = useState(false);
     const [incomeFormLock, setIncomeFormLock] = useState<{ ownerId: string; accountId: string; active: boolean }>({
         ownerId: '',
@@ -111,10 +114,11 @@ const Investment = () => {
 
     // Forms
     const [transferForm, setTransferForm] = useState({
-        type: 'DEPOSIT', // DEPOSIT (Bank -> RDN) or WITHDRAW (RDN -> Bank)
+        type: 'WITHDRAW',
         bankId: '',
         ownerId: '',
-        amount: ''
+        amount: '',
+        notes: ''
     });
 
     const [incomeForm, setIncomeForm] = useState({
@@ -126,7 +130,6 @@ const Investment = () => {
         date: new Date().toISOString().slice(0, 10)
     });
     const [stockGrowthDirection, setStockGrowthDirection] = useState<'UP' | 'DOWN'>('UP');
-    const [activeAmountField, setActiveAmountField] = useState<'income' | 'transfer' | null>(null);
 
     const loadData = async () => {
         try {
@@ -149,7 +152,7 @@ const Investment = () => {
 
             const rdns = metaRes.accounts.filter((acc: any) => acc.type === 'RDN');
             const investmentAccounts = metaRes.accounts.filter((acc: any) => acc.type === 'RDN' || acc.type === 'Sekuritas');
-            const banks = metaRes.accounts.filter((acc: any) => acc.type === 'Bank' || acc.type === 'E-Wallet');
+            const banks = metaRes.accounts.filter((acc: any) => acc.type === 'Bank');
             setRdnAccounts(rdns);
             setInvestmentIncomeAccounts(investmentAccounts);
             setBankAccounts(banks);
@@ -183,6 +186,11 @@ const Investment = () => {
         : validatedTransactions.filter((tx: any) => tx.ownerId === selectedOwnerId);
     const currentMonthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
     const nextMonthStart = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+    const historyMonthStart = new Date(historyMonthCursor.getFullYear(), historyMonthCursor.getMonth(), 1);
+    const historyMonthEnd = new Date(historyMonthCursor.getFullYear(), historyMonthCursor.getMonth() + 1, 1);
+    const canMoveHistoryForward =
+        historyMonthStart.getFullYear() < currentMonthStart.getFullYear()
+        || historyMonthStart.getMonth() < currentMonthStart.getMonth();
     const monthlyInvestmentTransactions = scopedTransactions.filter((tx: any) => {
         const txDate = new Date(tx.date);
         return txDate >= currentMonthStart && txDate < nextMonthStart;
@@ -249,17 +257,18 @@ const Investment = () => {
             .map((owner) => {
                 const ownerTransactions = validatedTransactions.filter((tx: any) => tx.ownerId === owner.id);
                 const summary = summarizeFlows(ownerTransactions, detailAccount.id);
+                const ownerBalance = Number(detailAccount.ownerBalances?.[owner.id] || 0);
 
                 return {
                     ownerId: owner.id,
                     name: owner.name,
-                    amount: summary.currentValue,
+                    amount: ownerBalance,
                     depositCount: summary.depositCount,
                     withdrawalCount: summary.withdrawalCount,
                     incomeCount: summary.incomeCount
                 };
             })
-            .filter((row) => row.amount !== 0 || row.depositCount > 0 || row.incomeCount > 0)
+            .filter((row) => row.amount !== 0 || row.depositCount > 0 || row.incomeCount > 0 || row.withdrawalCount > 0)
             .sort((a, b) => b.amount - a.amount)
         : [];
 
@@ -280,13 +289,42 @@ const Investment = () => {
     const historyAccountTransactions = historyAccount
         ? scopedTransactions
             .filter((tx: any) =>
-                (isInvestmentTransfer(tx) && tx.destinationAccountId === historyAccount.id)
-                || (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === historyAccount.id)
-                || (isInvestmentIncome(tx) && tx.destinationAccountId === historyAccount.id)
+                (
+                    (isInvestmentTransfer(tx) && tx.destinationAccountId === historyAccount.id)
+                    || (normalizeTransactionType(tx.type) === 'TRANSFER' && tx.sourceAccountId === historyAccount.id)
+                    || (isInvestmentIncome(tx) && tx.destinationAccountId === historyAccount.id)
+                )
+                && (
+                    historyRange === 'ALL'
+                    || (
+                        new Date(tx.date) >= historyMonthStart
+                        && new Date(tx.date) < historyMonthEnd
+                    )
+                )
             )
             .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
-            .slice(0, 10)
         : [];
+    const HISTORY_PAGE_SIZE = 6;
+    const historyTotalPages = Math.max(1, Math.ceil(historyAccountTransactions.length / HISTORY_PAGE_SIZE));
+    const pagedHistoryAccountTransactions = historyAccountTransactions.slice(
+        (historyPage - 1) * HISTORY_PAGE_SIZE,
+        historyPage * HISTORY_PAGE_SIZE
+    );
+
+    useEffect(() => {
+        setHistoryPage(1);
+    }, [historyAccount?.id, historyRange]);
+
+    useEffect(() => {
+        if (!historyAccount) return;
+        setHistoryMonthCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+    }, [historyAccount?.id]);
+
+    useEffect(() => {
+        if (historyPage > historyTotalPages) {
+            setHistoryPage(historyTotalPages);
+        }
+    }, [historyPage, historyTotalPages]);
 
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -299,8 +337,8 @@ const Investment = () => {
         setSubmitting(true);
         try {
             const amount = Number(transferForm.amount);
-            const sourceId = transferForm.type === 'DEPOSIT' ? transferForm.bankId : selectedRdn.id;
-            const destId = transferForm.type === 'DEPOSIT' ? selectedRdn.id : transferForm.bankId;
+            const sourceId = selectedRdn.id;
+            const destId = transferForm.bankId;
 
             await createTransaction({
                 type: 'TRANSFER',
@@ -309,11 +347,15 @@ const Investment = () => {
                 destinationAccountId: destId,
                 ownerId: transferForm.ownerId || owners[0]?.id,
                 activityId: activities[0]?.id,
-                description: `${transferForm.type === 'DEPOSIT' ? 'Transfer ke investasi' : 'Pencairan investasi dari'} ${selectedRdn.name}`
+                description: transferForm.notes.trim() || (
+                    transferForm.type === 'RDN_TRANSFER'
+                        ? `Transfer antar RDN dari ${selectedRdn.name}`
+                        : `Pencairan investasi dari ${selectedRdn.name}`
+                )
             });
 
             setIsTransferModalOpen(false);
-            setTransferForm((prev) => ({ ...prev, amount: '' }));
+            setTransferForm((prev) => ({ ...prev, amount: '', notes: '' }));
             await loadData();
         } catch (error: any) {
             alert(getErrorMessage(error, 'Gagal memproses transfer'));
@@ -434,6 +476,38 @@ const Investment = () => {
     const preferredRdnForQuickAction = selectedRdnId !== 'ALL'
         ? filteredRdns.find((account) => account.id === selectedRdnId) || null
         : filteredRdns[0] || null;
+    const rdnTransferTargets = selectedRdn
+        ? rdnAccounts.filter((account: any) => account.id !== selectedRdn.id)
+        : rdnAccounts;
+    const rdnOwnershipOptions = selectedRdn
+        ? owners
+            .map((owner) => ({
+                ...owner,
+                balance: Number(selectedRdn.ownerBalances?.[owner.id] || 0)
+            }))
+            .filter((owner) => owner.balance > 0)
+            .sort((a, b) => b.balance - a.balance)
+        : [];
+
+    const getPreferredRdnOwnerId = (rdn: any) => {
+        const scopedOwnerBalance = selectedOwnerId !== 'ALL'
+            ? Number(rdn?.ownerBalances?.[selectedOwnerId] || 0)
+            : 0;
+
+        if (selectedOwnerId !== 'ALL' && scopedOwnerBalance > 0) {
+            return selectedOwnerId;
+        }
+
+        const topOwner = owners
+            .map((owner) => ({
+                id: owner.id,
+                balance: Number(rdn?.ownerBalances?.[owner.id] || 0)
+            }))
+            .filter((owner) => owner.balance > 0)
+            .sort((a, b) => b.balance - a.balance)[0];
+
+        return topOwner?.id || '';
+    };
 
     const openTransferQuickAction = () => {
         if (!preferredRdnForQuickAction) {
@@ -441,21 +515,31 @@ const Investment = () => {
             return;
         }
 
-        const preferredOwnerId = selectedOwnerId !== 'ALL'
-            ? selectedOwnerId
-            : preferredRdnForQuickAction.ownerId || owners[0]?.id || '';
+        const preferredOwnerId = getPreferredRdnOwnerId(preferredRdnForQuickAction);
 
         setSelectedRdn(preferredRdnForQuickAction);
         setTransferForm((prev) => ({
             ...prev,
-            type: 'DEPOSIT',
+            type: 'WITHDRAW',
             bankId: bankAccounts[0]?.id || '',
             ownerId: preferredOwnerId,
-            amount: ''
+            amount: '',
+            notes: `Pencairan investasi dari ${preferredRdnForQuickAction.name}`
         }));
         setIsTransferModalOpen(true);
         setFabOpen(false);
     };
+
+    useEffect(() => {
+        if (!isTransferModalOpen || !selectedRdn) return;
+        if (rdnOwnershipOptions.length === 0) return;
+        if (rdnOwnershipOptions.some((owner) => owner.id === transferForm.ownerId)) return;
+
+        setTransferForm((prev) => ({
+            ...prev,
+            ownerId: rdnOwnershipOptions[0]?.id || ''
+        }));
+    }, [isTransferModalOpen, selectedRdn, rdnOwnershipOptions, transferForm.ownerId]);
 
     const openInvestmentIncomeQuickAction = (kind: 'SUKUK' | 'STOCK_GROWTH') => {
         const preferredAccount = preferredRdnForQuickAction || investmentIncomeAccounts[0] || null;
@@ -508,7 +592,7 @@ const Investment = () => {
             onClick: () => openInvestmentIncomeQuickAction('SUKUK')
         },
         {
-            label: 'Transfer',
+            label: 'Pencairan',
             icon: <ArrowRightLeft size={18} />,
             gradient: 'from-sky-500 to-blue-400',
             shadow: 'rgba(14,165,233,0.4)',
@@ -832,9 +916,7 @@ const Investment = () => {
                             <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
                                 <button
                                     onClick={() => {
-                                        const preferredOwnerId = selectedOwnerId !== 'ALL'
-                                            ? selectedOwnerId
-                                            : owners[0]?.id || '';
+                                        const preferredOwnerId = getPreferredRdnOwnerId(rdn);
                                         setSelectedRdn(rdn);
                                         setTransferForm((prev) => ({
                                             ...prev,
@@ -885,6 +967,7 @@ const Investment = () => {
                                     <div className="mt-2 space-y-1 text-[11px] font-medium text-blue-900/70 leading-relaxed">
                                         <p>Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.</p>
                                         <p>Kas tersisa {formatCurrency(detailAccountSummary.cashBalance)}, saham aktif {formatCurrency(detailAccountSummary.stockHoldingValue)}, IPO pending {formatCurrency(detailAccountSummary.pendingIpoValue)}.</p>
+                                        <p>Breakdown owner di bawah mengikuti dana yang saat ini tercatat di RDN ini.</p>
                                     </div>
                                 )}
                             </div>
@@ -892,7 +975,7 @@ const Investment = () => {
                             <div>
                                 <div className="grid grid-cols-[1fr_auto] gap-3 px-2 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">
                                     <span>Kepemilikan</span>
-                                    <span>Nilai Tercatat</span>
+                                    <span>Saldo di RDN</span>
                                 </div>
                                 <div className="space-y-2">
                                     {ownershipRows.length > 0 ? ownershipRows.map((row) => (
@@ -900,7 +983,7 @@ const Investment = () => {
                                             <div>
                                                 <span className="font-bold text-slate-900">{row.name}</span>
                                                 <p className="mt-0.5 text-[11px] font-medium text-slate-500">
-                                                    {row.depositCount} setor, {row.incomeCount} hasil
+                                                    {row.depositCount} setor, {row.withdrawalCount} cair, {row.incomeCount} hasil
                                                 </p>
                                             </div>
                                             <span className="text-base font-black text-slate-900 tracking-tight">{formatCurrency(row.amount)}</span>
@@ -924,6 +1007,11 @@ const Investment = () => {
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Riwayat Transaksi</h3>
                                 <p className="mt-0.5 text-xs text-slate-500">{historyAccount.name}</p>
+                                <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                    {historyRange === 'ALL'
+                                        ? 'Semua riwayat transaksi'
+                                        : `Per bulan - ${historyMonthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}`}
+                                </p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -947,10 +1035,52 @@ const Investment = () => {
                             </div>
                         </div>
 
+                        <div className="flex gap-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setHistoryRange('CURRENT_MONTH')}
+                                className={`flex-1 rounded-2xl border px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${historyRange === 'CURRENT_MONTH' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-200 hover:text-blue-600'}`}
+                            >
+                                Per Bulan
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setHistoryRange('ALL')}
+                                className={`flex-1 rounded-2xl border px-3 py-2 text-[10px] font-bold uppercase tracking-widest transition-colors ${historyRange === 'ALL' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}
+                            >
+                                Semua
+                            </button>
+                        </div>
+
+                        {historyRange === 'CURRENT_MONTH' && (
+                            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoryMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
+                                    className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white hover:text-slate-700"
+                                    aria-label="Bulan sebelumnya"
+                                >
+                                    <ChevronLeft size={16} />
+                                </button>
+                                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-600">
+                                    {historyMonthStart.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoryMonthCursor((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                                    disabled={!canMoveHistoryForward}
+                                    className="flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-white hover:text-slate-700 disabled:opacity-30"
+                                    aria-label="Bulan berikutnya"
+                                >
+                                    <ChevronRight size={16} />
+                                </button>
+                            </div>
+                        )}
+
                         <div className="overflow-y-auto overscroll-contain flex-1 -mx-2 px-2">
                             <div className="space-y-2">
-                                {historyAccountTransactions.length > 0 ? (
-                                    historyAccountTransactions.map((tx: any) => {
+                                {pagedHistoryAccountTransactions.length > 0 ? (
+                                    pagedHistoryAccountTransactions.map((tx: any) => {
                                         const txIsIncome = isInvestmentIncome(tx);
                                         return (
                                             <div key={tx.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors">
@@ -1002,11 +1132,37 @@ const Investment = () => {
                                     })
                                 ) : (
                                     <div className="rounded-2xl border border-slate-100 bg-slate-50/50 p-6 text-center text-sm font-medium text-slate-500">
-                                        Belum ada riwayat transaksi.
+                                        {historyRange === 'ALL'
+                                            ? 'Belum ada riwayat transaksi.'
+                                            : 'Belum ada riwayat transaksi pada bulan ini.'}
                                     </div>
                                 )}
                             </div>
                         </div>
+
+                        {historyAccountTransactions.length > HISTORY_PAGE_SIZE && (
+                            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                                    disabled={historyPage === 1}
+                                    className="rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                                >
+                                    Sebelumnya
+                                </button>
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                                    Hal {historyPage} / {historyTotalPages}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setHistoryPage((page) => Math.min(historyTotalPages, page + 1))}
+                                    disabled={historyPage >= historyTotalPages}
+                                    className="rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-slate-600 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                                >
+                                    Selanjutnya
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
@@ -1090,10 +1246,8 @@ const Investment = () => {
                                         inputMode="numeric"
                                         placeholder="0"
                                         className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-semibold bg-slate-50"
-                                        value={activeAmountField === 'income' ? incomeForm.amount : formatThousands(incomeForm.amount)}
+                                        value={formatThousands(incomeForm.amount)}
                                         onChange={(e) => setIncomeForm((prev) => ({ ...prev, amount: sanitizeAmount(e.target.value) }))}
-                                        onFocus={() => setActiveAmountField('income')}
-                                        onBlur={() => setActiveAmountField((current) => current === 'income' ? null : current)}
                                     />
                                 </label>
                                 <label className="space-y-1.5 block">
@@ -1173,25 +1327,53 @@ const Investment = () => {
                     <div className="w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-slate-100 p-6 animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between mb-5">
                             <div>
-                                <h3 className="text-lg font-black text-slate-900 tracking-tight">Transfer Dana Investasi</h3>
-                                <p className="mt-0.5 text-xs text-slate-500">Pindah dana antara bank dan rekening investasi.</p>
+                                <h3 className="text-lg font-black text-slate-900 tracking-tight">
+                                    {transferForm.type === 'RDN_TRANSFER' ? 'Transfer Antar RDN' : 'Pencairan Investasi'}
+                                </h3>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                    {transferForm.type === 'RDN_TRANSFER'
+                                        ? 'Pindahkan dana dari rekening investasi ini ke rekening RDN lain.'
+                                        : 'Pindahkan dana dari rekening investasi ke bank atau e-wallet.'}
+                                </p>
                             </div>
                             <button onClick={() => setIsTransferModalOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors shrink-0"><X size={15} /></button>
                         </div>
 
-                        <div className="flex gap-2 h-11 mb-4">
+                        <div className="mb-4 flex gap-2 h-11">
                             <button
-                                onClick={() => setTransferForm({ ...transferForm, type: 'DEPOSIT' })}
-                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${transferForm.type === 'DEPOSIT' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'}`}
-                            >
-                                Ke Investasi
-                            </button>
-                            <button
-                                onClick={() => setTransferForm({ ...transferForm, type: 'WITHDRAW' })}
+                                type="button"
+                                onClick={() => setTransferForm((prev) => ({
+                                    ...prev,
+                                    type: 'WITHDRAW',
+                                    bankId: bankAccounts[0]?.id || '',
+                                    notes: prev.notes || `Pencairan investasi dari ${selectedRdn.name}`
+                                }))}
                                 className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${transferForm.type === 'WITHDRAW' ? 'bg-amber-500 text-white border-amber-500 shadow-md shadow-amber-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-amber-200 hover:text-amber-500'}`}
                             >
                                 Pencairan
                             </button>
+                            <button
+                                type="button"
+                                onClick={() => setTransferForm((prev) => ({
+                                    ...prev,
+                                    type: 'RDN_TRANSFER',
+                                    bankId: rdnTransferTargets[0]?.id || '',
+                                    notes: prev.notes || `Transfer antar RDN dari ${selectedRdn.name}`
+                                }))}
+                                className={`flex-1 rounded-2xl text-[10px] font-bold uppercase tracking-widest transition-all border ${transferForm.type === 'RDN_TRANSFER' ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-500/20' : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'}`}
+                            >
+                                Antar RDN
+                            </button>
+                        </div>
+
+                        <div className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Dari</p>
+                            <p className="mt-1 text-sm font-bold text-slate-900">{selectedRdn.name}</p>
+                            <p className="mt-1 text-[11px] text-slate-500">
+                                {transferForm.type === 'RDN_TRANSFER'
+                                    ? 'Rekening RDN sumber untuk transfer antar RDN.'
+                                    : 'Rekening investasi sumber untuk proses pencairan.'}
+                            </p>
                         </div>
 
                         <form onSubmit={handleTransfer} className="space-y-4">
@@ -1202,42 +1384,59 @@ const Investment = () => {
                                     value={transferForm.ownerId}
                                     onChange={e => setTransferForm({ ...transferForm, ownerId: e.target.value, bankId: '' })}
                                     required
+                                    disabled={rdnOwnershipOptions.length === 0}
                                 >
                                     <option value="" disabled>Pilih kepemilikan...</option>
-                                    {owners.map((owner) => (
-                                        <option key={owner.id} value={owner.id}>{owner.name}</option>
+                                    {rdnOwnershipOptions.map((owner) => (
+                                        <option key={owner.id} value={owner.id}>
+                                            {owner.name} ({formatCurrency(owner.balance)})
+                                        </option>
                                     ))}
                                 </select>
+                                {rdnOwnershipOptions.length === 0 && (
+                                    <p className="mt-1 text-[11px] text-amber-600 ml-1">
+                                        Belum ada kepemilikan yang memiliki dana di RDN ini.
+                                    </p>
+                                )}
+                                {transferForm.ownerId && selectedRdn?.ownerBalances?.[transferForm.ownerId] ? (
+                                    <p className="mt-1 text-[11px] text-slate-500 ml-1">
+                                        Dana owner ini di {selectedRdn.name}: {formatCurrency(Number(selectedRdn.ownerBalances?.[transferForm.ownerId] || 0))}
+                                    </p>
+                                ) : null}
                             </label>
 
                             <label className="space-y-1.5 block">
                                 <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">
-                                    {transferForm.type === 'DEPOSIT' ? 'Rekening Sumber Dana' : 'Rekening Tujuan Pencairan'}
+                                    {transferForm.type === 'RDN_TRANSFER' ? 'Rekening RDN Tujuan' : 'Rekening Bank Tujuan'}
                                 </span>
                                 <select
                                     className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                     value={transferForm.bankId}
                                     onChange={e => setTransferForm({ ...transferForm, bankId: e.target.value })}
                                     required
-                                    disabled={bankAccounts.length === 0}
+                                    disabled={transferForm.type === 'RDN_TRANSFER' ? rdnTransferTargets.length === 0 : bankAccounts.length === 0}
                                 >
                                     <option value="" disabled>
-                                        {transferForm.type === 'DEPOSIT' ? 'Pilih rekening sumber...' : 'Pilih rekening tujuan...'}
+                                        {transferForm.type === 'RDN_TRANSFER' ? 'Pilih rekening RDN tujuan...' : 'Pilih rekening bank tujuan...'}
                                     </option>
-                                    {bankAccounts
-                                        .filter((b: any) => !transferForm.ownerId || !b.ownerId || b.ownerId === transferForm.ownerId)
-                                        .map((b: any) => (
-                                            <option key={b.id} value={b.id}>{b.name} ({formatCurrency(b.balance)})</option>
+                                    {(transferForm.type === 'RDN_TRANSFER' ? rdnTransferTargets : bankAccounts)
+                                        .map((account: any) => (
+                                            <option key={account.id} value={account.id}>{account.name} ({formatCurrency(account.balance)})</option>
                                         ))}
                                 </select>
-                                {bankAccounts.filter((b: any) => !transferForm.ownerId || !b.ownerId || b.ownerId === transferForm.ownerId).length === 0 && transferForm.ownerId && (
+                                {transferForm.type === 'RDN_TRANSFER' && rdnTransferTargets.length === 0 && (
                                     <p className="mt-1 text-[11px] text-amber-600 ml-1">
-                                        Pemilik ini belum memiliki rekening bank atau e-wallet.
+                                        Belum ada rekening RDN lain yang bisa dipilih.
                                     </p>
                                 )}
-                                {bankAccounts.length === 0 && !transferForm.ownerId && (
+                                {transferForm.type !== 'RDN_TRANSFER' && bankAccounts.length === 0 && transferForm.ownerId && (
                                     <p className="mt-1 text-[11px] text-amber-600 ml-1">
-                                        Belum ada rekening bank atau e-wallet yang tersedia.
+                                        Belum ada rekening bank yang tersedia untuk pencairan.
+                                    </p>
+                                )}
+                                {transferForm.type !== 'RDN_TRANSFER' && bankAccounts.length === 0 && !transferForm.ownerId && (
+                                    <p className="mt-1 text-[11px] text-amber-600 ml-1">
+                                        Belum ada rekening bank yang tersedia.
                                     </p>
                                 )}
                             </label>
@@ -1250,15 +1449,24 @@ const Investment = () => {
                                     inputMode="numeric"
                                     placeholder="0"
                                     className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-semibold bg-slate-50"
-                                    value={activeAmountField === 'transfer' ? transferForm.amount : formatThousands(transferForm.amount)}
+                                    value={formatThousands(transferForm.amount)}
                                     onChange={(e) => setTransferForm((f) => ({ ...f, amount: sanitizeAmount(e.target.value) }))}
-                                    onFocus={() => setActiveAmountField('transfer')}
-                                    onBlur={() => setActiveAmountField((current) => current === 'transfer' ? null : current)}
                                 />
                             </label>
 
-                            <button disabled={submitting} className={`w-full h-12 rounded-2xl text-white text-xs font-bold uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2 mt-4 shadow-lg active:scale-95 transition-all ${transferForm.type === 'DEPOSIT' ? 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-500' : 'bg-amber-500 shadow-amber-500/20 hover:bg-amber-400'}`}>
-                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : transferForm.type === 'DEPOSIT' ? 'Transfer ke Investasi' : 'Pencairan ke Bank'}
+                            <label className="space-y-1.5 block">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Catatan</span>
+                                <textarea
+                                    rows={3}
+                                    placeholder={transferForm.type === 'RDN_TRANSFER' ? 'Contoh: Pindah dana ke RDN utama' : 'Contoh: Cairkan dana untuk kebutuhan bulanan'}
+                                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm bg-slate-50 resize-none"
+                                    value={transferForm.notes}
+                                    onChange={(e) => setTransferForm((prev) => ({ ...prev, notes: e.target.value }))}
+                                />
+                            </label>
+
+                            <button disabled={submitting || rdnOwnershipOptions.length === 0} className={`w-full h-12 rounded-2xl text-white text-xs font-bold uppercase tracking-widest disabled:opacity-60 flex items-center justify-center gap-2 mt-4 shadow-lg active:scale-95 transition-all ${transferForm.type === 'RDN_TRANSFER' ? 'bg-blue-600 shadow-blue-600/20 hover:bg-blue-500' : 'bg-amber-500 shadow-amber-500/20 hover:bg-amber-400'}`}>
+                                <ArrowRightLeft size={16} /> {submitting ? 'Memproses...' : transferForm.type === 'RDN_TRANSFER' ? 'Transfer Antar RDN' : 'Pencairan ke Bank'}
                             </button>
                         </form>
                     </div>

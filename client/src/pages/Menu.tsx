@@ -1212,6 +1212,22 @@ const MenuPage = () => {
                     {/* Setup Kategori */}
                     <button
                         className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
+                        onClick={() => navigate('/accounts/cash')}
+                    >
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-xl bg-cyan-100 text-cyan-600 flex items-center justify-center">
+                                <Wallet size={16} />
+                            </div>
+                            <div className="min-w-0">
+                                <span className="block text-sm font-semibold text-slate-800 truncate">Lihat Rekening Kas</span>
+                                <span className="block text-[11px] text-slate-500 truncate">Pantau isi Bank dan E-Wallet</span>
+                            </div>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-400" />
+                    </button>
+
+                    <button
+                        className="w-full flex items-center justify-between gap-3 p-4 hover:bg-white/55 transition-colors border-b border-white/50 text-left"
                         onClick={() => { setShowActivityForm(false); setIsActivityManagerOpen(true); }}
                     >
                         <div className="flex items-center gap-3 min-w-0">

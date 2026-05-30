@@ -36,7 +36,7 @@ const Targets = () => {
     const [loading, setLoading] = useState(true);
     const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
     const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
-    const [form, setForm] = useState({ title: '', totalAmount: '', monthCount: '' });
+    const [form, setForm] = useState({ title: '', notes: '', totalAmount: '', monthCount: '' });
 
     const loadPageData = async () => {
         const [metaRes, targetRes] = await Promise.all([
@@ -74,7 +74,7 @@ const Targets = () => {
     };
 
     const resetTargetForm = () => {
-        setForm({ title: '', totalAmount: '', monthCount: '' });
+        setForm({ title: '', notes: '', totalAmount: '', monthCount: '' });
         setEditingTargetId(null);
     };
 
@@ -87,6 +87,7 @@ const Targets = () => {
         setEditingTargetId(target.id);
         setForm({
             title: target.title || '',
+            notes: target.notes || '',
             totalAmount: String(target.totalAmount || ''),
             monthCount: String(diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 12),
         });
@@ -108,6 +109,7 @@ const Targets = () => {
         try {
             const payload = {
                 title: form.title.trim(),
+                notes: form.notes.trim(),
                 totalAmount: Number(form.totalAmount),
                 monthCount: Number(form.monthCount),
                 ownerId: data.owners[0]?.id || undefined
@@ -279,6 +281,11 @@ const Targets = () => {
                                         <p className="mt-1 text-xs text-slate-500 truncate">
                                             {formatCurrency(target.totalAmount)} / bln <span className="text-slate-300 mx-1">•</span> {monthsLeft} bln tersisa
                                         </p>
+                                        {target.notes && (
+                                            <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
+                                                {target.notes}
+                                            </p>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0 -mt-1 -mr-1">
                                         <button
@@ -394,6 +401,16 @@ const Targets = () => {
                                     onChange={(e) => setForm((f) => ({ ...f, monthCount: sanitizeAmount(e.target.value) }))}
                                 />
                                 <p className="px-1 text-[11px] text-slate-400">Dihitung mulai bulan ini hingga jumlah bulan yang ditentukan.</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Catatan</label>
+                                <textarea
+                                    rows={3}
+                                    placeholder="Contoh: dibayar tiap awal bulan, prioritas utama, atau memo lain"
+                                    className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none transition resize-none focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                    value={form.notes}
+                                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                                />
                             </div>
 
                             <button

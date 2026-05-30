@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Plus, Save, Trash2, Wallet, X } from 'lucide-react';
 import Spinner from '../components/Spinner';
+import { useTransaction } from '../context/TransactionContext';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
+import { computeStockMoney } from '../services/stocksDirect';
 import {
     createStockTransaction,
     deleteStockTransaction,
@@ -20,6 +22,17 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
     maximumFractionDigits: 0
 }).format(value || 0);
 
+const formatThousands = (raw: string) => {
+    if (!raw) return '';
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric)) return '';
+    return new Intl.NumberFormat('id-ID').format(numeric);
+};
+
+const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
+const getOwnerBalance = (account: Account | null | undefined, ownerId?: string) =>
+    Number((ownerId && account?.ownerBalances?.[ownerId]) || 0);
+
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
 
 const emptyForm = () => ({
@@ -34,6 +47,7 @@ const emptyForm = () => ({
 });
 
 const Stocks = () => {
+    const { openModal } = useTransaction();
     const [searchParams, setSearchParams] = useSearchParams();
     const [owners, setOwners] = useState<Owner[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
@@ -47,18 +61,65 @@ const Stocks = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [form, setForm] = useState(emptyForm());
+    const tickerInputRef = useRef<HTMLInputElement | null>(null);
+    const lotInputRef = useRef<HTMLInputElement | null>(null);
+    const priceInputRef = useRef<HTMLInputElement | null>(null);
+    const submitButtonRef = useRef<HTMLButtonElement | null>(null);
 
     const stockAccounts = useMemo(
         () => accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type)),
         [accounts]
     );
+    const availableStockAccounts = useMemo(
+        () => stockAccounts
+            .filter((account) => {
+                if (editingId && account.id === form.accountId) return true;
+                if (selectedOwnerId !== 'ALL') return getOwnerBalance(account, selectedOwnerId) > 0;
+                return Object.values(account.ownerBalances || {}).some((amount) => Number(amount || 0) > 0);
+            })
+            .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0)),
+        [editingId, form.accountId, selectedOwnerId, stockAccounts]
+    );
     const selectedAccount = stockAccounts.find((account) => account.id === form.accountId) || null;
-    const selectedOwner = owners.find((owner) => owner.id === (selectedAccount?.ownerId || form.ownerId)) || null;
+    const accountOwnerOptions = useMemo(
+        () => selectedAccount
+            ? owners
+                .map((owner) => ({
+                    ...owner,
+                    balance: getOwnerBalance(selectedAccount, owner.id)
+                }))
+                .filter((owner) => editingId ? (owner.balance > 0 || owner.id === form.ownerId) : owner.balance > 0)
+                .sort((a, b) => b.balance - a.balance)
+            : [],
+        [editingId, form.ownerId, owners, selectedAccount]
+    );
+    const selectedOwner = owners.find((owner) => owner.id === form.ownerId) || null;
+    const enteredLot = Number(form.lot || 0);
+    const enteredPricePerShare = Number(form.pricePerShare || 0);
+    const tradePreview = useMemo(() => {
+        if (!selectedAccount || enteredLot <= 0 || enteredPricePerShare <= 0) return null;
+
+        return computeStockMoney({
+            side: form.side,
+            lot: enteredLot,
+            pricePerShare: enteredPricePerShare,
+            brokerFeePercent: Number(selectedAccount.stockBrokerFeePercent || 0),
+            levyFeePercent: Number(selectedAccount.stockLevyFeePercent || 0)
+        });
+    }, [enteredLot, enteredPricePerShare, form.side, selectedAccount]);
+    const availableCash = getOwnerBalance(selectedAccount, form.ownerId);
+    const requiredCash = form.side === 'BUY' ? Number(tradePreview?.netValue || 0) : 0;
+    const remainingCashAfterBuy = form.side === 'BUY' ? availableCash - requiredCash : null;
+    const isBuyFundsEnough = form.side !== 'BUY' || !tradePreview || remainingCashAfterBuy === null || remainingCashAfterBuy >= 0;
+    const isSubmitBlockedByFunds = form.side === 'BUY' && Boolean(tradePreview) && !isBuyFundsEnough;
 
     const loadData = async () => {
         try {
             const meta = await fetchMasterMeta();
             const nextAccounts = meta.accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type));
+            const fundedAccounts = nextAccounts.filter((account) =>
+                Object.values(account.ownerBalances || {}).some((amount) => Number(amount || 0) > 0)
+            );
             setOwners(meta.owners);
             setAccounts(meta.accounts);
 
@@ -77,8 +138,8 @@ const Stocks = () => {
             setPositions(positionRows);
             setForm((current) => ({
                 ...current,
-                accountId: current.accountId || nextAccounts[0]?.id || '',
-                ownerId: current.ownerId || nextAccounts[0]?.ownerId || meta.owners[0]?.id || ''
+                accountId: current.accountId || fundedAccounts[0]?.id || nextAccounts[0]?.id || '',
+                ownerId: current.ownerId
             }));
         } finally {
             setLoading(false);
@@ -91,19 +152,32 @@ const Stocks = () => {
 
     useEffect(() => {
         const action = searchParams.get('action');
-        if (!action || stockAccounts.length === 0) return;
+        if (!action || availableStockAccounts.length === 0) return;
 
         const requestedAccountId = searchParams.get('accountId');
         const requestedOwnerId = searchParams.get('ownerId');
-        const resolvedAccount = stockAccounts.find((account) => account.id === requestedAccountId) || stockAccounts[0];
-        const resolvedOwnerId = requestedOwnerId || resolvedAccount?.ownerId || owners[0]?.id || '';
+        const requestedTicker = searchParams.get('ticker') || '';
+        const requestedLot = searchParams.get('lot') || '';
+        const requestedPricePerShare = searchParams.get('pricePerShare') || '';
+        const requestedTradedAt = searchParams.get('tradedAt') || new Date().toISOString().slice(0, 10);
+        const requestedNotes = searchParams.get('notes') || '';
+        const resolvedAccount = availableStockAccounts.find((account) => account.id === requestedAccountId) || availableStockAccounts[0];
+        const resolvedOwnerId = requestedOwnerId
+            || owners
+                .find((owner) => getOwnerBalance(resolvedAccount, owner.id) > 0)?.id
+            || '';
 
         setEditingId(null);
         setForm({
             ...emptyForm(),
             side: action === 'sell' ? 'SELL' : 'BUY',
             accountId: resolvedAccount?.id || '',
-            ownerId: resolvedOwnerId
+            ownerId: resolvedOwnerId,
+            ticker: requestedTicker.toUpperCase(),
+            lot: requestedLot,
+            pricePerShare: requestedPricePerShare,
+            tradedAt: requestedTradedAt,
+            notes: requestedNotes
         });
         setIsFormOpen(true);
 
@@ -111,15 +185,54 @@ const Stocks = () => {
         nextParams.delete('action');
         nextParams.delete('accountId');
         nextParams.delete('ownerId');
+        nextParams.delete('ticker');
+        nextParams.delete('lot');
+        nextParams.delete('pricePerShare');
+        nextParams.delete('tradedAt');
+        nextParams.delete('notes');
         setSearchParams(nextParams, { replace: true });
-    }, [owners, searchParams, setSearchParams, stockAccounts]);
+    }, [availableStockAccounts, owners, searchParams, setSearchParams]);
+
+    useEffect(() => {
+        if (!selectedAccount) return;
+        if (accountOwnerOptions.some((owner) => owner.id === form.ownerId)) return;
+
+        setForm((current) => ({
+            ...current,
+            ownerId: accountOwnerOptions[0]?.id || ''
+        }));
+    }, [accountOwnerOptions, form.ownerId, selectedAccount]);
+
+    useEffect(() => {
+        if (!isFormOpen) return;
+
+        const focusTarget = window.setTimeout(() => {
+            if (!form.ticker.trim()) {
+                tickerInputRef.current?.focus();
+                return;
+            }
+            if (!form.lot.trim()) {
+                lotInputRef.current?.focus();
+                return;
+            }
+            if (!form.pricePerShare.trim()) {
+                priceInputRef.current?.focus();
+                return;
+            }
+            submitButtonRef.current?.focus();
+        }, 80);
+
+        return () => window.clearTimeout(focusTarget);
+    }, [isFormOpen]);
 
     const resetForm = () => {
         setEditingId(null);
         setForm({
             ...emptyForm(),
-            ownerId: stockAccounts[0]?.ownerId || owners[0]?.id || '',
-            accountId: stockAccounts[0]?.id || ''
+            ownerId: availableStockAccounts[0]
+                ? owners.find((owner) => getOwnerBalance(availableStockAccounts[0], owner.id) > 0)?.id || ''
+                : '',
+            accountId: availableStockAccounts[0]?.id || ''
         });
         setIsFormOpen(false);
     };
@@ -150,7 +263,7 @@ const Stocks = () => {
             await loadData();
             setIsFormOpen(false);
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menyimpan transaksi saham');
+            alert(error?.response?.data?.error || error?.message || 'Gagal menyimpan transaksi saham');
         } finally {
             setSaving(false);
         }
@@ -179,10 +292,30 @@ const Stocks = () => {
             if (editingId === id) resetForm();
             await loadData();
         } catch (error: any) {
-            alert(error?.response?.data?.error || 'Gagal menghapus transaksi saham');
+            alert(error?.response?.data?.error || error?.message || 'Gagal menghapus transaksi saham');
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleOpenTopUpRdn = () => {
+        if (!selectedAccount) return;
+
+        setIsFormOpen(false);
+        setEditingId(null);
+        openModal('INVESTMENT', {
+            ownerId: form.ownerId || undefined,
+            destinationAccountId: selectedAccount.id,
+            returnTo: 'stocks',
+            returnAccountId: selectedAccount.id,
+            returnOwnerId: form.ownerId || undefined,
+            returnAction: 'buy',
+            returnTicker: form.ticker.trim().toUpperCase(),
+            returnLot: form.lot,
+            returnPricePerShare: form.pricePerShare,
+            returnTradedAt: form.tradedAt,
+            returnNotes: form.notes
+        });
     };
 
     const activePositions = useMemo(() => positions.filter((row) => row.totalLots > 0), [positions]);
@@ -217,10 +350,10 @@ const Stocks = () => {
             </div>
 
             {/* No account warning */}
-            {stockAccounts.length === 0 && (
+            {availableStockAccounts.length === 0 && (
                 <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
-                    <p className="text-sm font-bold text-slate-900">Belum ada rekening saham</p>
-                    <p className="mt-1 text-xs text-slate-600">Tambahkan rekening bertipe <code className="font-mono bg-amber-100 px-1 rounded">RDN</code> atau <code className="font-mono bg-amber-100 px-1 rounded">Sekuritas</code> dari menu Setting.</p>
+                    <p className="text-sm font-bold text-slate-900">Belum ada rekening saham yang memiliki dana</p>
+                    <p className="mt-1 text-xs text-slate-600">Tambahkan dana ke rekening bertipe <code className="font-mono bg-amber-100 px-1 rounded">RDN</code> atau <code className="font-mono bg-amber-100 px-1 rounded">Sekuritas</code>, lalu akun akan muncul di sini.</p>
                 </div>
             )}
 
@@ -460,25 +593,35 @@ const Stocks = () => {
                                         value={form.accountId}
                                         onChange={(e) => {
                                             const nextAccountId = e.target.value;
-                                            const account = stockAccounts.find((item) => item.id === nextAccountId);
+                                            const account = availableStockAccounts.find((item) => item.id === nextAccountId);
                                             setForm((current) => ({
                                                 ...current,
                                                 accountId: nextAccountId,
-                                                ownerId: account?.ownerId || current.ownerId
+                                                ownerId: owners.find((owner) => getOwnerBalance(account, owner.id) > 0)?.id || ''
                                             }));
                                         }}
                                     >
-                                        {stockAccounts.map((account) => (
+                                        {availableStockAccounts.map((account) => (
                                             <option key={account.id} value={account.id}>{account.name}</option>
                                         ))}
                                     </select>
                                 </label>
-                                <div className="space-y-1.5">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Pemilik Otomatis</span>
-                                    <div className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 flex items-center text-slate-700 font-semibold">
-                                        {selectedOwner?.name || 'Mengikuti sekuritas'}
-                                    </div>
-                                </div>
+                                <label className="space-y-1.5 block">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Pemilik Dana</span>
+                                    <select
+                                        className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
+                                        value={form.ownerId}
+                                        onChange={(e) => setForm((current) => ({ ...current, ownerId: e.target.value }))}
+                                        disabled={accountOwnerOptions.length === 0}
+                                    >
+                                        <option value="" disabled>Pilih pemilik dana...</option>
+                                        {accountOwnerOptions.map((owner) => (
+                                            <option key={owner.id} value={owner.id}>
+                                                {owner.name} ({formatCurrency(owner.balance)})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
                             </div>
 
                             {/* Ticker + BUY/SELL toggle */}
@@ -486,10 +629,21 @@ const Stocks = () => {
                                 <label className="space-y-1.5 block">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Kode Saham (Ticker)</span>
                                     <input
+                                        ref={tickerInputRef}
                                         className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm font-bold uppercase bg-slate-50 tracking-widest"
                                         placeholder="Contoh: BBCA"
                                         value={form.ticker}
-                                        onChange={(e) => setForm((current) => ({ ...current, ticker: e.target.value.toUpperCase() }))}
+                                        maxLength={4}
+                                        onChange={(e) => {
+                                            const nextTicker = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+                                            setForm((current) => ({ ...current, ticker: nextTicker }));
+
+                                            if (nextTicker.length === 4) {
+                                                window.setTimeout(() => {
+                                                    lotInputRef.current?.focus();
+                                                }, 0);
+                                            }
+                                        }}
                                     />
                                 </label>
                                 <div className="space-y-1.5">
@@ -518,24 +672,78 @@ const Stocks = () => {
                                 <label className="space-y-1.5 block">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Jumlah Lot</span>
                                     <input
+                                        ref={lotInputRef}
                                         className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                         inputMode="numeric"
-                                        placeholder="Contoh: 10"
-                                        value={form.lot}
-                                        onChange={(e) => setForm((current) => ({ ...current, lot: e.target.value.replace(/\D/g, '') }))}
+                                        placeholder="Contoh: 10.000"
+                                        value={formatThousands(form.lot)}
+                                        onChange={(e) => setForm((current) => ({ ...current, lot: sanitizeAmount(e.target.value) }))}
                                     />
                                 </label>
                                 <label className="space-y-1.5 block">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Harga per Lembar (Rp)</span>
                                     <input
+                                        ref={priceInputRef}
                                         className="w-full rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium"
                                         inputMode="numeric"
-                                        placeholder="Contoh: 1500"
-                                        value={form.pricePerShare}
-                                        onChange={(e) => setForm((current) => ({ ...current, pricePerShare: e.target.value.replace(/\D/g, '') }))}
+                                        placeholder="Contoh: 1.500"
+                                        value={formatThousands(form.pricePerShare)}
+                                        onChange={(e) => setForm((current) => ({ ...current, pricePerShare: sanitizeAmount(e.target.value) }))}
                                     />
                                 </label>
                             </div>
+
+                            {selectedAccount && (
+                                <div className={`rounded-2xl border px-4 py-3 ${isBuyFundsEnough ? 'border-emerald-100 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/80'}`}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Dana</p>
+                                            <p className="mt-1 text-sm font-bold text-slate-900">{selectedAccount.name}</p>
+                                        </div>
+                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${isBuyFundsEnough ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                            {form.side === 'BUY'
+                                                ? (tradePreview ? (isBuyFundsEnough ? 'Dana Cukup' : 'Dana Kurang') : 'Isi Dulu')
+                                                : 'Info Sell'}
+                                        </span>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-2 gap-3 text-[11px]">
+                                        <div className="rounded-xl bg-white/80 px-3 py-2">
+                                            <p className="font-bold uppercase tracking-widest text-slate-400">Saldo Tersedia</p>
+                                            <p className="mt-1 font-bold text-slate-900">{formatCurrency(availableCash)}</p>
+                                        </div>
+                                        <div className="rounded-xl bg-white/80 px-3 py-2">
+                                            <p className="font-bold uppercase tracking-widest text-slate-400">
+                                                {form.side === 'BUY' ? 'Butuh Netto' : 'Estimasi Netto'}
+                                            </p>
+                                            <p className="mt-1 font-bold text-slate-900">{formatCurrency(Number(tradePreview?.netValue || 0))}</p>
+                                        </div>
+                                        <div className="rounded-xl bg-white/80 px-3 py-2">
+                                            <p className="font-bold uppercase tracking-widest text-slate-400">Nilai Bruto</p>
+                                            <p className="mt-1 font-bold text-slate-900">{formatCurrency(Number(tradePreview?.grossValue || 0))}</p>
+                                        </div>
+                                        <div className="rounded-xl bg-white/80 px-3 py-2">
+                                            <p className="font-bold uppercase tracking-widest text-slate-400">Total Fee</p>
+                                            <p className="mt-1 font-bold text-slate-900">
+                                                {formatCurrency(Number(tradePreview?.brokerFee || 0) + Number(tradePreview?.levyFee || 0))}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {form.side === 'BUY' && tradePreview ? (
+                                        <p className={`mt-3 text-[11px] font-semibold ${isBuyFundsEnough ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                            {isBuyFundsEnough
+                                                ? `Sisa saldo setelah BUY sekitar ${formatCurrency(Math.max(0, Number(remainingCashAfterBuy || 0)))}.`
+                                                : `Saldo kurang sekitar ${formatCurrency(Math.abs(Number(remainingCashAfterBuy || 0)))}. Tambahkan dana ke RDN dulu.`}
+                                        </p>
+                                    ) : null}
+                                    {selectedOwner && (
+                                        <p className="mt-2 text-[11px] font-medium text-slate-500">
+                                            Saldo yang dipakai adalah milik {selectedOwner.name} pada akun ini.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Trade date */}
                             <label className="space-y-1.5 block">
@@ -560,8 +768,23 @@ const Stocks = () => {
                             </label>
 
                             {/* Submit */}
+                            {isSubmitBlockedByFunds && (
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                                    <p className="text-[11px] font-semibold text-rose-700">
+                                        Dana di rekening saham belum cukup untuk transaksi BUY ini. Tambahkan dana ke RDN/sekuritas dulu, lalu simpan ulang.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={handleOpenTopUpRdn}
+                                        className="mt-3 inline-flex h-10 items-center justify-center rounded-2xl bg-rose-600 px-4 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-rose-500"
+                                    >
+                                        Top Up RDN Ini
+                                    </button>
+                                </div>
+                            )}
                             <button
-                                disabled={saving || stockAccounts.length === 0}
+                                ref={submitButtonRef}
+                                disabled={saving || availableStockAccounts.length === 0 || isSubmitBlockedByFunds}
                                 className="w-full rounded-2xl bg-blue-600 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-500"
                             >
                                 {editingId ? <Save size={16} /> : <Plus size={16} />}

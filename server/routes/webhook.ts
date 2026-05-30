@@ -28,7 +28,7 @@ export const shouldAutoValidateNotificationTransaction = (parsed: ParsedNotifica
     parsed.parseStatus === 'PARSED';
 
 const ACCOUNT_HINTS = ['bca', 'bsya', 'bni', 'wondr', 'bri', 'brimo', 'mandiri', 'livin', 'seabank', 'jago', 'blu', 'bsi', 'btpn', 'jenius', 'rhb', 'dana', 'gopay', 'ovo', 'shopeepay', 'flip', 'ovo', 'dana', 'paypal'];
-const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'top up berhasil', 'berhasil top up', 'setor tunai', 'penerimaan', 'pemasukan'];
+const INCOME_KEYWORDS = ['masuk', 'menerima', 'diterima', 'terima', 'transfer masuk', 'dana masuk', 'cashback', 'gaji', 'kredit', 'cr ', 'setor tunai', 'penerimaan', 'pemasukan'];
 const EXPENSE_KEYWORDS = ['keluar', 'bayar', 'membayar', 'pembayaran', 'dana keluar', 'transfer keluar', 'debit', 'db ', 'dr ', 'transaksi berhasil', 'briva', 'virtual account', 'tagihan', 'belanja', 'pembelian', 'tarik tunai', 'penarikan', 'biaya', 'biaya admin', 'biaya layanan', 'fee'];
 const TRANSFER_KEYWORDS = ['transfer', 'pindah', 'kirim', 'pengiriman'];
 const TRANSFER_OUT_KEYWORDS = ['dikirim', 'mengirim', 'kirim ke', 'transfer ke', 'transfer dana ke rekening', 'pindah ke', 'ditransfer ke', 'pembayaran'];
@@ -40,6 +40,7 @@ const INVESTMENT_KEYWORDS = ['investasi', 'reksa', 'saham', 'stockbit', 'bibit',
 const E_WALLET_APPS = ['dana', 'gopay', 'ovo', 'shopeepay', 'flip'];
 const TOP_UP_RECONCILIATION_WINDOW_MS = 15 * 60 * 1000;
 const TOP_UP_RECONCILIATION_MAX_FEE = 5000;
+const DUPLICATE_NOTIFICATION_WINDOW_MS = 5 * 60 * 1000;
 const CHAT_APP_HINTS = ['whatsapp', 'wa business', 'telegram', 'line', 'discord', 'messenger', 'instagram', 'facebook', 'signal'];
 const EMAIL_PACKAGE_HINTS = ['com.google.android.gm', 'com.microsoft.office.outlook'];
 const PROMO_KEYWORDS = [
@@ -66,6 +67,20 @@ const normalizeText = (value: string) => value.toLowerCase().trim();
 
 const containsAny = (text: string, keywords: string[]) => keywords.some((keyword) => text.includes(keyword));
 
+const containsIncomeSignal = (text: string) => {
+    const lower = normalizeText(text);
+
+    if (containsAny(lower, INCOME_KEYWORDS.filter((keyword) => keyword !== 'kredit'))) {
+        return true;
+    }
+
+    if (/\bkredit\b/.test(lower) && !lower.includes('kartu kredit')) {
+        return true;
+    }
+
+    return false;
+};
+
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const digitsOnly = (value: string) => value.replace(/\D/g, '');
 const ACCOUNT_HINT_ALIASES: Record<string, string> = {
@@ -73,7 +88,7 @@ const ACCOUNT_HINT_ALIASES: Record<string, string> = {
     mybca: 'bca',
     livin: 'mandiri',
     wondr: 'bni',
-    bsya: 'bca'
+    bsya: 'bsya'
 };
 
 const canonicalizeAccountHint = (hint?: string | null) => {
@@ -83,6 +98,23 @@ const canonicalizeAccountHint = (hint?: string | null) => {
 };
 
 const extractAmount = (text: string) => {
+    const contextualPatterns = [
+        /(?:total transaksi|jumlah transaksi|nominal transaksi|nilai transaksi)\s*:?\s*(?:rp\.?\s*)?([\d.,]+)/i,
+        /(?:total|jumlah|nominal)\s*:?\s*(?:rp\.?\s*)?([\d.,]+)/i,
+        /(?:sebesar|senilai)\s*(?:rp\.?\s*)?([\d.,]+)/i
+    ];
+
+    for (const pattern of contextualPatterns) {
+        const raw = text.match(pattern)?.[1];
+        if (!raw) continue;
+
+        const normalized = raw.replace(/[,.]\d{1,2}$/, '').replace(/[.,]/g, '');
+        const amount = Number(normalized);
+        if (Number.isFinite(amount) && amount > 0) {
+            return amount;
+        }
+    }
+
     // Handle Indonesian format: Rp2.700.000,00 OR Rp 2.700.000
     const candidates = [
         text.match(/rp\s*([\d.,]+)/i),
@@ -93,6 +125,9 @@ const extractAmount = (text: string) => {
     for (const match of candidates) {
         const raw = match?.[1];
         if (!raw) continue;
+
+        // Angka panjang tanpa separator biasanya nomor referensi / QRIS, bukan nominal transaksi.
+        if (!/[.,]/.test(raw) && raw.length >= 10) continue;
 
         // Remove trailing decimal like ,00
         const normalized = raw.replace(/[,.]\d{1,2}$/, '').replace(/[.,]/g, '');
@@ -154,11 +189,16 @@ const isDirectionlessSuccessNotification = (text: string) => {
 
 const detectTransferLikeTopUp = (sourceApp: string, text: string) => {
     const lowerSourceApp = normalizeText(sourceApp);
+    if (text.includes('dikenakan biaya') || text.includes('biaya admin') || text.includes('biaya layanan')) return false;
     const mentionsTopUp = text.includes('top up') || text.includes('topup') || text.includes('pengisian saldo') || text.includes('isi saldo');
+    const isEwalletTransfer = E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
+        && (text.includes('dikirim ke') || text.includes('telah dikirim'));
+    if (isEwalletTransfer) return true;
+    const isBankTopUpEwallet = mentionsTopUp && E_WALLET_APPS.some((app) => text.includes(app));
+    if (isBankTopUpEwallet) return true;
     if (!mentionsTopUp) return false;
 
     return E_WALLET_APPS.some((app) => lowerSourceApp.includes(app))
-        || E_WALLET_APPS.some((app) => text.includes(app))
         || text.includes('saldo')
         || text.includes('dari ');
 };
@@ -206,6 +246,241 @@ const detectTransferOutConfirmation = (sourceApp: string, text: string) => {
         'telah dikirim ke',
         'dikirim ke'
     ]);
+};
+
+const detectQrisExpenseNotification = (sourceApp: string, title: string, text: string) => {
+    const combined = normalizeText(`${title} ${text}`.trim());
+    const source = normalizeText(sourceApp);
+
+    const isQris = combined.includes('qris');
+    const isSuccess = combined.includes('sukses') || combined.includes('berhasil');
+    const hasAmount = /\brp\s*[\d.,]+/i.test(`${title} ${text}`);
+    const hasMerchantPattern = combined.includes('sebesar rp') || combined.includes('merchant') || combined.includes('trx qris');
+    const isBankingSource = containsAny(source, ['bsya', 'bca', 'bri', 'bni', 'mandiri', 'livin', 'wondr', 'bsi']);
+
+    return isBankingSource && isQris && isSuccess && hasAmount && hasMerchantPattern;
+};
+
+const extractQrisMerchantName = (title: string, text: string) => {
+    const combined = `${title} ${text}`.replace(/\s+/g, ' ').trim();
+    const merchantMatch = combined.match(/(?:sukses|berhasil)\s*-\s*(.+?)\s+sebesar\s+rp\.?\s*[\d.,]+/i);
+    if (!merchantMatch?.[1]) return null;
+
+    return merchantMatch[1]
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 80);
+};
+
+const titleCaseWords = (value: string) => value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+
+const formatLabelName = (value: string) => {
+    const normalized = value.replace(/\s+/g, ' ').trim();
+    if (!normalized) return normalized;
+    if (/^[A-Z0-9\s&.-]+$/.test(normalized)) return normalized;
+    return titleCaseWords(normalized);
+};
+
+const extractTopUpTargetName = (title: string, text: string) => {
+    const combined = `${title} ${text}`.replace(/\s+/g, ' ').trim();
+    const targetMatch = combined.match(/(?:top up|topup|pengisian saldo|isi saldo)\s+([A-Za-z0-9 .&-]{2,40}?)(?:\s+dari|\s+berhasil|\s+sebesar|\s+rp\b|\bke\b|$)/i);
+    if (!targetMatch?.[1]) return null;
+    return formatLabelName(targetMatch[1]).slice(0, 60);
+};
+
+const extractTransferOutTargetName = (title: string, text: string) => {
+    const combined = `${title} ${text}`.replace(/\s+/g, ' ').trim();
+    const targetMatch = combined.match(/(?:telah dikirim ke|dikirim ke|transfer ke|ke rekening|ke)\s+([A-Za-z0-9 .&-]{2,60}?)(?:\s+sebesar|\s+rp\b|\s+nomor referensi|\s+ref[:.]|\s+dari|\s+$|,)/i);
+    if (!targetMatch?.[1]) return null;
+    return formatLabelName(targetMatch[1]).slice(0, 80);
+};
+
+const extractTransferInSourceName = (title: string, text: string) => {
+    const combined = `${title} ${text}`.replace(/\s+/g, ' ').trim();
+    const sourceMatch = combined.match(/(?:diterima dari|transfer dari|masuk dari|dari)\s+([A-Za-z0-9 .&-]{2,60}?)(?:\s+sebesar|\s+rp\b|\s+ke rekening|\s+nomor referensi|\s+ref[:.]|\s+$|,)/i);
+    if (!sourceMatch?.[1]) return null;
+    return formatLabelName(sourceMatch[1]).slice(0, 80);
+};
+
+const buildParsedDescription = (sourceApp: string, title: string, text: string, type: TransactionType | null) => {
+    if (type === TransactionType.EXPENSE && detectQrisExpenseNotification(sourceApp, title, text)) {
+        const merchant = extractQrisMerchantName(title, text);
+        if (merchant) return `QRIS - ${merchant}`;
+        return 'QRIS';
+    }
+
+    const lowerCombined = normalizeText(`${title} ${text}`.trim());
+
+    if (type === TransactionType.TRANSFER && detectTransferLikeTopUp(sourceApp, lowerCombined)) {
+        const target = extractTopUpTargetName(title, text);
+        if (target) return `Top Up - ${target}`;
+        return 'Top Up';
+    }
+
+    if (type === TransactionType.TRANSFER || type === TransactionType.EXPENSE) {
+        const target = extractTransferOutTargetName(title, text);
+        if (target) return `Transfer ke ${target}`;
+    }
+
+    if (type === TransactionType.INCOME) {
+        const source = extractTransferInSourceName(title, text);
+        if (source) return `Transfer masuk dari ${source}`;
+    }
+
+    return text.trim().slice(0, 160);
+};
+
+const normalizeTypeForDuplicate = (type: TransactionType | null | undefined) => {
+    if (type === TransactionType.INVESTMENT_OUT) return TransactionType.EXPENSE;
+    if (type === TransactionType.INVESTMENT_IN) return TransactionType.TRANSFER;
+    return type ?? null;
+};
+
+const getDuplicateSourceKey = (sourceApp: string) => {
+    const sourceHint = detectSourceAppHint(sourceApp);
+    if (sourceHint) return sourceHint;
+
+    return normalizeText(sourceApp).replace(/[^a-z0-9]+/g, ' ').trim();
+};
+
+const buildDuplicateFingerprint = (title: string, senderName: string, text: string) => {
+    return normalizeText(`${title} ${senderName} ${text}`)
+        .replace(/\brp\s*[\d.,]+\b/g, ' ')
+        .replace(/\b\d{1,2}[:/-]\d{1,2}(?::\d{2})?\b/g, ' ')
+        .replace(/\b\d{2,18}\b/g, ' ')
+        .replace(/\b(notif|auto|kamu|baru|aja|transaksi|sebesar|berhasil|klik|untuk|cek|detailnya|info|lebih|lanjut|hubungi|hubun)\b/g, ' ')
+        .replace(/[^a-z0-9\s]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
+const getFingerprintTokens = (value: string) => {
+    return new Set(
+        value
+            .split(' ')
+            .map((token) => token.trim())
+            .filter((token) => token.length >= 4)
+    );
+};
+
+const hasMeaningfulTokenOverlap = (left: string, right: string) => {
+    if (!left || !right) return false;
+
+    const leftTokens = getFingerprintTokens(left);
+    const rightTokens = getFingerprintTokens(right);
+    let overlap = 0;
+
+    for (const token of leftTokens) {
+        if (rightTokens.has(token)) {
+            overlap += 1;
+            if (overlap >= 2) return true;
+        }
+    }
+
+    return false;
+};
+
+const isGenericIncomingDuplicateTemplate = (sourceApp: string, text: string) => {
+    return detectBniIncomingNotification(sourceApp, text)
+        || containsAny(text, [
+            'kamu baru aja terima rp',
+            'kamu baru aja menerima rp',
+            'transaksi diterima'
+        ]);
+};
+
+const isGenericOutgoingDuplicateTemplate = (sourceApp: string, text: string) => {
+    return detectBniOutgoingNotification(sourceApp, text)
+        || containsAny(text, [
+            'kamu baru aja transaksi sebesar rp',
+            'kamu baru aja bayar rp',
+            'kamu baru aja membayar rp'
+        ]);
+};
+
+const hasSpecificTransactionContext = (text: string) => {
+    return containsAny(text, [
+        'top up',
+        'topup',
+        'pengisian saldo',
+        'isi saldo',
+        'rekening tujuan',
+        'nomor rekening',
+        'nomor referensi',
+        'no. referensi',
+        'ref:',
+        'diterima dari',
+        'transfer ke',
+        'transfer dari',
+        'dikirim ke',
+        'ke rekening',
+        'shopeepay',
+        'gopay',
+        'dana',
+        'ovo',
+        'flip',
+        'rdn'
+    ]);
+};
+
+const isLikelyDuplicateNotificationPair = ({
+    sourceApp,
+    title,
+    senderName,
+    text,
+    parsedType,
+    existing
+}: {
+    sourceApp: string;
+    title: string;
+    senderName: string;
+    text: string;
+    parsedType: TransactionType | null;
+    existing: {
+        sourceApp: string;
+        title: string | null;
+        senderName: string | null;
+        messageText: string;
+        parsedType: TransactionType | null;
+    };
+}) => {
+    const currentType = normalizeTypeForDuplicate(parsedType);
+    const existingType = normalizeTypeForDuplicate(existing.parsedType);
+    if (!currentType || currentType !== existingType) return false;
+
+    const currentSourceKey = getDuplicateSourceKey(sourceApp);
+    const existingSourceKey = getDuplicateSourceKey(existing.sourceApp);
+    if (!currentSourceKey || currentSourceKey !== existingSourceKey) return false;
+
+    const currentCombined = normalizeText(`${title} ${senderName} ${text}`.trim());
+    const existingCombined = normalizeText(`${existing.title || ''} ${existing.senderName || ''} ${existing.messageText}`.trim());
+
+    if (currentCombined === existingCombined) return true;
+
+    const currentFingerprint = buildDuplicateFingerprint(title, senderName, text);
+    const existingFingerprint = buildDuplicateFingerprint(existing.title || '', existing.senderName || '', existing.messageText);
+    if (currentFingerprint && currentFingerprint === existingFingerprint) return true;
+    if (hasMeaningfulTokenOverlap(currentFingerprint, existingFingerprint)) return true;
+
+    const currentGeneric = currentType === TransactionType.INCOME
+        ? isGenericIncomingDuplicateTemplate(sourceApp, currentCombined)
+        : currentType === TransactionType.EXPENSE
+            ? isGenericOutgoingDuplicateTemplate(sourceApp, currentCombined)
+            : false;
+    const existingGeneric = existingType === TransactionType.INCOME
+        ? isGenericIncomingDuplicateTemplate(existing.sourceApp, existingCombined)
+        : existingType === TransactionType.EXPENSE
+            ? isGenericOutgoingDuplicateTemplate(existing.sourceApp, existingCombined)
+            : false;
+
+    return currentGeneric !== existingGeneric
+        && (currentGeneric || existingGeneric)
+        && (hasSpecificTransactionContext(currentCombined) || hasSpecificTransactionContext(existingCombined));
 };
 
 const detectFeeCharge = (text: string) => {
@@ -263,7 +538,18 @@ const shouldIgnorePromotionalNotification = (sourceApp: string, title: string, t
     const combined = normalizeText(`${title} ${text}`.trim());
 
     const hasPromoKeyword = PROMO_KEYWORDS.some((keyword) => combined.includes(keyword));
-    if (!hasPromoKeyword) return false;
+    const hasCreditCardMarketingHint = containsAny(combined, [
+        'kartu kredit',
+        'dapatkan limit',
+        'limit hingga',
+        'limit sampai',
+        'ajukan kartu',
+        'approval cuma',
+        'approval hanya',
+        'myads.id',
+        '2 messages'
+    ]);
+    if (!hasPromoKeyword && !hasCreditCardMarketingHint) return false;
 
     const hasStrongTransactionalProof = [
         'transaksi berhasil', 'transfer berhasil', 'top up berhasil',
@@ -272,6 +558,7 @@ const shouldIgnorePromotionalNotification = (sourceApp: string, title: string, t
         'saldo akhir', 'mutasi', 'debit', 'kredit', 'va ', 'briva'
     ].some((keyword) => combined.includes(keyword));
 
+    if (hasCreditCardMarketingHint) return true;
     if (hasStrongTransactionalProof) return false;
 
     if (combined.includes('tarik tunai') && (combined.includes('diskon') || combined.includes('promo'))) {
@@ -393,7 +680,7 @@ const resolveAccountHints = (
 ) => {
     const sourceAppHint = detectSourceAppHint(sourceApp);
     const hintFromSourcePhrase = detectHintAfterAnchors(text, ['dari ', 'via ', 'dr ', 'sumber dana ']);
-    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ', 'top up ', 'topup ', 'pengisian saldo ', 'isi saldo ']);
+    const hintFromDestinationPhrase = detectHintAfterAnchors(text, ['ke rekening ', 'ke ', 'tujuan ']);
     const accountNumberHint = detectAccountNumberHint(text);
     const transferDirection = detectTransferDirection(text);
     const isTopUpLike = detectTransferLikeTopUp(sourceApp, text);
@@ -406,8 +693,19 @@ const resolveAccountHints = (
 
     if (type && isDualAccountTransactionType(type)) {
         if (isEWalletTopUp) {
-            sourceAccountHint = hintFromSourcePhrase;
-            destinationAccountHint = hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
+            if (transferDirection === 'OUT') {
+                sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
+                destinationAccountHint = accountNumberHint
+                    ?? hintFromDestinationPhrase
+                    ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
+            } else {
+                sourceAccountHint = hintFromSourcePhrase
+                    ?? accountNumberHint
+                    ?? (fallbackHint && fallbackHint !== sourceAppHint ? fallbackHint : null);
+                destinationAccountHint = sourceAppHint
+                    ?? hintFromDestinationPhrase
+                    ?? fallbackHint;
+            }
         } else if (transferDirection === 'OUT') {
             sourceAccountHint = sourceAppHint ?? fallbackHint ?? hintFromSourcePhrase;
             destinationAccountHint = accountNumberHint ?? hintFromDestinationPhrase ?? fallbackHint ?? sourceAppHint;
@@ -510,7 +808,10 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
     let parseStatus: ParseStatus = 'FAILED';
     let parseNotes: string | null = 'Format belum dikenali';
 
-    if (detectBniIncomingNotification(sourceApp, lowerText)) {
+    if (detectQrisExpenseNotification(sourceApp, title, text)) {
+        type = TransactionType.EXPENSE;
+        confidenceScore = 0.92;
+    } else if (detectBniIncomingNotification(sourceApp, lowerText)) {
         type = TransactionType.INCOME;
         confidenceScore = 0.9;
     } else if (detectBniOutgoingNotification(sourceApp, lowerText)) {
@@ -531,7 +832,7 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
         // Hitung skor keyword untuk INCOME vs EXPENSE
         const incomeStrongHit = containsAny(lowerText, STRONG_INCOME_KEYWORDS);
         const expenseStrongHit = detectFeeCharge(lowerText) || containsAny(lowerText, STRONG_EXPENSE_KEYWORDS);
-        const incomeAnyHit = containsAny(lowerText, INCOME_KEYWORDS);
+        const incomeAnyHit = containsIncomeSignal(lowerText);
         const expenseAnyHit = containsAny(lowerText, EXPENSE_KEYWORDS);
 
         if (incomeStrongHit && !expenseStrongHit) {
@@ -616,10 +917,12 @@ export const parseNotificationText = (sourceApp: string, title: string, text: st
         ? [sourceAccountHint, destinationAccountHint].filter(Boolean).join(' -> ') || accountHint
         : accountHint ?? sourceAccountHint ?? destinationAccountHint;
 
+    const description = buildParsedDescription(sourceApp, title, text, type);
+
     return {
         amount,
         type,
-        description: text.trim().slice(0, 160),
+        description,
         accountHint: displayAccountHint,
         sourceAccountHint,
         destinationAccountHint,
@@ -986,19 +1289,34 @@ router.post('/notification', async (req, res) => {
             });
         }
 
-        // Cek duplikasi (Debounce): Apakah ada notifikasi dari aplikasi yang sama, 
-        // dengan nominal yang SAMA dan tipe yang SAMA masuk dalam 1 menit terakhir?
+        // Cegah notif ganda untuk event yang sama, termasuk pasangan notif generik + detail.
         if (parsed.amount) {
-            const oneMinAgo = new Date(Date.now() - 1 * 60 * 1000);
-            const duplicate = await prisma.notificationInbox.findFirst({
+            const duplicateSince = new Date(Date.now() - DUPLICATE_NOTIFICATION_WINDOW_MS);
+            const duplicateCandidates = await prisma.notificationInbox.findMany({
                 where: {
-                    sourceApp: String(appName),
                     parsedAmount: parsed.amount,
-                    receivedAt: { gte: oneMinAgo },
-                    parseStatus: { not: 'IGNORED' }, // Hanya cek terhadap notif yg valid
-                    ...(parsed.type ? { parsedType: parsed.type } : {})
+                    receivedAt: { gte: duplicateSince },
+                    parseStatus: { not: 'IGNORED' }
+                },
+                orderBy: { receivedAt: 'desc' },
+                take: 10,
+                select: {
+                    id: true,
+                    sourceApp: true,
+                    title: true,
+                    senderName: true,
+                    messageText: true,
+                    parsedType: true
                 }
             });
+            const duplicate = duplicateCandidates.find((candidate) => isLikelyDuplicateNotificationPair({
+                sourceApp: String(appName),
+                title: title ? String(title) : '',
+                senderName: senderName ? String(senderName) : '',
+                text: String(text),
+                parsedType: parsed.type,
+                existing: candidate
+            }));
 
             if (duplicate) {
                 return res.status(200).json({
@@ -1027,6 +1345,38 @@ router.post('/notification', async (req, res) => {
                 rawPayload: rawPayload ?? req.body
             }
         });
+
+        const sourceAppHint = detectSourceAppHint(String(appName));
+        const destinationHintDigits = digitsOnly(parsed.destinationAccountHint ?? '');
+        const hintedDestinationAccount = parsed.destinationAccountHint
+            ? await findAccountByHint(parsed.destinationAccountHint)
+            : null;
+        const needsDestinationConfirmation = parsed.type === TransactionType.TRANSFER
+            && Boolean(sourceAppHint && E_WALLET_APPS.includes(sourceAppHint))
+            && destinationHintDigits.length >= 4
+            && !hintedDestinationAccount;
+
+        if (needsDestinationConfirmation) {
+            const confirmationNote = `Rekening tujuan *${destinationHintDigits.slice(-4)} belum terdaftar. Konfirmasi atau tambahkan rekening dulu.`;
+            await prisma.notificationInbox.update({
+                where: { id: notification.id },
+                data: {
+                    parseStatus: 'PENDING' as any,
+                    parseNotes: confirmationNote
+                }
+            });
+
+            return res.status(202).json({
+                success: true,
+                notification: {
+                    ...notification,
+                    parseStatus: 'PENDING',
+                    parseNotes: confirmationNote
+                },
+                createdTransaction: false,
+                reason: confirmationNote
+            });
+        }
 
         // Abaikan auto-create hanya jika parser gagal total atau data dasarnya belum cukup.
         // Notifikasi PENDING yang sudah punya nominal + tipe tetap boleh dibuat sebagai transaksi review.

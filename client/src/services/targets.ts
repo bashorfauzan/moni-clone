@@ -6,6 +6,7 @@ import { getErrorMessage } from './errors';
 export type TargetItem = {
     id: string;
     title: string;
+    notes?: string | null;
     totalAmount: number;
     remainingAmount: number;
     remainingMonths: number;
@@ -30,6 +31,7 @@ export type TargetContributionResult = {
 
 export type TargetWritePayload = {
     title: string;
+    notes?: string;
     totalAmount: number;
     monthCount: number;
     ownerId?: string;
@@ -81,6 +83,7 @@ const getSuggestedContributionAmount = (target: Pick<TargetItem, 'totalAmount' |
 const targetSelectFields = (includeLastContributionAt: boolean) => `
     id,
     title,
+    notes,
     totalAmount,
     remainingAmount,
     remainingMonths,
@@ -122,6 +125,7 @@ const withTargetSelectFallback = async <T>(runner: (includeLastContributionAt: b
 const normalizeTarget = (row: any): TargetItem => ({
     id: row.id,
     title: row.title,
+    notes: row.notes ?? null,
     totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
     remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0),
     remainingMonths: Number(row.remainingMonths ?? row.remaining_months ?? 0),
@@ -186,6 +190,7 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
                 .insert({
                     id: crypto.randomUUID(),
                     title: payload.title.trim(),
+                    notes: payload.notes?.trim() || null,
                     totalAmount: payload.totalAmount,
                     remainingMonths: parsedMonthCount,
                     remainingAmount: payload.totalAmount * parsedMonthCount,
@@ -235,6 +240,7 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
                 .from('Target')
                 .update({
                     title: payload.title.trim(),
+                    notes: payload.notes?.trim() || null,
                     totalAmount: payload.totalAmount,
                     remainingMonths: nextRemainingMonths,
                     remainingAmount: payload.totalAmount * nextRemainingMonths,

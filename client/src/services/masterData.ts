@@ -16,6 +16,7 @@ export type Account = {
     stockLevyFeePercent?: number;
     balance: number;
     ownerId?: string;
+    ownerBalances?: Record<string, number>;
 };
 export type Activity = { id: string; name: string };
 
@@ -57,7 +58,12 @@ const normalizeAccount = (row: any): Account => ({
     stockBrokerFeePercent: Number(row.stockBrokerFeePercent ?? row.stock_broker_fee_percent ?? 0),
     stockLevyFeePercent: Number(row.stockLevyFeePercent ?? row.stock_levy_fee_percent ?? 0),
     balance: Number(row.balance ?? 0),
-    ownerId: row.ownerId ?? row.owner_id
+    ownerId: row.ownerId ?? row.owner_id,
+    ownerBalances: row.ownerBalances && typeof row.ownerBalances === 'object'
+        ? Object.fromEntries(
+            Object.entries(row.ownerBalances).map(([ownerId, amount]) => [ownerId, Number(amount ?? 0)])
+        )
+        : undefined
 });
 
 const normalizeActivity = (row: any): Activity => ({
@@ -65,19 +71,90 @@ const normalizeActivity = (row: any): Activity => ({
     name: row.name
 });
 
+const normalizeTxType = (type?: string) => type === 'TOP_UP' ? 'TRANSFER' : type;
+
+const buildOwnerBalancesByAccount = ({
+    accounts,
+    transactions,
+    stockTransactions,
+    ipoTransactions
+}: {
+    accounts: Array<{ id: string }>;
+    transactions: Array<{ type?: string; amount?: number; ownerId?: string; sourceAccountId?: string | null; destinationAccountId?: string | null }>;
+    stockTransactions: Array<{ ownerId?: string; accountId?: string | null; side?: string; netValue?: number }>;
+    ipoTransactions: Array<{ ownerId?: string; accountId?: string | null; side?: string; netValue?: number }>;
+}) => {
+    const ownerBalanceMap = new Map<string, Map<string, number>>();
+
+    for (const account of accounts) {
+        ownerBalanceMap.set(account.id, new Map<string, number>());
+    }
+
+    const adjust = (accountId?: string | null, ownerId?: string, delta = 0) => {
+        if (!accountId || !ownerId || !Number.isFinite(delta) || delta === 0) return;
+        const accountMap = ownerBalanceMap.get(accountId);
+        if (!accountMap) return;
+        accountMap.set(ownerId, (accountMap.get(ownerId) || 0) + delta);
+    };
+
+    for (const tx of transactions) {
+        const amount = Number(tx.amount || 0);
+        if (!Number.isFinite(amount) || amount === 0 || !tx.ownerId) continue;
+
+        const type = normalizeTxType(tx.type);
+        if (type === 'INCOME') adjust(tx.destinationAccountId, tx.ownerId, amount);
+        if (type === 'EXPENSE') adjust(tx.sourceAccountId, tx.ownerId, -amount);
+        if (type === 'TRANSFER') {
+            adjust(tx.sourceAccountId, tx.ownerId, -amount);
+            adjust(tx.destinationAccountId, tx.ownerId, amount);
+        }
+    }
+
+    for (const tx of stockTransactions) {
+        const amount = Number(tx.netValue || 0);
+        if (!tx.ownerId || !tx.accountId || !Number.isFinite(amount) || amount === 0) continue;
+        adjust(tx.accountId, tx.ownerId, tx.side === 'BUY' ? -amount : amount);
+    }
+
+    for (const tx of ipoTransactions) {
+        const amount = Number(tx.netValue || 0);
+        if (!tx.ownerId || !tx.accountId || !Number.isFinite(amount) || amount === 0) continue;
+        adjust(tx.accountId, tx.ownerId, tx.side === 'BUY' ? -amount : amount);
+    }
+
+    return Object.fromEntries(
+        Array.from(ownerBalanceMap.entries()).map(([accountId, balances]) => [
+            accountId,
+            Object.fromEntries(Array.from(balances.entries()))
+        ])
+    ) as Record<string, Record<string, number>>;
+};
+
 export const fetchMasterMeta = async (): Promise<MasterMeta> => {
     if (useDirectSupabaseData && supabase) {
-        const [ownersRes, accountsRes, activitiesRes] = await Promise.all([
+        const [ownersRes, accountsRes, activitiesRes, transactionsRes, stockTransactionsRes, ipoTransactionsRes] = await Promise.all([
             supabase.from('Owner').select('id, name').order('createdAt', { ascending: true }),
             supabase.from('Account').select('id, name, type, accountNumber, appPackageName, appDeepLink, appStoreUrl, stockBrokerFeePercent, stockLevyFeePercent, balance, ownerId').order('createdAt', { ascending: false }),
-            supabase.from('Activity').select('id, name').order('createdAt', { ascending: false })
+            supabase.from('Activity').select('id, name').order('createdAt', { ascending: false }),
+            supabase.from('Transaction').select('type, amount, ownerId, sourceAccountId, destinationAccountId, isValidated').eq('isValidated', true),
+            supabase.from('StockTransaction').select('ownerId, accountId, side, netValue'),
+            supabase.from('IpoTransaction').select('ownerId, accountId, side, netValue')
         ]);
 
-        if (!ownersRes.error && !accountsRes.error && !activitiesRes.error) {
+        if (!ownersRes.error && !accountsRes.error && !activitiesRes.error && !transactionsRes.error && !stockTransactionsRes.error && !ipoTransactionsRes.error) {
+            const ownerBalancesByAccount = buildOwnerBalancesByAccount({
+                accounts: accountsRes.data || [],
+                transactions: transactionsRes.data || [],
+                stockTransactions: stockTransactionsRes.data || [],
+                ipoTransactions: ipoTransactionsRes.data || []
+            });
             recordDataAccessMode('master', 'direct-supabase', 'Master data berhasil dibaca langsung dari Supabase.');
             return {
                 owners: (ownersRes.data || []).map(normalizeOwner),
-                accounts: (accountsRes.data || []).map(normalizeAccount),
+                accounts: (accountsRes.data || []).map((row) => normalizeAccount({
+                    ...row,
+                    ownerBalances: ownerBalancesByAccount[row.id] || {}
+                })),
                 activities: (activitiesRes.data || []).map(normalizeActivity)
             };
         }

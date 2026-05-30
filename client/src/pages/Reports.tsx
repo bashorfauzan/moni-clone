@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
-    PieChart, Pie, Cell, ResponsiveContainer,
+    PieChart, Pie, Cell,
     BarChart, Bar, XAxis, Tooltip as ChartTooltip, AreaChart, Area
 } from 'recharts';
-import { CheckCircle2, ChevronLeft, ChevronRight, Download, Pencil, Trash2 } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Pencil, Trash2 } from 'lucide-react';
 import { useTransaction } from '../context/TransactionContext';
 import { createTransaction, fetchTransactions, type TransactionItem, bulkDeleteTransactions } from '../services/transactions';
 import api from '../services/api';
@@ -12,6 +12,7 @@ import { useSecurity } from '../context/SecurityContext';
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
 import { downloadBackupBlob } from '../services/backup';
+import { readStorage, writeStorage } from '../lib/storage';
 import {
     isInvestmentLiquidation,
     isInvestmentTransfer,
@@ -21,6 +22,48 @@ import {
 
 const COLORS = ['#60A5FA', '#34D399', '#FBBF24', '#F87171', '#A78BFA', '#F472B6'];
 type TransactionModalType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
+const REPORTS_TRANSACTION_LEGEND_KEY = 'reportsTransactionLegendOpen';
+
+const MeasuredChart = ({
+    className,
+    minHeight,
+    children,
+}: {
+    className?: string;
+    minHeight: string;
+    children: (size: { width: number; height: number }) => ReactNode;
+}) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const [size, setSize] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
+
+    useEffect(() => {
+        const element = containerRef.current;
+        if (!element) return;
+
+        const updateSize = () => {
+            const { width, height } = element.getBoundingClientRect();
+            setSize({
+                width: Math.max(0, Math.floor(width)),
+                height: Math.max(0, Math.floor(height)),
+            });
+        };
+
+        updateSize();
+
+        const observer = new ResizeObserver(() => updateSize());
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    }, []);
+
+    const isReady = size.width > 0 && size.height > 0;
+
+    return (
+        <div ref={containerRef} className={className} style={{ minHeight }}>
+            {isReady ? children(size) : null}
+        </div>
+    );
+};
 
 const toDateKey = (date: Date) => {
     const year = date.getFullYear();
@@ -193,6 +236,7 @@ const Reports = () => {
     const [selectedTx, setSelectedTx] = useState<Set<string>>(new Set());
     const [lastDeletedTransactions, setLastDeletedTransactions] = useState<TransactionItem[]>([]);
     const [txCategory, setTxCategory] = useState<'SEMUA' | 'INVESTASI' | 'TRANSFER' | 'BELANJA' | 'LAINNYA'>('SEMUA');
+    const [isTransactionLegendOpen, setIsTransactionLegendOpen] = useState(() => readStorage(REPORTS_TRANSACTION_LEGEND_KEY, 'true') === 'true');
     const longPressTimerRef = useRef<number | null>(null);
     const longPressTriggeredRef = useRef(false);
 
@@ -201,6 +245,14 @@ const Reports = () => {
         if (next.has(id)) next.delete(id);
         else next.add(id);
         setSelectedTx(next);
+    };
+
+    const toggleTransactionLegend = () => {
+        setIsTransactionLegendOpen((prev) => {
+            const next = !prev;
+            writeStorage(REPORTS_TRANSACTION_LEGEND_KEY, String(next));
+            return next;
+        });
     };
 
     const clearLongPressTimer = () => {
@@ -554,10 +606,24 @@ const Reports = () => {
 
     const getAmountColor = (tx: TransactionItem) => {
         const kind = getReportTransactionKind(tx);
-        if (kind === 'INCOME' || kind === 'INVESTMENT_LIQUIDATION') return 'text-emerald-600';
-        if (kind === 'EXPENSE' || kind === 'INVESTMENT_TOP_UP') return 'text-rose-600';
+        if (kind === 'INCOME') return 'text-emerald-600';
+        if (kind === 'EXPENSE') return 'text-rose-600';
+        if (kind === 'TRANSFER') return 'text-blue-600';
+        if (kind === 'INVESTMENT_TOP_UP') return 'text-amber-600';
+        if (kind === 'INVESTMENT_LIQUIDATION') return 'text-violet-600';
         if (kind === 'TOP_UP') return 'text-fuchsia-600';
         return 'text-slate-900';
+    };
+
+    const getEditButtonTone = (tx: TransactionItem) => {
+        const kind = getReportTransactionKind(tx);
+        if (kind === 'EXPENSE') return 'bg-rose-50 text-rose-600 hover:bg-rose-100';
+        if (kind === 'INVESTMENT_TOP_UP') return 'bg-amber-50 text-amber-600 hover:bg-amber-100';
+        if (kind === 'INCOME') return 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100';
+        if (kind === 'INVESTMENT_LIQUIDATION') return 'bg-violet-50 text-violet-600 hover:bg-violet-100';
+        if (kind === 'TOP_UP') return 'bg-fuchsia-50 text-fuchsia-600 hover:bg-fuchsia-100';
+        if (kind === 'TRANSFER') return 'bg-blue-50 text-blue-600 hover:bg-blue-100';
+        return 'bg-slate-100 text-slate-600 hover:bg-slate-200';
     };
 
     const getOriginBadge = (tx: TransactionItem) => (
@@ -690,9 +756,9 @@ const Reports = () => {
                     </span>
                 </div>
                 {data.wealthHistoryData.length > 0 ? (
-                    <div className="h-48 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={data.wealthHistoryData}>
+                    <MeasuredChart className="h-48 min-w-0 w-full" minHeight="12rem">
+                        {({ width, height }) => (
+                            <AreaChart width={width} height={height} data={data.wealthHistoryData}>
                                 <defs>
                                     <linearGradient id="wealthFill" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#2563eb" stopOpacity={0.24} />
@@ -712,8 +778,8 @@ const Reports = () => {
                                     contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '11px' }}
                                 />
                             </AreaChart>
-                        </ResponsiveContainer>
-                    </div>
+                        )}
+                    </MeasuredChart>
                 ) : (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
                         <p className="text-sm font-bold text-slate-600">Belum ada riwayat saldo untuk periode ini</p>
@@ -730,20 +796,22 @@ const Reports = () => {
 
                 {data.categoryData.length > 0 ? (
                     <div className="grid gap-5 lg:grid-cols-[260px_1fr] lg:items-center">
-                        <div className="relative h-52">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <PieChart>
-                                    <Pie data={data.categoryData} cx="50%" cy="50%" innerRadius="52%" outerRadius="76%" paddingAngle={4} dataKey="value">
-                                        {data.categoryData.map((_: unknown, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                                    </Pie>
-                                    <ChartTooltip contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px' }} />
-                                </PieChart>
-                            </ResponsiveContainer>
-                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                                <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</span>
-                                <span className="mt-1 max-w-[8rem] break-words text-sm font-black text-slate-900">{formatCurrency(data.totalVolume)}</span>
-                            </div>
-                        </div>
+                        <MeasuredChart className="relative h-52 min-w-0" minHeight="13rem">
+                            {({ width, height }) => (
+                                <>
+                                    <PieChart width={width} height={height}>
+                                        <Pie data={data.categoryData} cx="50%" cy="50%" innerRadius="52%" outerRadius="76%" paddingAngle={4} dataKey="value">
+                                            {data.categoryData.map((_: unknown, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                        </Pie>
+                                        <ChartTooltip contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '12px', fontSize: '12px' }} />
+                                    </PieChart>
+                                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">Perputaran</span>
+                                        <span className="mt-1 max-w-[8rem] break-words text-sm font-black text-slate-900">{formatCurrency(data.totalVolume)}</span>
+                                    </div>
+                                </>
+                            )}
+                        </MeasuredChart>
                         <div className="space-y-2">
                             {data.categoryData.map((item: { name: string; value: number }, i: number) => (
                                 <div key={i} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-3 py-2.5">
@@ -771,16 +839,16 @@ const Reports = () => {
                     <span className="flex items-center gap-1.5 text-[11px] font-semibold text-rose-600"><span className="h-2 w-2 rounded-full bg-rose-500" />Pengeluaran</span>
                 </div>
                 {data.trendData.length > 0 ? (
-                    <div className="h-44 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={data.trendData} barGap={4}>
+                    <MeasuredChart className="h-44 min-w-0 w-full" minHeight="11rem">
+                        {({ width, height }) => (
+                            <BarChart width={width} height={height} data={data.trendData} barGap={4}>
                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10, fontWeight: 700 }} />
                                 <Bar dataKey="Pemasukan" fill="#10b981" radius={[5, 5, 0, 0]} barSize={viewMode === 'MONTHLY' ? 8 : 18} />
                                 <Bar dataKey="Pengeluaran" fill="#f43f5e" radius={[5, 5, 0, 0]} barSize={viewMode === 'MONTHLY' ? 8 : 18} />
                                 <ChartTooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ background: '#fff', border: '1px solid #f1f5f9', borderRadius: '10px', fontSize: '11px' }} />
                             </BarChart>
-                        </ResponsiveContainer>
-                    </div>
+                        )}
+                    </MeasuredChart>
                 ) : (
                     <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
                         <p className="text-sm font-bold text-slate-600">Belum ada data tren untuk ditampilkan</p>
@@ -842,6 +910,36 @@ const Reports = () => {
                     ))}
                 </div>
 
+                <button
+                    type="button"
+                    onClick={toggleTransactionLegend}
+                    className="flex w-full items-center justify-between border-b border-slate-100 px-5 py-3 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 lg:hidden"
+                >
+                    <span>Legend Warna</span>
+                    {isTransactionLegendOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </button>
+
+                <div className={`${isTransactionLegendOpen ? 'flex' : 'hidden'} flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3 lg:flex`}>
+                    <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-bold text-emerald-700">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" /> Masuk
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1 text-[10px] font-bold text-rose-700">
+                        <span className="h-2 w-2 rounded-full bg-rose-500" /> Keluar
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-bold text-blue-700">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" /> Transfer
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-fuchsia-50 px-2.5 py-1 text-[10px] font-bold text-fuchsia-700">
+                        <span className="h-2 w-2 rounded-full bg-fuchsia-500" /> Top Up
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">
+                        <span className="h-2 w-2 rounded-full bg-amber-500" /> Investasi
+                    </span>
+                    <span className="flex items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-[10px] font-bold text-violet-700">
+                        <span className="h-2 w-2 rounded-full bg-violet-500" /> Pencairan
+                    </span>
+                </div>
+
                 {lastDeletedTransactions.length > 0 && (
                     <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/80 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
@@ -874,15 +972,11 @@ const Reports = () => {
                     <>
                         {/* Mobile card list */}
                         <div className="divide-y divide-slate-100 lg:hidden">
-                            <div className="px-4 py-3 bg-slate-50/50">
-                                <p className="text-[11px] font-bold text-slate-500">
-                                    Tahan transaksi untuk mulai memilih, lalu tap transaksi lain untuk menambah pilihan.
-                                </p>
-                            </div>
                             {visibleTx.map((tx: TransactionItem) => {
                                 const badge = getTypeBadge(tx);
                                 const origin = getOriginBadge(tx);
                                 const isSelected = selectedTx.has(tx.id);
+                                const editTone = getEditButtonTone(tx);
                                 return (
                                     <div
                                         key={tx.id}
@@ -926,7 +1020,7 @@ const Reports = () => {
                                                     event.stopPropagation();
                                                     openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
                                                 }}
-                                                className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                                className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${editTone}`}
                                             ><Pencil size={13} /></button>
                                         </div>
                                     </div>
@@ -952,6 +1046,7 @@ const Reports = () => {
                                         const badge = getTypeBadge(tx);
                                         const origin = getOriginBadge(tx);
                                         const isSelected = selectedTx.has(tx.id);
+                                        const editTone = getEditButtonTone(tx);
                                         return (
                                             <tr
                                                 key={tx.id}
@@ -992,7 +1087,7 @@ const Reports = () => {
                                                                 event.stopPropagation();
                                                                 openEditModal(tx.id, getEditableModalType(tx), { amount: tx.amount, description: tx.description || tx.activity?.name, ownerId: tx.ownerId, activityId: tx.activityId, sourceAccountId: tx.sourceAccountId, destinationAccountId: tx.destinationAccountId });
                                                             }}
-                                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                                                            className={`flex h-8 w-8 items-center justify-center rounded-xl transition-colors ${editTone}`}
                                                             title="Edit"
                                                         ><Pencil size={13} /></button>
                                                     </div>

@@ -1,0 +1,2 @@
+ALTER TABLE "Target"
+ADD COLUMN IF NOT EXISTS "notes" TEXT;
