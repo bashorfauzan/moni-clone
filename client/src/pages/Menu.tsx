@@ -707,6 +707,12 @@ const MenuPage = () => {
             if (supabase) {
                 // Delete in FK-safe order: children first, parents last
                 if (resetOptions.transactions) {
+                    const { error: ipoTxError } = await supabase.from('IpoTransaction').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (ipoTxError && !ipoTxError.message.includes('does not exist')) throw new Error(ipoTxError.message);
+                    const { error: ipoOrderError } = await supabase.from('IpoOrder').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (ipoOrderError && !ipoOrderError.message.includes('does not exist')) throw new Error(ipoOrderError.message);
+                    const { error: stockTxError } = await supabase.from('StockTransaction').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+                    if (stockTxError && !stockTxError.message.includes('does not exist')) throw new Error(stockTxError.message);
                     const { error: e1 } = await supabase.from('Transaction').delete().neq('id', '00000000-0000-0000-0000-000000000000');
                     if (e1) throw new Error(e1.message);
                     const { error: e2 } = await supabase.from('NotificationInbox').delete().neq('id', '00000000-0000-0000-0000-000000000000');

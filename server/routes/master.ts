@@ -543,6 +543,24 @@ router.post('/reset-data', async (req, res) => {
         await prisma.$transaction(async (trx) => {
             // 1. Children / derived records
             if (shouldResetTransactions) {
+                try {
+                    await trx.ipoTransaction.deleteMany({});
+                } catch (error: any) {
+                    if (!isMissingTableError(error)) throw error;
+                }
+
+                try {
+                    await trx.ipoOrder.deleteMany({});
+                } catch (error: any) {
+                    if (!isMissingTableError(error)) throw error;
+                }
+
+                try {
+                    await trx.stockTransaction.deleteMany({});
+                } catch (error: any) {
+                    if (!isMissingTableError(error)) throw error;
+                }
+
                 await trx.transaction.deleteMany({});
             }
 

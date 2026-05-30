@@ -618,14 +618,14 @@ const TransactionModal = () => {
                                 <p className="text-sm text-slate-400 italic p-2">
                                     {isInvestment
                                         ? pickerType === 'source'
-                                            ? 'Belum ada rekening bank yang bisa dipilih.'
+                                            ? 'Anda tidak memiliki saldo pada rekening bank/e-wallet.'
                                             : 'Belum ada rekening RDN yang bisa dipilih.'
                                         : isTopUp
                                             ? pickerType === 'source'
                                                 ? 'Rekening sumber top up hanya bisa dari Bank atau E-Wallet.'
                                                 : 'Tujuan top up hanya bisa ke E-Wallet, RDN, atau Sekuritas.'
                                         : (isIncome || isExpense)
-                                            ? 'Belum ada rekening bank yang bisa dipilih.'
+                                            ? 'Anda tidak memiliki saldo pada rekening bank/e-wallet.'
                                             : (isTransfer && pickerType === 'source')
                                                 ? 'Rekening sumber transfer hanya bisa dari Bank atau E-Wallet.'
                                             : (isTransfer && pickerType === 'destination')

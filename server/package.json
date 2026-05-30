@@ -9,7 +9,7 @@
     "start:prod": "npm run migrate:manual && node --loader ts-node/esm index.ts",
     "db:push": "prisma db push",
     "dev": "node --loader ts-node/esm --watch index.ts",
-    "build": "prisma generate",
+    "build": "tsc --noEmit -p tsconfig.json",
     "postinstall": "prisma generate",
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:rules": "node --loader ts-node/esm tests/transactionRules.test.mjs",
