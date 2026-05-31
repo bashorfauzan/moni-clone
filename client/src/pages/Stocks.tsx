@@ -26,6 +26,12 @@ const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
     maximumFractionDigits: 0
 }).format(value || 0);
 
+const formatPercent = (value: number) =>
+    `${value >= 0 ? '+' : ''}${new Intl.NumberFormat('id-ID', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+    }).format(value)}%`;
+
 const formatThousands = (raw: string) => {
     if (!raw) return '';
     const numeric = Number(raw);
@@ -39,45 +45,35 @@ const getOwnerBalance = (account: Account | null | undefined, ownerId?: string) 
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
 const BROKER_LABEL_PRESETS = [
-    { label: 'RHB', aliases: ['rhb', 'rhb syariah', 'rhb k bashor', 'rhb k novan'] },
-    { label: 'BRI Danareksa', aliases: ['bri', 'bri danareksa', 'bri sekuritas', 'brights'] },
-    { label: 'Sinarmas', aliases: ['sinarmas', 'siminvest', 'sinarmas sekuritas'] },
-    { label: 'Phillip', aliases: ['phillip', 'phillip sekuritas', 'poems'] },
-    { label: 'Stockbit', aliases: ['stockbit', 'stockbit sekuritas'] },
-    { label: 'Ciptadana', aliases: ['ciptadana', 'ciptadana sekuritas', 'ciptadana sekuritas asia'] },
-    { label: 'Ajaib', aliases: ['ajaib', 'ajaib sekuritas'] },
-    { label: 'Semesta Indovest', aliases: ['semesta', 'semesta indovest', 's-invest', 's invest'] }
+    { label: 'RHB', aliases: ['rhb', 'rhb syariah', 'rhb k bashor', 'rhb k novan'], brokerFeePercent: 0.15, levyFeePercent: 0.25 },
+    { label: 'BRI Danareksa', aliases: ['bri', 'bri danareksa', 'bri sekuritas', 'brights'], brokerFeePercent: 0.17, levyFeePercent: 0.27 },
+    { label: 'Sinarmas', aliases: ['sinarmas', 'siminvest', 'sinarmas sekuritas'], brokerFeePercent: 0.14, levyFeePercent: 0.24 },
+    { label: 'Phillip', aliases: ['phillip', 'phillip sekuritas', 'poems'], brokerFeePercent: 0.15, levyFeePercent: 0.25 },
+    { label: 'Stockbit', aliases: ['stockbit', 'stockbit sekuritas'], brokerFeePercent: 0.15, levyFeePercent: 0.25 },
+    { label: 'Ciptadana', aliases: ['ciptadana', 'ciptadana sekuritas', 'ciptadana sekuritas asia'], brokerFeePercent: 0.18, levyFeePercent: 0.28 },
+    { label: 'Ajaib', aliases: ['ajaib', 'ajaib sekuritas'], brokerFeePercent: 0.15, levyFeePercent: 0.25 },
+    { label: 'Semesta Indovest', aliases: ['semesta', 'semesta indovest', 's-invest', 's invest'], brokerFeePercent: 0.15, levyFeePercent: 0.25 }
 ] as const;
 
-const detectBrokerLabel = (accountName: string) => {
-    const normalized = accountName.trim().toLowerCase();
-    if (!normalized) return null;
-    return BROKER_LABEL_PRESETS.find((preset) =>
-        preset.aliases.some((alias) => normalized === alias || normalized.includes(alias))
-    )?.label || null;
-};
-
-const getBrokerBadgeTone = (label: string | null) => {
-    switch (label) {
-        case 'RHB':
-            return 'bg-sky-100 text-sky-700 border-sky-200';
-        case 'BRI Danareksa':
-            return 'bg-blue-100 text-blue-700 border-blue-200';
-        case 'Sinarmas':
-            return 'bg-amber-100 text-amber-700 border-amber-200';
-        case 'Phillip':
-            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-        case 'Stockbit':
-            return 'bg-violet-100 text-violet-700 border-violet-200';
-        case 'Ciptadana':
-            return 'bg-rose-100 text-rose-700 border-rose-200';
-        case 'Ajaib':
-            return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
-        case 'Semesta Indovest':
-            return 'bg-teal-100 text-teal-700 border-teal-200';
-        default:
-            return 'bg-slate-100 text-slate-700 border-slate-200';
+const getEffectiveFeeConfig = (account: Account | null) => {
+    const brokerFeePercent = Number(account?.stockBrokerFeePercent || 0);
+    const levyFeePercent = Number(account?.stockLevyFeePercent || 0);
+    if (brokerFeePercent > 0 || levyFeePercent > 0) {
+        return {
+            brokerFeePercent,
+            levyFeePercent
+        };
     }
+
+    const normalized = String(account?.name || '').trim().toLowerCase();
+    const preset = BROKER_LABEL_PRESETS.find((item) =>
+        item.aliases.some((alias) => normalized === alias || normalized.includes(alias))
+    );
+
+    return {
+        brokerFeePercent: Number(preset?.brokerFeePercent || 0),
+        levyFeePercent: Number(preset?.levyFeePercent || 0)
+    };
 };
 
 const emptyForm = () => ({
@@ -122,23 +118,29 @@ const Stocks = () => {
         () => accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type)),
         [accounts]
     );
-    const availableStockAccounts = useMemo(
+    const fundedStockAccounts = useMemo(
         () => stockAccounts
-            .filter((account) => {
-                if (editingId && account.id === form.accountId) return true;
-                if (selectedOwnerId !== 'ALL') return getOwnerBalance(account, selectedOwnerId) > 0;
-                return Object.values(account.ownerBalances || {}).some((amount) => Number(amount || 0) > 0);
-            })
+            .filter((account) =>
+                Object.values(account.ownerBalances || {}).some((amount) => Number(amount || 0) > 0)
+            )
             .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0)),
-        [editingId, form.accountId, selectedOwnerId, stockAccounts]
+        [stockAccounts]
+    );
+    const formStockAccounts = useMemo(
+        () => {
+            if (!form.accountId) return fundedStockAccounts;
+            const currentAccount = stockAccounts.find((account) => account.id === form.accountId);
+            if (!currentAccount) return fundedStockAccounts;
+            if (fundedStockAccounts.some((account) => account.id === currentAccount.id)) return fundedStockAccounts;
+            return [currentAccount, ...fundedStockAccounts];
+        },
+        [form.accountId, fundedStockAccounts, stockAccounts]
     );
     const selectedAccount = stockAccounts.find((account) => account.id === form.accountId) || null;
-    const selectedFilterAccount = useMemo(
-        () => stockAccounts.find((account) => account.id === selectedAccountId) || null,
-        [selectedAccountId, stockAccounts]
+    const selectedAccountFeeConfig = useMemo(
+        () => getEffectiveFeeConfig(selectedAccount),
+        [selectedAccount]
     );
-    const selectedAccountBrokerLabel = detectBrokerLabel(selectedAccount?.name || '');
-    const selectedFilterBrokerLabel = detectBrokerLabel(selectedFilterAccount?.name || '');
     const accountOwnerOptions = useMemo(
         () => selectedAccount
             ? owners
@@ -146,7 +148,11 @@ const Stocks = () => {
                     ...owner,
                     balance: getOwnerBalance(selectedAccount, owner.id)
                 }))
-                .filter((owner) => editingId ? (owner.balance > 0 || owner.id === form.ownerId) : owner.balance > 0)
+                .filter((owner) => {
+                    if (owner.id === form.ownerId) return true;
+                    if (editingId) return owner.balance > 0;
+                    return owner.balance > 0;
+                })
                 .sort((a, b) => b.balance - a.balance)
             : [],
         [editingId, form.ownerId, owners, selectedAccount]
@@ -161,10 +167,10 @@ const Stocks = () => {
             side: form.side,
             lot: enteredLot,
             pricePerShare: enteredPricePerShare,
-            brokerFeePercent: Number(selectedAccount.stockBrokerFeePercent || 0),
-            levyFeePercent: Number(selectedAccount.stockLevyFeePercent || 0)
+            brokerFeePercent: selectedAccountFeeConfig.brokerFeePercent,
+            levyFeePercent: selectedAccountFeeConfig.levyFeePercent
         });
-    }, [enteredLot, enteredPricePerShare, form.side, selectedAccount]);
+    }, [enteredLot, enteredPricePerShare, form.side, selectedAccount, selectedAccountFeeConfig]);
     const availableCash = getOwnerBalance(selectedAccount, form.ownerId);
     const requiredCash = form.side === 'BUY' ? Number(tradePreview?.netValue || 0) : 0;
     const remainingCashAfterBuy = form.side === 'BUY' ? availableCash - requiredCash : null;
@@ -255,7 +261,7 @@ const Stocks = () => {
 
     useEffect(() => {
         const action = searchParams.get('action');
-        if (!action || availableStockAccounts.length === 0) return;
+        if (!action || formStockAccounts.length === 0) return;
 
         const requestedAccountId = searchParams.get('accountId');
         const requestedOwnerId = searchParams.get('ownerId');
@@ -264,7 +270,7 @@ const Stocks = () => {
         const requestedPricePerShare = searchParams.get('pricePerShare') || '';
         const requestedTradedAt = searchParams.get('tradedAt') || new Date().toISOString().slice(0, 10);
         const requestedNotes = searchParams.get('notes') || '';
-        const resolvedAccount = availableStockAccounts.find((account) => account.id === requestedAccountId) || availableStockAccounts[0];
+        const resolvedAccount = formStockAccounts.find((account) => account.id === requestedAccountId) || formStockAccounts[0];
         const resolvedOwnerId = requestedOwnerId
             || owners
                 .find((owner) => getOwnerBalance(resolvedAccount, owner.id) > 0)?.id
@@ -294,7 +300,7 @@ const Stocks = () => {
         nextParams.delete('tradedAt');
         nextParams.delete('notes');
         setSearchParams(nextParams, { replace: true });
-    }, [availableStockAccounts, owners, searchParams, setSearchParams]);
+    }, [formStockAccounts, owners, searchParams, setSearchParams]);
 
     useEffect(() => {
         if (!selectedAccount) return;
@@ -332,10 +338,10 @@ const Stocks = () => {
         setEditingId(null);
         setForm({
             ...emptyForm(),
-            ownerId: availableStockAccounts[0]
-                ? owners.find((owner) => getOwnerBalance(availableStockAccounts[0], owner.id) > 0)?.id || ''
+            ownerId: formStockAccounts[0]
+                ? owners.find((owner) => getOwnerBalance(formStockAccounts[0], owner.id) > 0)?.id || ''
                 : '',
-            accountId: availableStockAccounts[0]?.id || ''
+            accountId: formStockAccounts[0]?.id || ''
         });
         setIsFormOpen(false);
     };
@@ -427,8 +433,8 @@ const Stocks = () => {
         });
     };
 
-    const handleQuickSell = (ticker: string) => {
-        const activeTicker = ticker.trim().toUpperCase();
+    const handleQuickSell = (position: StockPosition) => {
+        const activeTicker = position.ticker.trim().toUpperCase();
         if (!activeTicker) return;
 
         const lotsByHolding = new Map<string, { ownerId: string; accountId: string; lots: number }>();
@@ -458,12 +464,22 @@ const Stocks = () => {
         }
 
         setEditingId(null);
+        const fallbackPrice = Math.round(
+            Number(
+                liveQuotes[activeTicker]?.price
+                || position.avgBuyPrice
+                || position.avgCostPerShare
+                || 0
+            )
+        );
         setForm({
             ...emptyForm(),
             ownerId: bestHolding.ownerId,
             accountId: bestHolding.accountId,
             ticker: activeTicker,
             side: 'SELL',
+            lot: String(Math.max(0, bestHolding.lots)),
+            pricePerShare: fallbackPrice > 0 ? String(fallbackPrice) : '',
             tradedAt: new Date().toISOString().slice(0, 10)
         });
         setIsFormOpen(true);
@@ -576,7 +592,7 @@ const Stocks = () => {
             </div>
 
             {/* No account warning */}
-            {availableStockAccounts.length === 0 && (
+            {fundedStockAccounts.length === 0 && (
                 <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
                     <p className="text-sm font-bold text-slate-900">Belum ada rekening saham yang memiliki dana</p>
                     <p className="mt-1 text-xs text-slate-600">Tambahkan dana ke rekening bertipe <code className="font-mono bg-amber-100 px-1 rounded">RDN</code> atau <code className="font-mono bg-amber-100 px-1 rounded">Sekuritas</code>, lalu akun akan muncul di sini.</p>
@@ -646,14 +662,6 @@ const Stocks = () => {
                                 <option key={account.id} value={account.id}>{account.name}</option>
                             ))}
                         </select>
-                        {selectedFilterBrokerLabel ? (
-                            <div className="flex items-center gap-2 px-1">
-                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getBrokerBadgeTone(selectedFilterBrokerLabel)}`}>
-                                    {selectedFilterBrokerLabel}
-                                </span>
-                                <span className="text-[10px] font-medium text-slate-400">Broker akun terpilih</span>
-                            </div>
-                        ) : null}
                     </div>
                     <input
                         className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 h-10 text-xs uppercase bg-slate-50 font-medium placeholder:normal-case placeholder:text-slate-400 text-slate-700 focus:outline-none focus:border-blue-300 transition-colors"
@@ -694,25 +702,36 @@ const Stocks = () => {
                             const liveQuote = liveQuotes[row.ticker.trim().toUpperCase()] || null;
                             const currentPrice = Number(liveQuote?.price || 0);
                             const marketValue = currentPrice > 0 ? currentPrice * row.totalShares : 0;
+                            const priceChangePercent = currentPrice > 0 && row.avgCostPerShare > 0
+                                ? ((currentPrice - row.avgCostPerShare) / row.avgCostPerShare) * 100
+                                : 0;
 
                             return (
                             <button
                                 key={row.ticker}
                                 type="button"
-                                onClick={() => handleQuickSell(row.ticker)}
+                                onClick={() => handleQuickSell(row)}
                                 className={`w-full rounded-2xl border bg-white/80 p-4 hover:shadow-md transition-all space-y-3 border-l-4 text-left ${row.realizedPnl >= 0 ? 'border-l-blue-500 border-slate-100 hover:border-blue-100' : 'border-l-rose-400 border-slate-100 hover:border-rose-100'}`}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <p className="text-lg font-black text-slate-900 tracking-tight">{row.ticker}</p>
-                                        <p className="mt-0.5 text-xs text-slate-500 font-medium">
-                                            {row.totalLots.toLocaleString('id-ID')} lot &middot; Avg {formatCurrency(row.avgCostPerShare)}
-                                        </p>
                                         {currentPrice > 0 ? (
-                                            <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
-                                                Harga Kini {formatCurrency(currentPrice)}
+                                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs font-medium text-slate-500">
+                                                <span>{row.totalLots.toLocaleString('id-ID')} lot</span>
+                                                <span>&middot;</span>
+                                                <span>Avg {formatCurrency(row.avgCostPerShare)}</span>
+                                                <span>&middot;</span>
+                                                <span>Kini {formatCurrency(currentPrice)}</span>
+                                                <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${priceChangePercent >= 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                                    {formatPercent(priceChangePercent)}
+                                                </span>
+                                            </div>
+                                        ) : (
+                                            <p className="mt-1 text-xs font-medium text-slate-500">
+                                                {row.totalLots.toLocaleString('id-ID')} lot &middot; Avg {formatCurrency(row.avgCostPerShare)}
                                             </p>
-                                        ) : null}
+                                        )}
                                     </div>
                                     <div className="shrink-0 text-right">
                                         <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest border ${row.realizedPnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
@@ -1021,7 +1040,7 @@ const Stocks = () => {
                                         value={form.accountId}
                                         onChange={(e) => {
                                             const nextAccountId = e.target.value;
-                                            const account = availableStockAccounts.find((item) => item.id === nextAccountId);
+                                            const account = formStockAccounts.find((item) => item.id === nextAccountId);
                                             setForm((current) => ({
                                                 ...current,
                                                 accountId: nextAccountId,
@@ -1029,17 +1048,14 @@ const Stocks = () => {
                                             }));
                                         }}
                                     >
-                                        {availableStockAccounts.map((account) => (
+                                        {formStockAccounts.map((account) => (
                                             <option key={account.id} value={account.id}>{account.name}</option>
                                         ))}
                                     </select>
-                                    {selectedAccountBrokerLabel ? (
-                                        <div className="flex items-center gap-2 px-1">
-                                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getBrokerBadgeTone(selectedAccountBrokerLabel)}`}>
-                                                {selectedAccountBrokerLabel}
-                                            </span>
-                                            <span className="text-[10px] font-medium text-slate-400">Broker akun terpilih</span>
-                                        </div>
+                                    {fundedStockAccounts.length === 0 ? (
+                                        <p className="px-1 text-[11px] font-medium text-amber-600">
+                                            Semua rekening sekuritas/RDN saat ini belum memiliki dana. Top up dulu agar transaksi BUY bisa digunakan.
+                                        </p>
                                     ) : null}
                                 </label>
                                 <label className="space-y-1.5 block">
@@ -1243,7 +1259,7 @@ const Stocks = () => {
                             )}
                             <button
                                 ref={submitButtonRef}
-                                disabled={saving || availableStockAccounts.length === 0 || isSubmitBlockedByFunds || isSubmitBlockedByLots}
+                                disabled={saving || formStockAccounts.length === 0 || isSubmitBlockedByFunds || isSubmitBlockedByLots}
                                 className="w-full rounded-2xl bg-blue-600 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-500"
                             >
                                 {editingId ? <Save size={16} /> : <Plus size={16} />}

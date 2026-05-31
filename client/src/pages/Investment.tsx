@@ -259,6 +259,11 @@ const Investment = () => {
         const txDate = new Date(tx.date);
         return txDate >= currentMonthStart && txDate < nextMonthStart;
     });
+    const monthlyStockTransactions = stockTransactions.filter((tx: any) => {
+        if (selectedOwnerId !== 'ALL' && tx.ownerId !== selectedOwnerId) return false;
+        const txDate = new Date(tx.tradedAt);
+        return txDate >= currentMonthStart && txDate < nextMonthStart;
+    });
 
     const filteredRdns = rdnAccounts;
 
@@ -326,6 +331,21 @@ const Investment = () => {
         depositCount: 0,
         incomeCount: 0,
         withdrawalCount: 0
+    });
+    monthlyStockTransactions.forEach((tx: any) => {
+        const amount = Math.abs(Number(tx.netValue || 0));
+        if (!Number.isFinite(amount) || amount === 0) return;
+
+        if (tx.side === 'BUY') {
+            monthlyInvestmentSnapshot.deposit += amount;
+            monthlyInvestmentSnapshot.depositCount += 1;
+            return;
+        }
+
+        if (tx.side === 'SELL') {
+            monthlyInvestmentSnapshot.withdrawal += amount;
+            monthlyInvestmentSnapshot.withdrawalCount += 1;
+        }
     });
     const ownershipRows = detailAccount
         ? owners
