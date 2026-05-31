@@ -17,7 +17,7 @@ type StockQuotePayload = {
     price: number;
     asOf: string | null;
     currency: string;
-    source: 'alpha-vantage';
+    source: 'alpha-vantage' | 'yahoo-finance';
 };
 
 const stockQuoteCache = new Map<string, { expiresAt: number; value: StockQuotePayload }>();
@@ -81,6 +81,20 @@ const fetchAlphaVantageJson = async (params: URLSearchParams) => {
     return response.json();
 };
 
+const fetchYahooFinanceJson = async (symbol: string) => {
+    const response = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`, {
+        headers: {
+            accept: 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Yahoo Finance error ${response.status}`);
+    }
+
+    return response.json();
+};
+
 const parseAlphaVantageQuote = (ticker: string, symbol: string, payload: any): StockQuotePayload | null => {
     const rawQuote = payload?.['Global Quote'];
     if (!rawQuote || typeof rawQuote !== 'object') return null;
@@ -111,6 +125,39 @@ const fetchAlphaVantageQuote = async (ticker: string, symbol: string, apiKey: st
     }));
 
     return parseAlphaVantageQuote(ticker, symbol, payload);
+};
+
+const parseYahooFinanceQuote = (ticker: string, symbol: string, payload: any): StockQuotePayload | null => {
+    const result = Array.isArray(payload?.chart?.result) ? payload.chart.result[0] : null;
+    const meta = result?.meta;
+    if (!meta || typeof meta !== 'object') return null;
+
+    const price = Number(
+        meta.regularMarketPrice
+        ?? meta.previousClose
+        ?? meta.chartPreviousClose
+        ?? 0
+    );
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    const marketTime = Number(meta.regularMarketTime || 0);
+    const asOf = Number.isFinite(marketTime) && marketTime > 0
+        ? new Date(marketTime * 1000).toISOString()
+        : null;
+
+    return {
+        ticker,
+        symbol: String(meta.symbol || symbol || ticker).trim(),
+        price,
+        asOf,
+        currency: String(meta.currency || 'IDR').trim().toUpperCase() || 'IDR',
+        source: 'yahoo-finance'
+    };
+};
+
+const fetchYahooFinanceQuote = async (ticker: string, symbol: string) => {
+    const payload = await fetchYahooFinanceJson(symbol);
+    return parseYahooFinanceQuote(ticker, symbol, payload);
 };
 
 const resolveAlphaVantageSymbol = async (ticker: string, apiKey: string) => {
@@ -186,8 +233,29 @@ const fetchLiveStockQuote = async (ticker: string, apiKey: string): Promise<Stoc
         writeLiveCache(stockQuoteCache, activeTicker, quote, STOCK_QUOTE_CACHE_TTL_MS);
         return quote;
     } catch {
-        return null;
+        // fallback ke provider lain di bawah
     }
+
+    const yahooCandidateSymbols = Array.from(new Set([
+        `${activeTicker}.JK`,
+        `${activeTicker}.JKT`,
+        activeTicker
+    ]));
+
+    for (const symbol of yahooCandidateSymbols) {
+        try {
+            const quote = await fetchYahooFinanceQuote(activeTicker, symbol);
+            if (quote) {
+                writeLiveCache(stockSymbolCache, activeTicker, quote.symbol, STOCK_SYMBOL_CACHE_TTL_MS);
+                writeLiveCache(stockQuoteCache, activeTicker, quote, STOCK_QUOTE_CACHE_TTL_MS);
+                return quote;
+            }
+        } catch {
+            // coba simbol berikutnya
+        }
+    }
+
+    return null;
 };
 
 const ensureStockAccount = async (accountId: string) => {
@@ -421,31 +489,38 @@ router.get('/quotes', async (req, res) => {
                 .filter(Boolean)
         )).slice(0, 10);
 
-        if (!apiKey) {
-            return res.json({
-                configured: false,
-                provider: 'alpha-vantage',
-                quotes: {}
-            });
-        }
-
         const quotes: Record<string, StockQuotePayload> = {};
+        const errors: Record<string, string> = {};
 
         for (const ticker of tickers) {
-            const quote = await fetchLiveStockQuote(ticker, apiKey);
-            if (quote) {
-                quotes[ticker] = quote;
+            try {
+                const quote = apiKey
+                    ? await fetchLiveStockQuote(ticker, apiKey)
+                    : await fetchYahooFinanceQuote(ticker, `${ticker}.JK`);
+                if (quote) {
+                    quotes[ticker] = quote;
+                }
+            } catch (error: any) {
+                errors[ticker] = String(error?.message || 'Gagal mengambil quote');
             }
         }
 
         res.json({
-            configured: true,
-            provider: 'alpha-vantage',
-            quotes
+            configured: Boolean(apiKey),
+            provider: apiKey ? 'alpha-vantage' : 'yahoo-finance',
+            quotes,
+            errors
         });
     } catch (error) {
         console.error('Get live stock quotes error:', error);
-        res.status(500).json({ error: 'Gagal mengambil harga saham terbaru' });
+        res.json({
+            configured: Boolean(getAlphaVantageApiKey()),
+            provider: getAlphaVantageApiKey() ? 'alpha-vantage' : 'yahoo-finance',
+            quotes: {},
+            errors: {
+                general: 'Gagal mengambil harga saham terbaru'
+            }
+        });
     }
 });
 
