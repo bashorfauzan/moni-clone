@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Pencil, Plus, Save, Trash2, Wallet, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download, Pencil, Plus, Save, Search, Trash2, Wallet, X } from 'lucide-react';
 import Spinner from '../components/Spinner';
 import { useTransaction } from '../context/TransactionContext';
+import { useSecurity } from '../context/SecurityContext';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { computeStockMoney } from '../services/stocksDirect';
+import { downloadBackupBlob } from '../services/backup';
 import {
     createStockTransaction,
     deleteStockTransaction,
+    fetchStockQuotes,
     fetchStockPositions,
     fetchStockTransactions,
     updateStockTransaction,
+    type StockQuote,
     type StockPosition,
     type StockTransaction
 } from '../services/stocks';
@@ -34,6 +38,47 @@ const getOwnerBalance = (account: Account | null | undefined, ownerId?: string) 
     Number((ownerId && account?.ownerBalances?.[ownerId]) || 0);
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
+const BROKER_LABEL_PRESETS = [
+    { label: 'RHB', aliases: ['rhb', 'rhb syariah', 'rhb k bashor', 'rhb k novan'] },
+    { label: 'BRI Danareksa', aliases: ['bri', 'bri danareksa', 'bri sekuritas', 'brights'] },
+    { label: 'Sinarmas', aliases: ['sinarmas', 'siminvest', 'sinarmas sekuritas'] },
+    { label: 'Phillip', aliases: ['phillip', 'phillip sekuritas', 'poems'] },
+    { label: 'Stockbit', aliases: ['stockbit', 'stockbit sekuritas'] },
+    { label: 'Ciptadana', aliases: ['ciptadana', 'ciptadana sekuritas', 'ciptadana sekuritas asia'] },
+    { label: 'Ajaib', aliases: ['ajaib', 'ajaib sekuritas'] },
+    { label: 'Semesta Indovest', aliases: ['semesta', 'semesta indovest', 's-invest', 's invest'] }
+] as const;
+
+const detectBrokerLabel = (accountName: string) => {
+    const normalized = accountName.trim().toLowerCase();
+    if (!normalized) return null;
+    return BROKER_LABEL_PRESETS.find((preset) =>
+        preset.aliases.some((alias) => normalized === alias || normalized.includes(alias))
+    )?.label || null;
+};
+
+const getBrokerBadgeTone = (label: string | null) => {
+    switch (label) {
+        case 'RHB':
+            return 'bg-sky-100 text-sky-700 border-sky-200';
+        case 'BRI Danareksa':
+            return 'bg-blue-100 text-blue-700 border-blue-200';
+        case 'Sinarmas':
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        case 'Phillip':
+            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        case 'Stockbit':
+            return 'bg-violet-100 text-violet-700 border-violet-200';
+        case 'Ciptadana':
+            return 'bg-rose-100 text-rose-700 border-rose-200';
+        case 'Ajaib':
+            return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+        case 'Semesta Indovest':
+            return 'bg-teal-100 text-teal-700 border-teal-200';
+        default:
+            return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+};
 
 const emptyForm = () => ({
     ownerId: '',
@@ -48,11 +93,13 @@ const emptyForm = () => ({
 
 const Stocks = () => {
     const { openModal } = useTransaction();
+    const { verifySecurity } = useSecurity();
     const [searchParams, setSearchParams] = useSearchParams();
     const [owners, setOwners] = useState<Owner[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [transactions, setTransactions] = useState<StockTransaction[]>([]);
     const [positions, setPositions] = useState<StockPosition[]>([]);
+    const [liveQuotes, setLiveQuotes] = useState<Record<string, StockQuote>>({});
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
@@ -60,11 +107,16 @@ const Stocks = () => {
     const [tickerFilter, setTickerFilter] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isHistorySearchOpen, setIsHistorySearchOpen] = useState(false);
+    const [historyTickerQuery, setHistoryTickerQuery] = useState('');
+    const [historyPage, setHistoryPage] = useState(1);
     const [form, setForm] = useState(emptyForm());
     const tickerInputRef = useRef<HTMLInputElement | null>(null);
     const lotInputRef = useRef<HTMLInputElement | null>(null);
     const priceInputRef = useRef<HTMLInputElement | null>(null);
     const submitButtonRef = useRef<HTMLButtonElement | null>(null);
+    const historySearchInputRef = useRef<HTMLInputElement | null>(null);
 
     const stockAccounts = useMemo(
         () => accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type)),
@@ -81,6 +133,12 @@ const Stocks = () => {
         [editingId, form.accountId, selectedOwnerId, stockAccounts]
     );
     const selectedAccount = stockAccounts.find((account) => account.id === form.accountId) || null;
+    const selectedFilterAccount = useMemo(
+        () => stockAccounts.find((account) => account.id === selectedAccountId) || null,
+        [selectedAccountId, stockAccounts]
+    );
+    const selectedAccountBrokerLabel = detectBrokerLabel(selectedAccount?.name || '');
+    const selectedFilterBrokerLabel = detectBrokerLabel(selectedFilterAccount?.name || '');
     const accountOwnerOptions = useMemo(
         () => selectedAccount
             ? owners
@@ -112,6 +170,35 @@ const Stocks = () => {
     const remainingCashAfterBuy = form.side === 'BUY' ? availableCash - requiredCash : null;
     const isBuyFundsEnough = form.side !== 'BUY' || !tradePreview || remainingCashAfterBuy === null || remainingCashAfterBuy >= 0;
     const isSubmitBlockedByFunds = form.side === 'BUY' && Boolean(tradePreview) && !isBuyFundsEnough;
+    const totalTradeFee = Number(tradePreview?.brokerFee || 0) + Number(tradePreview?.levyFee || 0);
+    const ownedLots = useMemo(() => {
+        const activeTicker = form.ticker.trim().toUpperCase();
+        if (!form.ownerId || !form.accountId || !activeTicker) return 0;
+
+        return transactions.reduce((sum, row) => {
+            if (
+                row.ownerId !== form.ownerId
+                || row.accountId !== form.accountId
+                || row.ticker.toUpperCase() !== activeTicker
+            ) {
+                return sum;
+            }
+
+            return sum + (row.side === 'BUY' ? row.lot : -row.lot);
+        }, 0);
+    }, [form.accountId, form.ownerId, form.ticker, transactions]);
+    const editingTransaction = useMemo(
+        () => transactions.find((row) => row.id === editingId) || null,
+        [editingId, transactions]
+    );
+    const sellableLots = useMemo(() => {
+        if (!editingTransaction) return ownedLots;
+        const currentDelta = editingTransaction.side === 'BUY' ? editingTransaction.lot : -editingTransaction.lot;
+        return ownedLots - currentDelta;
+    }, [editingTransaction, ownedLots]);
+    const remainingLotsAfterSell = form.side === 'SELL' ? sellableLots - enteredLot : null;
+    const isSellLotsEnough = form.side !== 'SELL' || enteredLot <= 0 || remainingLotsAfterSell === null || remainingLotsAfterSell >= 0;
+    const isSubmitBlockedByLots = form.side === 'SELL' && enteredLot > 0 && !isSellLotsEnough;
 
     const loadData = async () => {
         try {
@@ -133,9 +220,25 @@ const Stocks = () => {
                 fetchStockTransactions(filter),
                 fetchStockPositions(filter)
             ]);
+            const activeTickers = Array.from(new Set(
+                positionRows
+                    .filter((row) => row.totalLots > 0)
+                    .map((row) => row.ticker.trim().toUpperCase())
+                    .filter(Boolean)
+            ));
+            let nextQuotes: Record<string, StockQuote> = {};
+
+            if (activeTickers.length > 0) {
+                try {
+                    nextQuotes = await fetchStockQuotes(activeTickers);
+                } catch {
+                    nextQuotes = {};
+                }
+            }
 
             setTransactions(txRows);
             setPositions(positionRows);
+            setLiveQuotes(nextQuotes);
             setForm((current) => ({
                 ...current,
                 accountId: current.accountId || fundedAccounts[0]?.id || nextAccounts[0]?.id || '',
@@ -242,6 +345,10 @@ const Stocks = () => {
         setSaving(true);
 
         try {
+            if (form.side === 'SELL' && Number(form.lot || 0) > Math.max(0, sellableLots)) {
+                throw new Error(`Lot saham tidak cukup untuk dijual (tersedia ${Math.max(0, sellableLots).toLocaleString('id-ID')} lot)`);
+            }
+
             const payload = {
                 ownerId: form.ownerId,
                 accountId: form.accountId,
@@ -284,12 +391,14 @@ const Stocks = () => {
         setIsFormOpen(true);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (row: StockTransaction) => {
+        const authorized = await verifySecurity(`Hapus Transaksi Saham ${row.ticker}`);
+        if (!authorized) return;
         if (!window.confirm('Hapus transaksi saham ini?')) return;
         setSaving(true);
         try {
-            await deleteStockTransaction(id);
-            if (editingId === id) resetForm();
+            await deleteStockTransaction(row.id);
+            if (editingId === row.id) resetForm();
             await loadData();
         } catch (error: any) {
             alert(error?.response?.data?.error || error?.message || 'Gagal menghapus transaksi saham');
@@ -318,9 +427,119 @@ const Stocks = () => {
         });
     };
 
+    const handleQuickSell = (ticker: string) => {
+        const activeTicker = ticker.trim().toUpperCase();
+        if (!activeTicker) return;
+
+        const lotsByHolding = new Map<string, { ownerId: string; accountId: string; lots: number }>();
+
+        transactions.forEach((row) => {
+            if (row.ticker.trim().toUpperCase() !== activeTicker) return;
+
+            const key = `${row.ownerId}::${row.accountId}`;
+            const current = lotsByHolding.get(key) || {
+                ownerId: row.ownerId,
+                accountId: row.accountId,
+                lots: 0
+            };
+
+            current.lots += row.side === 'BUY' ? row.lot : -row.lot;
+            lotsByHolding.set(key, current);
+        });
+
+        const candidateHoldings = Array.from(lotsByHolding.values())
+            .filter((row) => row.lots > 0)
+            .sort((a, b) => b.lots - a.lots);
+
+        const bestHolding = candidateHoldings[0];
+        if (!bestHolding) {
+            alert(`Belum ada lot aktif untuk ${activeTicker}.`);
+            return;
+        }
+
+        setEditingId(null);
+        setForm({
+            ...emptyForm(),
+            ownerId: bestHolding.ownerId,
+            accountId: bestHolding.accountId,
+            ticker: activeTicker,
+            side: 'SELL',
+            tradedAt: new Date().toISOString().slice(0, 10)
+        });
+        setIsFormOpen(true);
+    };
+
+    const handleFillOwnedLots = () => {
+        const nextLot = Math.max(0, form.side === 'SELL' ? sellableLots : ownedLots);
+        if (nextLot <= 0) return;
+
+        setForm((current) => ({
+            ...current,
+            lot: String(nextLot)
+        }));
+
+        window.setTimeout(() => {
+            priceInputRef.current?.focus();
+        }, 0);
+    };
+
     const activePositions = useMemo(() => positions.filter((row) => row.totalLots > 0), [positions]);
+    const historyFilteredTransactions = useMemo(() => {
+        const activeQuery = historyTickerQuery.trim().toUpperCase();
+        if (!activeQuery) return transactions;
+        return transactions.filter((row) => row.ticker.trim().toUpperCase().includes(activeQuery));
+    }, [historyTickerQuery, transactions]);
+    const visibleTransactions = useMemo(() => historyFilteredTransactions.slice(0, 10), [historyFilteredTransactions]);
+    const historyPageSize = 10;
+    const totalHistoryPages = Math.max(1, Math.ceil(historyFilteredTransactions.length / historyPageSize));
+    const pagedHistoryTransactions = useMemo(() => {
+        const startIndex = (historyPage - 1) * historyPageSize;
+        return historyFilteredTransactions.slice(startIndex, startIndex + historyPageSize);
+    }, [historyFilteredTransactions, historyPage]);
     const totalOpenLots = activePositions.reduce((sum, row) => sum + row.totalLots, 0);
     const totalRealizedPnl = positions.reduce((sum, row) => sum + row.realizedPnl, 0);
+
+    useEffect(() => {
+        setHistoryPage(1);
+    }, [historyTickerQuery]);
+
+    useEffect(() => {
+        if (!isHistorySearchOpen) return;
+        const timer = window.setTimeout(() => historySearchInputRef.current?.focus(), 50);
+        return () => window.clearTimeout(timer);
+    }, [isHistorySearchOpen]);
+
+    const handleDownloadHistory = async () => {
+        try {
+            const XLSX = await import('xlsx');
+            const workbook = XLSX.utils.book_new();
+            const rows = transactions.map((row) => ({
+                Tanggal: String(row.tradedAt).slice(0, 10),
+                Ticker: row.ticker,
+                Sisi: row.side,
+                Lot: row.lot,
+                'Harga per Lembar': row.pricePerShare,
+                'Nilai Bruto': row.grossValue,
+                'Fee Beli': row.brokerFee,
+                'Fee Jual': row.levyFee,
+                Netto: row.netValue,
+                Pemilik: row.owner?.name || '',
+                Rekening: row.account?.name || '',
+                Catatan: row.notes || ''
+            }));
+
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Histori Saham');
+            const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+            const blob = new Blob([output], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const dateStr = new Date().toISOString().slice(0, 10);
+            downloadBackupBlob(blob, `Histori Saham ${dateStr}.xlsx`);
+        } catch (error) {
+            console.error('Export stock history error:', error);
+            alert('Gagal mengunduh history saham ke Excel.');
+        }
+    };
 
     if (loading) return <Spinner message="Memuat modul saham..." />;
 
@@ -338,6 +557,13 @@ const Stocks = () => {
                     </Link>
                     <h1 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">Portofolio Saham</h1>
                 </div>
+                <button
+                                type="button"
+                                onClick={handleDownloadHistory}
+                                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
+                            >
+                                <Download size={12} /> 
+                            </button>
                 <button
                     onClick={() => {
                         resetForm();
@@ -389,44 +615,49 @@ const Stocks = () => {
             </div>
 
             {/* Filter Bar */}
-            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-4 space-y-3">
-                {/* Owner pill segments */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Pemilik:</span>
-                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
+            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
+                {/* Owner tabs — horizontal scroll, no wrap */}
+                <div className="flex gap-1.5 overflow-x-auto px-3 pt-3 pb-2 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+                    {[{ id: 'ALL', name: 'Semua' }, ...owners].map((item) => (
                         <button
-                            onClick={() => setSelectedOwnerId('ALL')}
-                            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            key={item.id}
+                            onClick={() => setSelectedOwnerId(item.id)}
+                            className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
+                                selectedOwnerId === item.id
+                                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
+                            }`}
                         >
-                            Semua
+                            {item.name.split(' ')[0]}
                         </button>
-                        {owners.map((owner) => (
-                            <button
-                                key={owner.id}
-                                onClick={() => setSelectedOwnerId(owner.id)}
-                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === owner.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {owner.name}
-                            </button>
-                        ))}
-                    </div>
+                    ))}
                 </div>
 
-                {/* Account + Ticker search row */}
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <select
-                        className="rounded-2xl border border-slate-200 px-4 h-11 text-sm bg-slate-50 font-medium cursor-pointer flex-1"
-                        value={selectedAccountId}
-                        onChange={(e) => setSelectedAccountId(e.target.value)}
-                    >
-                        <option value="ALL">Semua Rekening</option>
-                        {stockAccounts.map((account) => (
-                            <option key={account.id} value={account.id}>{account.name}</option>
-                        ))}
-                    </select>
+                {/* Rekening + Ticker */}
+                <div className="flex gap-2 px-3 pb-3">
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                        <select
+                            className="w-full rounded-xl border border-slate-200 px-3 h-10 text-xs bg-slate-50 font-medium cursor-pointer text-slate-700"
+                            value={selectedAccountId}
+                            onChange={(e) => setSelectedAccountId(e.target.value)}
+                        >
+                            <option value="ALL">Semua Rekening</option>
+                            {stockAccounts.map((account) => (
+                                <option key={account.id} value={account.id}>{account.name}</option>
+                            ))}
+                        </select>
+                        {selectedFilterBrokerLabel ? (
+                            <div className="flex items-center gap-2 px-1">
+                                <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getBrokerBadgeTone(selectedFilterBrokerLabel)}`}>
+                                    {selectedFilterBrokerLabel}
+                                </span>
+                                <span className="text-[10px] font-medium text-slate-400">Broker akun terpilih</span>
+                            </div>
+                        ) : null}
+                    </div>
                     <input
-                        className="rounded-2xl border border-slate-200 px-4 h-11 text-sm uppercase bg-slate-50 font-medium placeholder:normal-case placeholder:text-slate-400 flex-1"
-                        placeholder="Cari Ticker (mis. BBCA)"
+                        className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 h-10 text-xs uppercase bg-slate-50 font-medium placeholder:normal-case placeholder:text-slate-400 text-slate-700 focus:outline-none focus:border-blue-300 transition-colors"
+                        placeholder="Cari ticker..."
                         value={tickerFilter}
                         onChange={(e) => setTickerFilter(e.target.value.toUpperCase())}
                     />
@@ -459,10 +690,17 @@ const Stocks = () => {
                                 <p className="text-sm font-bold text-slate-500">Belum ada posisi aktif</p>
                                 <p className="text-xs text-slate-400">Tambahkan transaksi BUY untuk melihat posisi saham.</p>
                             </div>
-                        ) : activePositions.map((row) => (
-                            <div
+                        ) : activePositions.map((row) => {
+                            const liveQuote = liveQuotes[row.ticker.trim().toUpperCase()] || null;
+                            const currentPrice = Number(liveQuote?.price || 0);
+                            const marketValue = currentPrice > 0 ? currentPrice * row.totalShares : 0;
+
+                            return (
+                            <button
                                 key={row.ticker}
-                                className={`rounded-2xl border bg-white/80 p-4 hover:shadow-md transition-all space-y-3 border-l-4 ${row.realizedPnl >= 0 ? 'border-l-blue-500 border-slate-100 hover:border-blue-100' : 'border-l-rose-400 border-slate-100 hover:border-rose-100'}`}
+                                type="button"
+                                onClick={() => handleQuickSell(row.ticker)}
+                                className={`w-full rounded-2xl border bg-white/80 p-4 hover:shadow-md transition-all space-y-3 border-l-4 text-left ${row.realizedPnl >= 0 ? 'border-l-blue-500 border-slate-100 hover:border-blue-100' : 'border-l-rose-400 border-slate-100 hover:border-rose-100'}`}
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
@@ -470,17 +708,30 @@ const Stocks = () => {
                                         <p className="mt-0.5 text-xs text-slate-500 font-medium">
                                             {row.totalLots.toLocaleString('id-ID')} lot &middot; Avg {formatCurrency(row.avgCostPerShare)}
                                         </p>
+                                        {currentPrice > 0 ? (
+                                            <p className="mt-1 text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                                                Harga Kini {formatCurrency(currentPrice)}
+                                            </p>
+                                        ) : null}
                                     </div>
-                                    <span className={`shrink-0 rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest border ${row.realizedPnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
-                                        {formatCurrency(row.realizedPnl)}
-                                    </span>
+                                    <div className="shrink-0 text-right">
+                                        <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-widest border ${row.realizedPnl >= 0 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                            {currentPrice > 0 ? formatCurrency(marketValue) : formatCurrency(row.realizedPnl)}
+                                        </span>
+                                        {currentPrice > 0 ? (
+                                            <p className="mt-1 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                                Nilai Pasar
+                                            </p>
+                                        ) : null}
+                                    </div>
                                 </div>
                                 <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                    <span>Realized PnL</span>
+                                    <span>{currentPrice > 0 ? `PnL ${formatCurrency(row.realizedPnl)}` : 'Klik untuk jual'}</span>
                                     <span className="text-slate-500">{row.buyCount} Beli / {row.sellCount} Jual</span>
                                 </div>
-                            </div>
-                        ))}
+                            </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -498,6 +749,55 @@ const Stocks = () => {
                         )}
                     </div>
 
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsHistorySearchOpen((current) => !current)}
+                            className={`inline-flex h-9 items-center gap-1.5 rounded-xl border px-3 text-[10px] font-bold uppercase tracking-widest transition-colors ${isHistorySearchOpen ? 'border-blue-200 bg-blue-50 text-blue-600' : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:text-slate-700'}`}
+                        >
+                            <Search size={12} />
+                            Search Kode Saham
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsHistoryModalOpen(true)}
+                            className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900"
+                        >
+                            Lihat Semua
+                        </button>
+                    </div>
+
+                    {isHistorySearchOpen && (
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <label className="block space-y-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Cari Kode Saham</span>
+                                <input
+                                    ref={historySearchInputRef}
+                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 h-10 text-xs uppercase font-medium tracking-widest text-slate-700 placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
+                                    placeholder="Contoh: BBCA"
+                                    value={historyTickerQuery}
+                                    maxLength={8}
+                                    onChange={(e) => setHistoryTickerQuery(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                                />
+                            </label>
+                        </div>
+                    )}
+
+                    {transactions.length > 0 && (
+                        <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-3 py-2">
+                            <p className="text-[11px] font-medium text-slate-500">
+                                {historyFilteredTransactions.length > 10
+                                    ? 'Menampilkan 10 transaksi terbaru.'
+                                    : `Menampilkan ${historyFilteredTransactions.length} transaksi.`}
+                            </p>
+                            {historyTickerQuery && (
+                                <span className="rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-blue-600">
+                                    {historyFilteredTransactions.length} cocok
+                                </span>
+                            )}
+                        </div>
+                    )}
+
                     <div className="space-y-3">
                         {transactions.length === 0 ? (
                             <div className="rounded-2xl bg-slate-50 flex flex-col items-center justify-center gap-2 py-10 px-4 text-center">
@@ -507,7 +807,7 @@ const Stocks = () => {
                                 <p className="text-sm font-bold text-slate-500">Belum ada transaksi</p>
                                 <p className="text-xs text-slate-400">Transaksi saham akan tampil di sini.</p>
                             </div>
-                        ) : transactions.map((row) => (
+                        ) : visibleTransactions.map((row) => (
                             <div
                                 key={row.id}
                                 className="rounded-2xl border border-slate-100 bg-white/80 p-4 hover:shadow-md hover:border-blue-100 transition-all"
@@ -527,21 +827,23 @@ const Stocks = () => {
                                             {String(row.tradedAt).slice(0, 10)} &middot; Netto {formatCurrency(row.netValue)}
                                         </p>
                                     </div>
-                                    <div className="flex items-center gap-1.5 shrink-0">
+                                    <div className="flex items-center gap-1 shrink-0">
                                         <button
                                             type="button"
                                             onClick={() => handleEdit(row)}
                                             className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+                                            title="Edit"
                                         >
-                                            <Pencil size={14} />
+                                            <Pencil size={13} />
                                         </button>
                                         <button
                                             type="button"
                                             disabled={saving}
-                                            onClick={() => handleDelete(row.id)}
-                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-500 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                            onClick={() => void handleDelete(row)}
+                                            className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                                            title="Hapus"
                                         >
-                                            <Trash2 size={14} />
+                                            <Trash2 size={13} />
                                         </button>
                                     </div>
                                 </div>
@@ -550,6 +852,134 @@ const Stocks = () => {
                     </div>
                 </div>
             </div>
+
+            {isHistoryModalOpen && (
+                <div
+                    className="fixed inset-0 z-[120] flex items-end justify-center bg-slate-950/70 p-4 backdrop-blur-sm sm:items-center"
+                    onMouseDown={() => setIsHistoryModalOpen(false)}
+                >
+                    <div
+                        className="w-full max-w-3xl rounded-[28px] border border-slate-100 bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-5 sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200"
+                        onMouseDown={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-black tracking-tight text-slate-900">Semua Histori Saham</h3>
+                                <p className="mt-1 text-xs text-slate-500">Cari ticker tertentu lalu telusuri histori per halaman.</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsHistoryModalOpen(false)}
+                                className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 shrink-0"
+                            >
+                                <X size={15} />
+                            </button>
+                        </div>
+
+                        <div className="mt-5 space-y-4">
+                            <label className="block space-y-1.5">
+                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Search Kode Saham</span>
+                                <input
+                                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 h-11 text-sm uppercase font-medium tracking-widest text-slate-700 placeholder:normal-case placeholder:tracking-normal placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
+                                    placeholder="Contoh: BBCA"
+                                    value={historyTickerQuery}
+                                    maxLength={8}
+                                    onChange={(e) => setHistoryTickerQuery(e.target.value.toUpperCase().replace(/[^A-Z]/g, ''))}
+                                />
+                            </label>
+
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+                                <p className="text-[11px] font-medium text-slate-500">
+                                    Menampilkan {pagedHistoryTransactions.length} dari {historyFilteredTransactions.length} transaksi.
+                                </p>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                                        disabled={historyPage <= 1}
+                                        className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <ChevronLeft size={12} /> Sebelumnya
+                                    </button>
+                                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-slate-500">
+                                        {historyPage} / {totalHistoryPages}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setHistoryPage((current) => Math.min(totalHistoryPages, current + 1))}
+                                        disabled={historyPage >= totalHistoryPages}
+                                        className="inline-flex h-9 items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-600 transition-colors hover:border-slate-300 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Selanjutnya <ChevronRight size={12} />
+                                    </button>
+                                    {historyTickerQuery && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setHistoryTickerQuery('')}
+                                            className="inline-flex h-9 items-center rounded-xl border border-slate-200 bg-white px-3 text-[10px] font-bold uppercase tracking-widest text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-900"
+                                        >
+                                            Reset Search
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {historyFilteredTransactions.length === 0 ? (
+                                    <div className="rounded-2xl bg-slate-50 px-4 py-10 text-center">
+                                        <p className="text-sm font-bold text-slate-500">Belum ada histori yang cocok</p>
+                                        <p className="mt-1 text-xs text-slate-400">Coba ubah kode saham yang dicari.</p>
+                                    </div>
+                                ) : pagedHistoryTransactions.map((row) => (
+                                    <div
+                                        key={`modal-${row.id}`}
+                                        className="rounded-2xl border border-slate-100 bg-white/80 p-4 transition-all hover:border-blue-100 hover:shadow-md"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-base font-black text-slate-900">{row.ticker}</span>
+                                                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest border ${row.side === 'BUY' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-rose-50 text-rose-500 border-rose-100'}`}>
+                                                        {row.side}
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-xs font-medium text-slate-500">
+                                                    {row.lot} lot &middot; {formatCurrency(row.pricePerShare)} &middot; {row.account?.name}
+                                                </p>
+                                                <p className="mt-0.5 text-[11px] text-slate-400">
+                                                    {String(row.tradedAt).slice(0, 10)} &middot; Netto {formatCurrency(row.netValue)}
+                                                </p>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIsHistoryModalOpen(false);
+                                                        handleEdit(row);
+                                                    }}
+                                                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200"
+                                                    title="Edit"
+                                                >
+                                                    <Pencil size={13} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={saving}
+                                                    onClick={() => void handleDelete(row)}
+                                                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-rose-50 text-rose-600 transition-colors hover:bg-rose-100 disabled:opacity-50"
+                                                    title="Hapus"
+                                                >
+                                                    <Trash2 size={13} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Modal Form */}
             {isFormOpen && (
@@ -567,7 +997,7 @@ const Stocks = () => {
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
                                     {editingId ? 'Edit Transaksi' : 'Tambah Transaksi'}
                                 </h3>
-                                <p className="mt-0.5 text-xs text-slate-500">Nilai bruto, fee, dan netto dihitung otomatis.</p>
+                                <p className="mt-0.5 text-xs text-slate-500">Nilai transaksi, fee, dan netto dihitung otomatis.</p>
                             </div>
                             <button
                                 type="button"
@@ -580,9 +1010,7 @@ const Stocks = () => {
 
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {/* Info banner */}
-                            <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-700 font-medium leading-relaxed">
-                                Top up sekuritas tidak dicatat di sini. Tambahkan dana dari menu Home/Rekening, lalu catat BUY/SELL di modul saham.
-                            </div>
+                            
 
                             {/* Account + Owner */}
                             <div className="grid gap-3 sm:grid-cols-2">
@@ -605,6 +1033,14 @@ const Stocks = () => {
                                             <option key={account.id} value={account.id}>{account.name}</option>
                                         ))}
                                     </select>
+                                    {selectedAccountBrokerLabel ? (
+                                        <div className="flex items-center gap-2 px-1">
+                                            <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getBrokerBadgeTone(selectedAccountBrokerLabel)}`}>
+                                                {selectedAccountBrokerLabel}
+                                            </span>
+                                            <span className="text-[10px] font-medium text-slate-400">Broker akun terpilih</span>
+                                        </div>
+                                    ) : null}
                                 </label>
                                 <label className="space-y-1.5 block">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Pemilik Dana</span>
@@ -694,16 +1130,16 @@ const Stocks = () => {
                             </div>
 
                             {selectedAccount && (
-                                <div className={`rounded-2xl border px-4 py-3 ${isBuyFundsEnough ? 'border-emerald-100 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/80'}`}>
+                                <div className={`rounded-2xl border px-4 py-3 ${(form.side === 'BUY' ? isBuyFundsEnough : isSellLotsEnough) ? 'border-emerald-100 bg-emerald-50/70' : 'border-rose-200 bg-rose-50/80'}`}>
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Preview Dana</p>
                                             <p className="mt-1 text-sm font-bold text-slate-900">{selectedAccount.name}</p>
                                         </div>
-                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${isBuyFundsEnough ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest ${(form.side === 'BUY' ? isBuyFundsEnough : isSellLotsEnough) ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                                             {form.side === 'BUY'
                                                 ? (tradePreview ? (isBuyFundsEnough ? 'Dana Cukup' : 'Dana Kurang') : 'Isi Dulu')
-                                                : 'Info Sell'}
+                                                : (enteredLot > 0 ? (isSellLotsEnough ? 'Lot Cukup' : 'Lot Kurang') : 'Info Sell')}
                                         </span>
                                     </div>
 
@@ -719,15 +1155,24 @@ const Stocks = () => {
                                             <p className="mt-1 font-bold text-slate-900">{formatCurrency(Number(tradePreview?.netValue || 0))}</p>
                                         </div>
                                         <div className="rounded-xl bg-white/80 px-3 py-2">
-                                            <p className="font-bold uppercase tracking-widest text-slate-400">Nilai Bruto</p>
-                                            <p className="mt-1 font-bold text-slate-900">{formatCurrency(Number(tradePreview?.grossValue || 0))}</p>
-                                        </div>
-                                        <div className="rounded-xl bg-white/80 px-3 py-2">
                                             <p className="font-bold uppercase tracking-widest text-slate-400">Total Fee</p>
                                             <p className="mt-1 font-bold text-slate-900">
-                                                {formatCurrency(Number(tradePreview?.brokerFee || 0) + Number(tradePreview?.levyFee || 0))}
+                                                {formatCurrency(totalTradeFee)}
                                             </p>
                                         </div>
+                                        <button
+                                            type="button"
+                                            onClick={handleFillOwnedLots}
+                                            disabled={Math.max(0, form.side === 'SELL' ? sellableLots : ownedLots) <= 0}
+                                            className="rounded-xl bg-white/80 px-3 py-2 text-left transition-colors hover:bg-white disabled:cursor-default disabled:opacity-70"
+                                        >
+                                            <p className="font-bold uppercase tracking-widest text-slate-400">Lot Dimiliki</p>
+                                            <p className="mt-1 font-bold text-slate-900">{Math.max(0, ownedLots).toLocaleString('id-ID')} lot</p>
+                                            <p className="mt-1 text-[10px] font-medium text-slate-400">
+                                                Klik untuk isi jumlah lot
+                                            </p>
+                                        </button>
+                                        
                                     </div>
 
                                     {form.side === 'BUY' && tradePreview ? (
@@ -735,6 +1180,13 @@ const Stocks = () => {
                                             {isBuyFundsEnough
                                                 ? `Sisa saldo setelah BUY sekitar ${formatCurrency(Math.max(0, Number(remainingCashAfterBuy || 0)))}.`
                                                 : `Saldo kurang sekitar ${formatCurrency(Math.abs(Number(remainingCashAfterBuy || 0)))}. Tambahkan dana ke RDN dulu.`}
+                                        </p>
+                                    ) : null}
+                                    {form.side === 'SELL' && enteredLot > 0 ? (
+                                        <p className={`mt-3 text-[11px] font-semibold ${isSellLotsEnough ? 'text-emerald-700' : 'text-rose-700'}`}>
+                                            {isSellLotsEnough
+                                                ? `Sisa lot setelah SELL sekitar ${Math.max(0, Number(remainingLotsAfterSell || 0)).toLocaleString('id-ID')} lot.`
+                                                : `Lot kurang sekitar ${Math.abs(Number(remainingLotsAfterSell || 0)).toLocaleString('id-ID')} lot. Anda belum memiliki cukup saham untuk dijual.`}
                                         </p>
                                     ) : null}
                                     {selectedOwner && (
@@ -782,9 +1234,16 @@ const Stocks = () => {
                                     </button>
                                 </div>
                             )}
+                            {isSubmitBlockedByLots && (
+                                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+                                    <p className="text-[11px] font-semibold text-rose-700">
+                                        Lot saham belum cukup untuk transaksi SELL ini. Pastikan owner ini memang sudah memiliki saham pada akun sekuritas yang dipilih.
+                                    </p>
+                                </div>
+                            )}
                             <button
                                 ref={submitButtonRef}
-                                disabled={saving || availableStockAccounts.length === 0 || isSubmitBlockedByFunds}
+                                disabled={saving || availableStockAccounts.length === 0 || isSubmitBlockedByFunds || isSubmitBlockedByLots}
                                 className="w-full rounded-2xl bg-blue-600 h-12 text-xs font-bold uppercase tracking-widest text-white disabled:opacity-60 inline-flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all hover:bg-blue-500"
                             >
                                 {editingId ? <Save size={16} /> : <Plus size={16} />}

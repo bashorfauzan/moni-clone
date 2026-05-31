@@ -69,12 +69,101 @@ import Spinner from '../components/Spinner';
 
 const ACCOUNT_TYPES = ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'];
 const PAGE_SIZE = 6;
+const STOCK_FEE_PRESETS = [
+    {
+        key: 'RHB',
+        label: 'RHB',
+        aliases: ['rhb', 'rhb syariah', 'rhb k bashor', 'rhb k novan'],
+        brokerFeePercent: '0.15',
+        levyFeePercent: '0.25'
+    },
+    {
+        key: 'BRI_DANAREKSA',
+        label: 'BRI Danareksa',
+        aliases: ['bri', 'bri danareksa', 'bri sekuritas', 'brights'],
+        brokerFeePercent: '0.17',
+        levyFeePercent: '0.27'
+    },
+    {
+        key: 'SINARMAS',
+        label: 'Sinarmas',
+        aliases: ['sinarmas', 'siminvest', 'sinarmas sekuritas'],
+        brokerFeePercent: '0.14',
+        levyFeePercent: '0.24'
+    },
+    {
+        key: 'PHILLIP',
+        label: 'Phillip',
+        aliases: ['phillip', 'phillip sekuritas', 'poems'],
+        brokerFeePercent: '0.15',
+        levyFeePercent: '0.25'
+    },
+    {
+        key: 'STOCKBIT',
+        label: 'Stockbit',
+        aliases: ['stockbit', 'stockbit sekuritas'],
+        brokerFeePercent: '0.15',
+        levyFeePercent: '0.25'
+    },
+    {
+        key: 'CIPTADANA',
+        label: 'Ciptadana',
+        aliases: ['ciptadana', 'ciptadana sekuritas', 'ciptadana sekuritas asia'],
+        brokerFeePercent: '0.18',
+        levyFeePercent: '0.28'
+    },
+    {
+        key: 'AJAIB',
+        label: 'Ajaib',
+        aliases: ['ajaib', 'ajaib sekuritas'],
+        brokerFeePercent: '0.15',
+        levyFeePercent: '0.25'
+    },
+    {
+        key: 'SEMESTA',
+        label: 'Semesta Indovest',
+        aliases: ['semesta', 'semesta indovest', 's-invest', 's invest'],
+        brokerFeePercent: '0.15',
+        levyFeePercent: '0.25'
+    }
+] as const;
 const DEFAULT_RESET_OPTIONS = {
     transactions: true,
     targets: true,
     categories: false,
     accounts: false,
     owners: false
+};
+
+const detectBrokerLabel = (accountName: string) => {
+    const normalized = accountName.trim().toLowerCase();
+    if (!normalized) return null;
+    return STOCK_FEE_PRESETS.find((preset) =>
+        preset.aliases.some((alias) => normalized === alias || normalized.includes(alias))
+    )?.label || null;
+};
+
+const getBrokerBadgeTone = (label: string | null) => {
+    switch (label) {
+        case 'RHB':
+            return 'bg-sky-100 text-sky-700 border-sky-200';
+        case 'BRI Danareksa':
+            return 'bg-blue-100 text-blue-700 border-blue-200';
+        case 'Sinarmas':
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        case 'Phillip':
+            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        case 'Stockbit':
+            return 'bg-violet-100 text-violet-700 border-violet-200';
+        case 'Ciptadana':
+            return 'bg-rose-100 text-rose-700 border-rose-200';
+        case 'Ajaib':
+            return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+        case 'Semesta Indovest':
+            return 'bg-teal-100 text-teal-700 border-teal-200';
+        default:
+            return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
 };
 
 type RestorePreview = {
@@ -326,6 +415,24 @@ const MenuPage = () => {
     };
 
     const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
+
+    const findStockFeePreset = (name: string) => {
+        const normalized = name.trim().toLowerCase();
+        if (!normalized) return null;
+        return STOCK_FEE_PRESETS.find((preset) =>
+            preset.aliases.some((alias) => normalized === alias || normalized.includes(alias))
+        ) || null;
+    };
+
+    const applyStockFeePreset = (presetKey: string) => {
+        const preset = STOCK_FEE_PRESETS.find((item) => item.key === presetKey);
+        if (!preset) return;
+        setAccountForm((current) => ({
+            ...current,
+            stockBrokerFeePercent: preset.brokerFeePercent,
+            stockLevyFeePercent: preset.levyFeePercent
+        }));
+    };
 
     const compressThemeImage = (file: File, cropMode: 'fit' | 'crop-portrait') => new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -2247,7 +2354,19 @@ const MenuPage = () => {
                                     <input
                                         autoFocus
                                         value={accountForm.name}
-                                        onChange={(e) => setAccountForm((p) => ({ ...p, name: e.target.value }))}
+                                        onChange={(e) => {
+                                            const nextName = e.target.value;
+                                            const matchedPreset = (accountForm.type === 'RDN' || accountForm.type === 'Sekuritas')
+                                                ? findStockFeePreset(nextName)
+                                                : null;
+
+                                            setAccountForm((p) => ({
+                                                ...p,
+                                                name: nextName,
+                                                stockBrokerFeePercent: matchedPreset ? matchedPreset.brokerFeePercent : p.stockBrokerFeePercent,
+                                                stockLevyFeePercent: matchedPreset ? matchedPreset.levyFeePercent : p.stockLevyFeePercent
+                                            }));
+                                        }}
                                         onKeyDown={(e) => e.key === 'Enter' && saveAccount()}
                                         placeholder={accountForm.type === 'RDN' ? 'cth: Ajaib, Stockbit' : 'cth: BCA Tabungan'}
                                         className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
@@ -2301,24 +2420,44 @@ const MenuPage = () => {
                                     ) : null}
                                 </div>
                                 {(accountForm.type === 'RDN' || accountForm.type === 'Sekuritas') ? (
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-3">
                                         <div>
-                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Broker Fee (%)</label>
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Preset Fee Sekuritas</label>
+                                            <select
+                                                defaultValue=""
+                                                onChange={(e) => {
+                                                    applyStockFeePreset(e.target.value);
+                                                    e.currentTarget.value = '';
+                                                }}
+                                                className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all bg-white"
+                                            >
+                                                <option value="">Pilih preset fee opsional</option>
+                                                {STOCK_FEE_PRESETS.map((preset) => (
+                                                    <option key={preset.key} value={preset.key}>
+                                                        {preset.label} (Beli {preset.brokerFeePercent}% / Jual {preset.levyFeePercent}%)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Fee Beli (%)</label>
                                             <input
                                                 value={accountForm.stockBrokerFeePercent}
                                                 onChange={(e) => setAccountForm((p) => ({ ...p, stockBrokerFeePercent: e.target.value.replace(/[^\d.]/g, '') }))}
                                                 placeholder="cth: 0.15"
                                                 className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                                             />
-                                        </div>
-                                        <div>
-                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Levy Fee (%)</label>
+                                            </div>
+                                            <div>
+                                            <label className="text-[11px] font-bold uppercase tracking-widest text-slate-500 mb-1.5 block">Fee Jual (%)</label>
                                             <input
                                                 value={accountForm.stockLevyFeePercent}
                                                 onChange={(e) => setAccountForm((p) => ({ ...p, stockLevyFeePercent: e.target.value.replace(/[^\d.]/g, '') }))}
-                                                placeholder="cth: 0.043"
+                                                placeholder="cth: 0.25"
                                                 className="w-full h-11 rounded-xl border border-slate-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 transition-all"
                                             />
+                                            </div>
                                         </div>
                                     </div>
                                 ) : null}
@@ -2401,7 +2540,21 @@ const MenuPage = () => {
                                                     {getAccountIcon(acc.type)}
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-bold text-slate-800 truncate">{acc.name}</p>
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <p className="text-sm font-bold text-slate-800 truncate">{acc.name}</p>
+                                                        {(() => {
+                                                            const brokerLabel = (acc.type === 'RDN' || acc.type === 'Sekuritas')
+                                                                ? detectBrokerLabel(acc.name)
+                                                                : null;
+                                                            if (!brokerLabel) return null;
+
+                                                            return (
+                                                                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${getBrokerBadgeTone(brokerLabel)}`}>
+                                                                    {brokerLabel}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                    </div>
                                                     <p className="text-[11px] text-slate-500 font-semibold">
                                                         {acc.type}
                                                         {acc.accountNumber ? ` · ···${acc.accountNumber.slice(-4)}` : ''}

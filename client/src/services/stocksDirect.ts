@@ -31,11 +31,13 @@ export const computeStockMoney = ({
 }) => {
     const shares = lot * SHARES_PER_LOT;
     const grossValue = shares * pricePerShare;
-    const brokerFee = grossValue * (brokerFeePercent / 100);
-    const levyFee = grossValue * (levyFeePercent / 100);
+    const buyFee = grossValue * (brokerFeePercent / 100);
+    const sellFee = grossValue * (levyFeePercent / 100);
+    const brokerFee = side === 'BUY' ? buyFee : 0;
+    const levyFee = side === 'SELL' ? sellFee : 0;
     const netValue = side === 'BUY'
-        ? grossValue + brokerFee + levyFee
-        : grossValue - brokerFee - levyFee;
+        ? grossValue + brokerFee
+        : grossValue - levyFee;
 
     return {
         grossValue,
@@ -165,6 +167,63 @@ export const ensureStockFundsDirect = async (
 
     if (available < netValue) {
         throw new Error(`Saldo rekening saham tidak cukup (tersedia Rp ${formatIdr(available)})`);
+    }
+};
+
+export const getAvailableStockLotsDirect = async (
+    ownerId: string,
+    accountId: string,
+    ticker: string,
+    excludeStockTransactionId?: string
+) => {
+    const sb = ensureSupabase();
+    const normalizedTicker = String(ticker || '').trim().toUpperCase();
+    if (!ownerId || !accountId || !normalizedTicker) return 0;
+
+    let stockQuery = sb
+        .from('StockTransaction')
+        .select('id, side, lot')
+        .eq('ownerId', ownerId)
+        .eq('accountId', accountId)
+        .eq('ticker', normalizedTicker);
+
+    if (excludeStockTransactionId) {
+        stockQuery = stockQuery.neq('id', excludeStockTransactionId);
+    }
+
+    const [stockRes, ipoRes] = await Promise.all([
+        stockQuery,
+        sb
+            .from('IpoTransaction')
+            .select('side, lot')
+            .eq('ownerId', ownerId)
+            .eq('accountId', accountId)
+            .eq('ticker', normalizedTicker)
+    ]);
+
+    if (stockRes.error) throw stockRes.error;
+    if (ipoRes.error) throw ipoRes.error;
+
+    return [...(stockRes.data || []), ...(ipoRes.data || [])].reduce((sum: number, row: any) => {
+        const lot = Number(row.lot || 0);
+        if (!Number.isFinite(lot) || lot <= 0) return sum;
+        return sum + (row.side === 'BUY' ? lot : -lot);
+    }, 0);
+};
+
+export const ensureStockLotsDirect = async (
+    ownerId: string,
+    accountId: string,
+    ticker: string,
+    lot: number,
+    side: StockSide,
+    excludeStockTransactionId?: string
+) => {
+    if (side !== 'SELL') return;
+
+    const availableLots = await getAvailableStockLotsDirect(ownerId, accountId, ticker, excludeStockTransactionId);
+    if (availableLots < lot) {
+        throw new Error(`Lot saham tidak cukup untuk dijual (tersedia ${new Intl.NumberFormat('id-ID').format(Math.max(0, availableLots))} lot)`);
     }
 };
 

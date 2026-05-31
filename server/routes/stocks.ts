@@ -8,6 +8,20 @@ const router = express.Router();
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
 const SHARES_PER_LOT = 100;
+const STOCK_QUOTE_CACHE_TTL_MS = 15 * 60 * 1000;
+const STOCK_SYMBOL_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+type StockQuotePayload = {
+    ticker: string;
+    symbol: string;
+    price: number;
+    asOf: string | null;
+    currency: string;
+    source: 'alpha-vantage';
+};
+
+const stockQuoteCache = new Map<string, { expiresAt: number; value: StockQuotePayload }>();
+const stockSymbolCache = new Map<string, { expiresAt: number; value: string }>();
 
 const toTicker = (value: unknown) => String(value || '').trim().toUpperCase();
 
@@ -23,6 +37,157 @@ const parseStockSide = (value: unknown) => {
     }
 
     return null;
+};
+
+const getAlphaVantageApiKey = () =>
+    process.env.ALPHA_VANTAGE_API_KEY?.trim()
+    || process.env.ALPHA_VANTAGE_APIKEY?.trim()
+    || '';
+
+const readLiveCache = <T>(store: Map<string, { expiresAt: number; value: T }>, key: string) => {
+    const entry = store.get(key);
+    if (!entry) return null;
+    if (entry.expiresAt <= Date.now()) {
+        store.delete(key);
+        return null;
+    }
+
+    return entry.value;
+};
+
+const writeLiveCache = <T>(
+    store: Map<string, { expiresAt: number; value: T }>,
+    key: string,
+    value: T,
+    ttlMs: number
+) => {
+    store.set(key, {
+        expiresAt: Date.now() + ttlMs,
+        value
+    });
+};
+
+const fetchAlphaVantageJson = async (params: URLSearchParams) => {
+    const response = await fetch(`https://www.alphavantage.co/query?${params.toString()}`, {
+        headers: {
+            accept: 'application/json'
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error(`Alpha Vantage error ${response.status}`);
+    }
+
+    return response.json();
+};
+
+const parseAlphaVantageQuote = (ticker: string, symbol: string, payload: any): StockQuotePayload | null => {
+    const rawQuote = payload?.['Global Quote'];
+    if (!rawQuote || typeof rawQuote !== 'object') return null;
+
+    const price = Number(rawQuote['05. price'] || 0);
+    if (!Number.isFinite(price) || price <= 0) return null;
+
+    const latestTradingDay = String(rawQuote['07. latest trading day'] || '').trim();
+    const asOf = latestTradingDay
+        ? new Date(`${latestTradingDay}T00:00:00.000Z`).toISOString()
+        : null;
+
+    return {
+        ticker,
+        symbol,
+        price,
+        asOf,
+        currency: 'IDR',
+        source: 'alpha-vantage'
+    };
+};
+
+const fetchAlphaVantageQuote = async (ticker: string, symbol: string, apiKey: string) => {
+    const payload = await fetchAlphaVantageJson(new URLSearchParams({
+        function: 'GLOBAL_QUOTE',
+        symbol,
+        apikey: apiKey
+    }));
+
+    return parseAlphaVantageQuote(ticker, symbol, payload);
+};
+
+const resolveAlphaVantageSymbol = async (ticker: string, apiKey: string) => {
+    const cachedSymbol = readLiveCache(stockSymbolCache, ticker);
+    if (cachedSymbol) return cachedSymbol;
+
+    const payload = await fetchAlphaVantageJson(new URLSearchParams({
+        function: 'SYMBOL_SEARCH',
+        keywords: ticker,
+        apikey: apiKey
+    }));
+
+    const matches = Array.isArray(payload?.bestMatches) ? payload.bestMatches : [];
+    const normalizedTicker = ticker.toUpperCase();
+    const normalizedMatches = matches
+        .map((row: any) => ({
+            symbol: String(row?.['1. symbol'] || '').trim(),
+            region: String(row?.['4. region'] || '').trim().toLowerCase(),
+            currency: String(row?.['8. currency'] || '').trim().toUpperCase()
+        }))
+        .filter((row: { symbol: string }) => Boolean(row.symbol));
+
+    const preferredMatch = normalizedMatches.find((row: { symbol: string; region: string; currency: string }) =>
+        (row.symbol.toUpperCase() === normalizedTicker || row.symbol.toUpperCase().startsWith(`${normalizedTicker}.`))
+        && (row.currency === 'IDR' || row.region.includes('indonesia') || row.region.includes('jakarta'))
+    ) || normalizedMatches.find((row: { symbol: string }) =>
+        row.symbol.toUpperCase() === normalizedTicker || row.symbol.toUpperCase().startsWith(`${normalizedTicker}.`)
+    ) || null;
+
+    if (!preferredMatch?.symbol) {
+        return null;
+    }
+
+    writeLiveCache(stockSymbolCache, ticker, preferredMatch.symbol, STOCK_SYMBOL_CACHE_TTL_MS);
+    return preferredMatch.symbol;
+};
+
+const fetchLiveStockQuote = async (ticker: string, apiKey: string): Promise<StockQuotePayload | null> => {
+    const activeTicker = toTicker(ticker);
+    if (!activeTicker) return null;
+
+    const cachedQuote = readLiveCache(stockQuoteCache, activeTicker);
+    if (cachedQuote) return cachedQuote;
+
+    const cachedSymbol = readLiveCache(stockSymbolCache, activeTicker);
+    const candidateSymbols = Array.from(new Set([
+        cachedSymbol,
+        activeTicker,
+        `${activeTicker}.JK`,
+        `${activeTicker}.JKT`
+    ].filter((value): value is string => Boolean(value))));
+
+    for (const symbol of candidateSymbols) {
+        try {
+            const quote = await fetchAlphaVantageQuote(activeTicker, symbol, apiKey);
+            if (quote) {
+                writeLiveCache(stockSymbolCache, activeTicker, symbol, STOCK_SYMBOL_CACHE_TTL_MS);
+                writeLiveCache(stockQuoteCache, activeTicker, quote, STOCK_QUOTE_CACHE_TTL_MS);
+                return quote;
+            }
+        } catch {
+            // coba simbol berikutnya
+        }
+    }
+
+    try {
+        const resolvedSymbol = await resolveAlphaVantageSymbol(activeTicker, apiKey);
+        if (!resolvedSymbol || candidateSymbols.includes(resolvedSymbol)) return null;
+
+        const quote = await fetchAlphaVantageQuote(activeTicker, resolvedSymbol, apiKey);
+        if (!quote) return null;
+
+        writeLiveCache(stockQuoteCache, activeTicker, quote, STOCK_QUOTE_CACHE_TTL_MS);
+        return quote;
+    } catch {
+        return null;
+    }
 };
 
 const ensureStockAccount = async (accountId: string) => {
@@ -63,8 +228,10 @@ const buildTransactionValues = ({
 }) => {
     const shares = lot * SHARES_PER_LOT;
     const grossValue = pricePerShare * shares;
-    const brokerFee = grossValue * (brokerFeePercent / 100);
-    const levyFee = grossValue * (levyFeePercent / 100);
+    const buyFee = grossValue * (brokerFeePercent / 100);
+    const sellFee = grossValue * (levyFeePercent / 100);
+    const brokerFee = side === StockTransactionSide.BUY ? buyFee : 0;
+    const levyFee = side === StockTransactionSide.SELL ? sellFee : 0;
     const totalFee = brokerFee + levyFee;
     const netValue = side === StockTransactionSide.BUY
         ? grossValue + totalFee
@@ -72,12 +239,17 @@ const buildTransactionValues = ({
 
     return {
         grossValue,
+        brokerFee,
+        levyFee,
         netValue
     };
 };
 
 const getCashDelta = (side: StockTransactionSide, netValue: number) =>
     side === StockTransactionSide.BUY ? -netValue : netValue;
+
+const getLotDelta = (side: StockTransactionSide, lot: number) =>
+    side === StockTransactionSide.BUY ? lot : -lot;
 
 const ensureStockBuyFunds = async (
     trx: Prisma.TransactionClient,
@@ -105,6 +277,65 @@ const ensureStockBuyFunds = async (
         throw new Error(
             `Saldo rekening saham tidak cukup ` +
             `(tersedia Rp ${new Intl.NumberFormat('id-ID').format(availableBalance)})`
+        );
+    }
+};
+
+const ensureStockSellLots = async (
+    trx: Prisma.TransactionClient,
+    payload: {
+        side: StockTransactionSide;
+        ownerId: string;
+        accountId: string;
+        ticker: string;
+        lot: number;
+    },
+    existing?: {
+        id?: string;
+        side: StockTransactionSide;
+        ownerId: string;
+        accountId: string;
+        ticker: string;
+        lot: number;
+    } | null
+) => {
+    if (payload.side !== StockTransactionSide.SELL) return;
+
+    const [stockRows, ipoRows] = await Promise.all([
+        trx.stockTransaction.findMany({
+            where: {
+                ownerId: payload.ownerId,
+                accountId: payload.accountId,
+                ticker: payload.ticker,
+                ...(existing?.id ? { id: { not: existing.id } } : {})
+            },
+            select: {
+                side: true,
+                lot: true
+            }
+        }),
+        trx.ipoTransaction.findMany({
+            where: {
+                ownerId: payload.ownerId,
+                accountId: payload.accountId,
+                ticker: payload.ticker
+            },
+            select: {
+                side: true,
+                lot: true
+            }
+        })
+    ]);
+
+    const availableLots = [...stockRows, ...ipoRows].reduce(
+        (sum, row) => sum + getLotDelta(row.side, Number(row.lot || 0)),
+        0
+    );
+
+    if (availableLots < payload.lot) {
+        throw new Error(
+            `Lot saham tidak cukup untuk dijual ` +
+            `(tersedia ${new Intl.NumberFormat('id-ID').format(Math.max(0, availableLots))} lot)`
         );
     }
 };
@@ -179,6 +410,45 @@ router.get('/transactions', async (req, res) => {
     }
 });
 
+router.get('/quotes', async (req, res) => {
+    try {
+        const apiKey = getAlphaVantageApiKey();
+        const rawTickers = typeof req.query.tickers === 'string' ? req.query.tickers : '';
+        const tickers = Array.from(new Set(
+            rawTickers
+                .split(',')
+                .map((value) => toTicker(value))
+                .filter(Boolean)
+        )).slice(0, 10);
+
+        if (!apiKey) {
+            return res.json({
+                configured: false,
+                provider: 'alpha-vantage',
+                quotes: {}
+            });
+        }
+
+        const quotes: Record<string, StockQuotePayload> = {};
+
+        for (const ticker of tickers) {
+            const quote = await fetchLiveStockQuote(ticker, apiKey);
+            if (quote) {
+                quotes[ticker] = quote;
+            }
+        }
+
+        res.json({
+            configured: true,
+            provider: 'alpha-vantage',
+            quotes
+        });
+    } catch (error) {
+        console.error('Get live stock quotes error:', error);
+        res.status(500).json({ error: 'Gagal mengambil harga saham terbaru' });
+    }
+});
+
 router.post('/transactions', async (req, res) => {
     try {
         const payload = await validateStockPayload(req.body);
@@ -189,6 +459,13 @@ router.post('/transactions', async (req, res) => {
                 side: payload.side,
                 accountId: payload.accountId,
                 netValue: values.netValue
+            });
+            await ensureStockSellLots(trx, {
+                side: payload.side,
+                ownerId: payload.ownerId,
+                accountId: payload.accountId,
+                ticker: payload.ticker,
+                lot: payload.lot
             });
 
             return trx.stockTransaction.create({
@@ -241,6 +518,24 @@ router.patch('/transactions/:id', async (req, res) => {
                     side: existing.side,
                     accountId: existing.accountId,
                     netValue: existing.netValue
+                }
+            );
+            await ensureStockSellLots(
+                trx,
+                {
+                    side: payload.side,
+                    ownerId: payload.ownerId,
+                    accountId: payload.accountId,
+                    ticker: payload.ticker,
+                    lot: payload.lot
+                },
+                {
+                    id: existing.id,
+                    side: existing.side,
+                    ownerId: existing.ownerId,
+                    accountId: existing.accountId,
+                    ticker: existing.ticker,
+                    lot: existing.lot
                 }
             );
 

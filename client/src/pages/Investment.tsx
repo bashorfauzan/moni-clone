@@ -3,7 +3,7 @@ import { TrendingUp, TrendingDown, ArrowRightLeft, X, Save, Pencil, Trash2, Down
 import { fetchMasterMeta } from '../services/masterData';
 import { createInvestmentIncome, createTransaction, deleteTransaction, fetchTransactions, updateInvestmentIncome } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
-import { fetchStockPositions, fetchStockTransactions, type StockPosition } from '../services/stocks';
+import { fetchStockPositions, fetchStockQuotes, fetchStockTransactions, type StockPosition, type StockQuote, type StockTransaction } from '../services/stocks';
 import { fetchIpoOrders, type IpoOrder } from '../services/stocksIpo';
 import { downloadBackupBlob } from '../services/backup';
 import { Link, useNavigate } from 'react-router-dom';
@@ -14,6 +14,48 @@ import {
     isLegacyInvestmentTransactionType,
     normalizeTransactionType,
 } from '../lib/transactionRules';
+
+const BROKER_LABEL_PRESETS = [
+    { label: 'RHB', aliases: ['rhb', 'rhb syariah', 'rhb k bashor', 'rhb k novan'] },
+    { label: 'BRI Danareksa', aliases: ['bri', 'bri danareksa', 'bri sekuritas', 'brights'] },
+    { label: 'Sinarmas', aliases: ['sinarmas', 'siminvest', 'sinarmas sekuritas'] },
+    { label: 'Phillip', aliases: ['phillip', 'phillip sekuritas', 'poems'] },
+    { label: 'Stockbit', aliases: ['stockbit', 'stockbit sekuritas'] },
+    { label: 'Ciptadana', aliases: ['ciptadana', 'ciptadana sekuritas', 'ciptadana sekuritas asia'] },
+    { label: 'Ajaib', aliases: ['ajaib', 'ajaib sekuritas'] },
+    { label: 'Semesta Indovest', aliases: ['semesta', 'semesta indovest', 's-invest', 's invest'] }
+] as const;
+
+const detectBrokerLabel = (accountName: string) => {
+    const normalized = accountName.trim().toLowerCase();
+    if (!normalized) return null;
+    return BROKER_LABEL_PRESETS.find((preset) =>
+        preset.aliases.some((alias) => normalized === alias || normalized.includes(alias))
+    )?.label || null;
+};
+
+const getBrokerBadgeTone = (label: string | null) => {
+    switch (label) {
+        case 'RHB':
+            return 'bg-sky-100 text-sky-700 border-sky-200';
+        case 'BRI Danareksa':
+            return 'bg-blue-100 text-blue-700 border-blue-200';
+        case 'Sinarmas':
+            return 'bg-amber-100 text-amber-700 border-amber-200';
+        case 'Phillip':
+            return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        case 'Stockbit':
+            return 'bg-violet-100 text-violet-700 border-violet-200';
+        case 'Ciptadana':
+            return 'bg-rose-100 text-rose-700 border-rose-200';
+        case 'Ajaib':
+            return 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200';
+        case 'Semesta Indovest':
+            return 'bg-teal-100 text-teal-700 border-teal-200';
+        default:
+            return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+};
 
 const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -89,6 +131,8 @@ const Investment = () => {
     const [activities, setActivities] = useState<any[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [stockPositions, setStockPositions] = useState<StockPosition[]>([]);
+    const [stockTransactions, setStockTransactions] = useState<StockTransaction[]>([]);
+    const [liveQuotes, setLiveQuotes] = useState<Record<string, StockQuote>>({});
     const [ipoOrders, setIpoOrders] = useState<IpoOrder[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
@@ -135,17 +179,35 @@ const Investment = () => {
         try {
             setLoading(true);
             const ownerFilter = selectedOwnerId !== 'ALL' ? selectedOwnerId : undefined;
-            const [metaRes, txRes, stockPositionRes, ipoOrderRes] = await Promise.all([
+            const [metaRes, txRes, stockPositionRes, stockTransactionRes, ipoOrderRes] = await Promise.all([
                 fetchMasterMeta(),
                 fetchTransactions(),
                 fetchStockPositions({
                     ownerId: ownerFilter,
                     groupByAccount: true
                 }),
+                fetchStockTransactions({
+                    ownerId: ownerFilter
+                }),
                 fetchIpoOrders({
                     ownerId: ownerFilter
                 })
             ]);
+            const activeTickers = Array.from(new Set(
+                (stockPositionRes || [])
+                    .filter((position) => Number(position.totalShares || 0) > 0)
+                    .map((position) => String(position.ticker || '').trim().toUpperCase())
+                    .filter(Boolean)
+            ));
+            let nextQuotes: Record<string, StockQuote> = {};
+
+            if (activeTickers.length > 0) {
+                try {
+                    nextQuotes = await fetchStockQuotes(activeTickers);
+                } catch {
+                    nextQuotes = {};
+                }
+            }
 
             setOwners(metaRes.owners || []);
             setActivities(metaRes.activities || []);
@@ -161,6 +223,8 @@ const Investment = () => {
             // Modal = sum(Transfer IN) - sum(Transfer OUT)
             setTransactions(txRes);
             setStockPositions(stockPositionRes);
+            setStockTransactions(stockTransactionRes);
+            setLiveQuotes(nextQuotes);
             setIpoOrders(ipoOrderRes);
             setIncomeForm((prev) => ({
                 ...prev,
@@ -201,7 +265,16 @@ const Investment = () => {
     const portfolioData = filteredRdns.map((rdn) => {
         const summary = summarizeFlows(scopedTransactions, rdn.id);
         const accountStockPositions = stockPositions.filter((position) => position.accountId === rdn.id);
-        const stockHoldingValue = accountStockPositions.reduce((sum, position) => sum + Number(position.totalCost || 0), 0);
+        const stockHoldingBookValue = accountStockPositions.reduce((sum, position) => sum + Number(position.totalCost || 0), 0);
+        const stockHoldingValue = accountStockPositions.reduce((sum, position) => {
+            const quote = liveQuotes[String(position.ticker || '').trim().toUpperCase()];
+            const livePrice = Number(quote?.price || 0);
+            const liveMarketValue = livePrice > 0
+                ? livePrice * Number(position.totalShares || 0)
+                : Number(position.totalCost || 0);
+            return sum + liveMarketValue;
+        }, 0);
+        const hasLiveQuote = accountStockPositions.some((position) => Number(liveQuotes[String(position.ticker || '').trim().toUpperCase()]?.price || 0) > 0);
         const pendingIpoValue = getPendingIpoReservedValue(ipoOrders, rdn.id);
         const cashBalance = Number(rdn.balance || 0);
         const ecosystemValue = cashBalance + stockHoldingValue;
@@ -213,7 +286,9 @@ const Investment = () => {
             ...rdn,
             balance: ecosystemValue,
             cashBalance,
+            stockHoldingBookValue,
             stockHoldingValue,
+            hasLiveQuote,
             pendingIpoValue,
             availableCash,
             modal: summary.modal,
@@ -282,7 +357,13 @@ const Investment = () => {
             cashBalance: Number(detailAccount.balance || 0),
             stockHoldingValue: stockPositions
                 .filter((position) => position.accountId === detailAccount.id)
-                .reduce((sum, position) => sum + Number(position.totalCost || 0), 0),
+                .reduce((sum, position) => {
+                    const quote = liveQuotes[String(position.ticker || '').trim().toUpperCase()];
+                    const livePrice = Number(quote?.price || 0);
+                    return sum + (livePrice > 0
+                        ? livePrice * Number(position.totalShares || 0)
+                        : Number(position.totalCost || 0));
+                }, 0),
             pendingIpoValue: getPendingIpoReservedValue(ipoOrders, detailAccount.id)
         }
         : null;
@@ -304,9 +385,35 @@ const Investment = () => {
             )
             .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
         : [];
+    const historyAccountStockTransactions = historyAccount
+        ? stockTransactions
+            .filter((tx) =>
+                tx.accountId === historyAccount.id
+                && (
+                    historyRange === 'ALL'
+                    || (
+                        new Date(tx.tradedAt) >= historyMonthStart
+                        && new Date(tx.tradedAt) < historyMonthEnd
+                    )
+                )
+            )
+            .sort((a, b) => new Date(b.tradedAt).getTime() - new Date(a.tradedAt).getTime())
+        : [];
+    const historyCombinedItems = [
+        ...historyAccountTransactions.map((tx: any) => ({
+            entryType: 'cash' as const,
+            sortDate: tx.date,
+            item: tx
+        })),
+        ...historyAccountStockTransactions.map((tx) => ({
+            entryType: 'stock' as const,
+            sortDate: tx.tradedAt,
+            item: tx
+        }))
+    ].sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
     const HISTORY_PAGE_SIZE = 6;
-    const historyTotalPages = Math.max(1, Math.ceil(historyAccountTransactions.length / HISTORY_PAGE_SIZE));
-    const pagedHistoryAccountTransactions = historyAccountTransactions.slice(
+    const historyTotalPages = Math.max(1, Math.ceil(historyCombinedItems.length / HISTORY_PAGE_SIZE));
+    const pagedHistoryItems = historyCombinedItems.slice(
         (historyPage - 1) * HISTORY_PAGE_SIZE,
         historyPage * HISTORY_PAGE_SIZE
     );
@@ -859,11 +966,22 @@ const Investment = () => {
                         </div>
                     )}
 
-                    {portfolioData.map((rdn) => (
+                    {portfolioData.map((rdn) => {
+                        const brokerLabel = detectBrokerLabel(rdn.name);
+                        const brokerBadgeTone = getBrokerBadgeTone(brokerLabel);
+
+                        return (
                         <div key={rdn.id} className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3 shadow-sm">
                             <div className="flex justify-between items-start gap-2">
                                 <div className="min-w-0">
-                                    <h3 className="font-bold text-base text-slate-900 truncate leading-tight">{rdn.name}</h3>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <h3 className="font-bold text-base text-slate-900 truncate leading-tight">{rdn.name}</h3>
+                                        {brokerLabel ? (
+                                            <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest ${brokerBadgeTone}`}>
+                                                {brokerLabel}
+                                            </span>
+                                        ) : null}
+                                    </div>
                                     <p className="text-[10px] text-slate-400 mt-0.5">
                                         {rdn.depositCount}x setor - {rdn.incomeCount}x hasil - {rdn.stockPositionCount} saham aktif
                                     </p>
@@ -883,7 +1001,9 @@ const Investment = () => {
                                 <div className="min-w-0">
                                     <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">Nilai Saham</p>
                                     <p className="text-xs font-bold text-slate-800 truncate">{formatCurrency(rdn.stockHoldingValue)}</p>
-                                    <p className="text-[9px] text-slate-400 mt-0.5">@ harga beli</p>
+                                    <p className="text-[9px] text-slate-400 mt-0.5">
+                                        {rdn.hasLiveQuote ? '@ harga live' : '@ harga beli'}
+                                    </p>
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">IPO Dipesan</p>
@@ -944,7 +1064,7 @@ const Investment = () => {
                                 </button>
                             </div>
                         </div>
-                    ))}
+                    )})}
                 </div>
             </section>
 
@@ -967,6 +1087,7 @@ const Investment = () => {
                                     <div className="mt-2 space-y-1 text-[11px] font-medium text-blue-900/70 leading-relaxed">
                                         <p>Modal {formatCurrency(detailAccountSummary.modal)} dari {detailAccountSummary.depositCount} transfer, hasil {detailAccountSummary.incomeCount} transaksi.</p>
                                         <p>Kas tersisa {formatCurrency(detailAccountSummary.cashBalance)}, saham aktif {formatCurrency(detailAccountSummary.stockHoldingValue)}, IPO pending {formatCurrency(detailAccountSummary.pendingIpoValue)}.</p>
+                                        <p>Nilai saham akan memakai harga live jika quote tersedia, dan fallback ke harga beli jika belum ada.</p>
                                         <p>Breakdown owner di bawah mengikuti dana yang saat ini tercatat di RDN ini.</p>
                                     </div>
                                 )}
@@ -1079,8 +1200,43 @@ const Investment = () => {
 
                         <div className="overflow-y-auto overscroll-contain flex-1 -mx-2 px-2">
                             <div className="space-y-2">
-                                {pagedHistoryAccountTransactions.length > 0 ? (
-                                    pagedHistoryAccountTransactions.map((tx: any) => {
+                                {pagedHistoryItems.length > 0 ? (
+                                    pagedHistoryItems.map((entry) => {
+                                        if (entry.entryType === 'stock') {
+                                            const tx = entry.item;
+                                            return (
+                                                <div key={`stock-${tx.id}`} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors">
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className="flex items-center gap-2 mb-1.5">
+                                                                <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${tx.side === 'BUY' ? 'bg-blue-50 text-blue-600' : 'bg-rose-50 text-rose-600'}`}>
+                                                                    {tx.side === 'BUY' ? 'Beli Saham' : 'Jual Saham'}
+                                                                </span>
+                                                                <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+                                                                    {new Date(tx.tradedAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm font-bold text-slate-900 truncate">
+                                                                {tx.ticker} · {tx.lot.toLocaleString('id-ID')} lot @ {formatCurrency(tx.pricePerShare)}
+                                                            </p>
+                                                            <p className="mt-0.5 text-[11px] font-medium text-slate-500 truncate">
+                                                                {tx.owner?.name || 'Tanpa owner'} · {historyAccount.name}
+                                                            </p>
+                                                        </div>
+                                                        <div className="shrink-0 text-right">
+                                                            <span className={`text-sm font-black tracking-tight ${tx.side === 'BUY' ? 'text-rose-600' : 'text-emerald-600'}`}>
+                                                                {tx.side === 'BUY' ? '-' : '+'}{formatCurrency(tx.netValue)}
+                                                            </span>
+                                                            <p className="mt-0.5 text-[10px] font-medium text-slate-400">
+                                                                Fee {formatCurrency(Number(tx.brokerFee || 0) + Number(tx.levyFee || 0))}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        const tx = entry.item as any;
                                         const txIsIncome = isInvestmentIncome(tx);
                                         return (
                                             <div key={tx.id} className="rounded-2xl border border-slate-100 bg-slate-50/50 p-4 hover:bg-slate-50 transition-colors">
@@ -1140,7 +1296,7 @@ const Investment = () => {
                             </div>
                         </div>
 
-                        {historyAccountTransactions.length > HISTORY_PAGE_SIZE && (
+                        {historyCombinedItems.length > HISTORY_PAGE_SIZE && (
                             <div className="flex items-center justify-between border-t border-slate-100 pt-3">
                                 <button
                                     type="button"

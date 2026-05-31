@@ -4,6 +4,7 @@ import { recordDataAccessMode } from './dataAccessMode';
 import {
     computeStockMoney,
     ensureStockFundsDirect,
+    ensureStockLotsDirect,
     ensureSupabase,
     syncAccountBalancesDirect
 } from './stocksDirect';
@@ -26,6 +27,15 @@ export type StockTransaction = {
     notes?: string | null;
     owner?: { id: string; name: string };
     account?: { id: string; name: string; type: string };
+};
+
+export type StockQuote = {
+    ticker: string;
+    symbol: string;
+    price: number;
+    asOf: string | null;
+    currency: string;
+    source: string;
 };
 
 export type StockPosition = {
@@ -135,7 +145,14 @@ const calculatePositions = (rows: PositionInput[], groupByAccount = false): Stoc
     const positions: StockPosition[] = [];
 
     for (const rowsByKey of grouped.values()) {
-        const sortedRows = [...rowsByKey].sort((a, b) => new Date(a.tradedAt).getTime() - new Date(b.tradedAt).getTime());
+        const sortedRows = [...rowsByKey].sort((a, b) => {
+            const timeDiff = new Date(a.tradedAt).getTime() - new Date(b.tradedAt).getTime();
+            if (timeDiff !== 0) return timeDiff;
+            if (a.side !== b.side) {
+                return a.side === 'BUY' ? -1 : 1;
+            }
+            return 0;
+        });
         const fifoLots: Array<{ remainingShares: number; pricePerShare: number; costPerShare: number }> = [];
         let realizedPnl = 0;
         let buyCount = 0;
@@ -365,6 +382,13 @@ export const createStockTransaction = async (payload: StockTransactionPayload): 
         });
 
         await ensureStockFundsDirect(payload.accountId, computed.netValue, payload.side);
+        await ensureStockLotsDirect(
+            payload.ownerId || account.ownerId,
+            payload.accountId,
+            payload.ticker,
+            Number(payload.lot),
+            payload.side
+        );
 
         const now = new Date().toISOString();
         const { data, error } = await sb
@@ -446,6 +470,14 @@ export const updateStockTransaction = async (id: string, payload: StockTransacti
                 netValue: Number(existing.netValue || 0)
             }
         );
+        await ensureStockLotsDirect(
+            payload.ownerId || account.ownerId || existing.ownerId,
+            payload.accountId,
+            payload.ticker,
+            Number(payload.lot),
+            payload.side,
+            id
+        );
 
         const { data, error } = await sb
             .from('StockTransaction')
@@ -514,3 +546,16 @@ export const fetchStockPositions = async (filter: StockFilter = {}): Promise<Sto
         () => fetchStockPositionsViaApi(filter),
         'Posisi saham dihitung langsung dari Supabase.'
     );
+
+export const fetchStockQuotes = async (tickers: string[]): Promise<Record<string, StockQuote>> => {
+    const normalizedTickers = Array.from(new Set(
+        tickers
+            .map((value) => String(value || '').trim().toUpperCase())
+            .filter(Boolean)
+    ));
+
+    if (normalizedTickers.length === 0) return {};
+
+    const response = await api.get(`/stocks/quotes?tickers=${encodeURIComponent(normalizedTickers.join(','))}`);
+    return response.data?.quotes || {};
+};

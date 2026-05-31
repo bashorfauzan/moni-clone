@@ -42,12 +42,14 @@ VITE_SUPABASE_URL=https://PROJECT_REF.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
 VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 VITE_USE_SUPABASE_DATA=true
+ALPHA_VANTAGE_API_KEY=YOUR_ALPHA_VANTAGE_API_KEY
 ```
 
 Catatan:
 
 - Vercel Functions memakai environment yang sama untuk build dan runtime.
 - Karena frontend dan API berada di project/domain yang sama, `VITE_API_BASE_URL` tetap `/api`.
+- `ALPHA_VANTAGE_API_KEY` dipakai backend untuk mengambil harga saham live pada modul saham.
 
 ## Verifikasi setelah deploy
 

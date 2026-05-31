@@ -82,7 +82,7 @@ const Layout = () => {
                     />
 
                     {/* Speed Dial Actions */}
-                    <div className="fixed bottom-[176px] sm:bottom-[188px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
+                    <div className="pointer-events-none fixed bottom-[176px] sm:bottom-[188px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
                         {fabActions.map((action, idx) => (
                             <div
                                 key={idx}
