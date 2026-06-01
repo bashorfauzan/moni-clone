@@ -923,7 +923,7 @@ const Investment = () => {
                         </div>
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 mt-auto">
+                    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 mt-auto">
                         <div className="flex items-center justify-between mb-3 border-b border-white/10 pb-2">
                             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">
                                 Arus Bulan Ini ({currentMonthStart.toLocaleDateString('id-ID', { month: 'short' })})
@@ -933,18 +933,18 @@ const Investment = () => {
                             </span>
                         </div>
 
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Setoran</p>
-                                <p className="text-xs font-bold text-blue-300">{formatCurrency(monthlyInvestmentSnapshot.deposit)}</p>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="rounded-2xl border border-blue-400/10 bg-gradient-to-br from-blue-500/10 via-sky-400/5 to-white/5 px-3 py-3">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-100/70">Setoran</p>
+                                <p className="mt-2 text-sm font-black tracking-tight text-blue-300">{formatCurrency(monthlyInvestmentSnapshot.deposit)}</p>
                             </div>
-                            <div className="text-center">
-                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Hasil / Return</p>
-                                <p className="text-xs font-bold text-emerald-300">{formatCurrency(monthlyInvestmentSnapshot.income)}</p>
+                            <div className="rounded-2xl border border-emerald-400/10 bg-gradient-to-br from-emerald-500/10 via-green-400/5 to-white/5 px-3 py-3 text-center">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-emerald-100/70">Hasil</p>
+                                <p className="mt-2 text-sm font-black tracking-tight text-emerald-300">{formatCurrency(monthlyInvestmentSnapshot.income)}</p>
                             </div>
-                            <div className="text-right">
-                                <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-white/40 mb-1">Pencairan</p>
-                                <p className="text-xs font-bold text-amber-300">{formatCurrency(monthlyInvestmentSnapshot.withdrawal)}</p>
+                            <div className="rounded-2xl border border-amber-400/10 bg-gradient-to-br from-amber-500/10 via-orange-400/5 to-white/5 px-3 py-3 text-right">
+                                <p className="text-[9px] font-bold uppercase tracking-[0.18em] text-amber-100/70">Pencairan</p>
+                                <p className="mt-2 text-sm font-black tracking-tight text-amber-300">{formatCurrency(monthlyInvestmentSnapshot.withdrawal)}</p>
                             </div>
                         </div>
                     </div>

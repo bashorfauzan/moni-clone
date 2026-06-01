@@ -87,29 +87,20 @@ const CashAccounts = () => {
             </section>
 
             <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pemilik:</span>
-                        <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
-                            <button
-                                type="button"
-                                onClick={() => setSelectedOwnerId('ALL')}
-                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Semua
-                            </button>
+                <div className="flex items-end justify-between gap-3 flex-wrap">
+                    <label className="min-w-[220px] flex-1 space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Pemilik</span>
+                        <select
+                            value={selectedOwnerId}
+                            onChange={(event) => setSelectedOwnerId(event.target.value)}
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-blue-300 focus:bg-white"
+                        >
+                            <option value="ALL">Semua Pemilik</option>
                             {owners.map((owner) => (
-                                <button
-                                    key={owner.id}
-                                    type="button"
-                                    onClick={() => setSelectedOwnerId(owner.id)}
-                                    className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === owner.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                                >
-                                    {owner.name}
-                                </button>
+                                <option key={owner.id} value={owner.id}>{owner.name}</option>
                             ))}
-                        </div>
-                    </div>
+                        </select>
+                    </label>
                     <label className="inline-flex items-center gap-2 rounded-2xl bg-slate-100 px-3 py-2 text-[11px] font-bold uppercase tracking-widest text-slate-600">
                         <input
                             type="checkbox"

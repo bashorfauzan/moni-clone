@@ -236,76 +236,64 @@ const StocksIpo = () => {
             </div>
 
             {/* Hero Stats Card */}
-            <div className="relative overflow-hidden rounded-[28px] bg-slate-900 p-6 sm:p-8 shadow-2xl shadow-slate-900/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-500/20 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
-                <div className="pointer-events-none absolute top-1/2 right-1/3 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
-
-                <div className="relative z-10 grid grid-cols-2 gap-y-4 sm:grid-cols-5 sm:gap-y-0 sm:divide-x sm:divide-white/10">
-                    {IPO_STATUS_OPTIONS.map((status, index) => (
+            <div className="rounded-[28px] border border-slate-100 bg-white p-3 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 sm:gap-3">
+                    {IPO_STATUS_OPTIONS.map((status) => (
                         <div
                             key={status}
-                            className={`flex flex-col justify-center min-w-0 px-2 sm:px-5 ${index === 0 ? 'pl-0' : ''} ${index === IPO_STATUS_OPTIONS.length - 1 ? 'pr-0' : ''}`}
+                            className={`min-w-0 rounded-[22px] border px-4 py-4 sm:px-5 ${
+                                status === 'RENCANA' ? 'border-violet-100 bg-gradient-to-br from-violet-50 via-white to-violet-50/60' :
+                                status === 'PESAN' ? 'border-blue-100 bg-gradient-to-br from-blue-50 via-white to-blue-50/60' :
+                                status === 'JATAH' ? 'border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/60' :
+                                status === 'TIDAK_JATAH' ? 'border-rose-100 bg-gradient-to-br from-rose-50 via-white to-rose-50/60' :
+                                'border-amber-100 bg-gradient-to-br from-amber-50 via-white to-amber-50/60'
+                            }`}
                         >
-                            <div className="flex items-center gap-1.5 mb-1.5">
+                            <div className="flex items-center gap-1.5">
                                 <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${STATUS_STYLE[status].dot}`} />
-                                <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 leading-none truncate">
+                                <p className="truncate text-[9px] font-bold uppercase tracking-[0.22em] text-slate-500/90">
                                     {STATUS_STYLE[status].label}
                                 </p>
                             </div>
-                            <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
+                            <p className="mt-2 text-2xl sm:text-3xl font-black leading-none tracking-[-0.04em] text-slate-900">
                                 {statusCount[status]}
                             </p>
-                            <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">order</p>
+                            <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500/80">order</p>
                         </div>
                     ))}
                 </div>
             </div>
 
             {/* Filter Bar */}
-            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm p-4 space-y-3">
-                {/* Owner pill segments */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Pemilik:</span>
-                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
-                        <button
-                            onClick={() => setSelectedOwnerId('ALL')}
-                            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+            <div className="rounded-[24px] border border-slate-200 bg-white shadow-sm p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Pemilik</span>
+                        <select
+                            value={selectedOwnerId}
+                            onChange={(e) => setSelectedOwnerId(e.target.value)}
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-blue-300 focus:bg-white"
                         >
-                            Semua
-                        </button>
-                        {owners.map((owner) => (
-                            <button
-                                key={owner.id}
-                                onClick={() => setSelectedOwnerId(owner.id)}
-                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedOwnerId === owner.id ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {owner.name}
-                            </button>
-                        ))}
-                    </div>
-                </div>
+                            <option value="ALL">Semua Pemilik</option>
+                            {owners.map((owner) => (
+                                <option key={owner.id} value={owner.id}>{owner.name}</option>
+                            ))}
+                        </select>
+                    </label>
 
-                {/* Status pill segments */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 shrink-0">Status:</span>
-                    <div className="flex gap-1 bg-slate-100 rounded-2xl p-1 flex-wrap">
-                        <button
-                            onClick={() => setSelectedStatus('ALL')}
-                            className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedStatus === 'ALL' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                    <label className="space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Status</span>
+                        <select
+                            value={selectedStatus}
+                            onChange={(e) => setSelectedStatus(e.target.value as 'ALL' | IpoOrderStatus)}
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-blue-300 focus:bg-white"
                         >
-                            Semua
-                        </button>
-                        {IPO_STATUS_OPTIONS.map((status) => (
-                            <button
-                                key={status}
-                                onClick={() => setSelectedStatus(status)}
-                                className={`rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest transition-all ${selectedStatus === status ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                {STATUS_STYLE[status].label}
-                            </button>
-                        ))}
-                    </div>
+                            <option value="ALL">Semua Status</option>
+                            {IPO_STATUS_OPTIONS.map((status) => (
+                                <option key={status} value={status}>{STATUS_STYLE[status].label}</option>
+                            ))}
+                        </select>
+                    </label>
                 </div>
             </div>
 

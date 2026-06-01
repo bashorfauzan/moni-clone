@@ -131,6 +131,8 @@ const buildOwnerBalancesByAccount = ({
 };
 
 export const fetchMasterMeta = async (): Promise<MasterMeta> => {
+    let directSupabaseFailure: unknown = null;
+
     if (useDirectSupabaseData && supabase) {
         const [ownersRes, accountsRes, activitiesRes, transactionsRes, stockTransactionsRes, ipoTransactionsRes] = await Promise.all([
             supabase.from('Owner').select('id, name').order('createdAt', { ascending: true }),
@@ -164,6 +166,7 @@ export const fetchMasterMeta = async (): Promise<MasterMeta> => {
             accountsError: accountsRes.error,
             activitiesError: activitiesRes.error
         });
+        directSupabaseFailure = ownersRes.error || accountsRes.error || activitiesRes.error || transactionsRes.error || stockTransactionsRes.error || ipoTransactionsRes.error;
         recordDataAccessMode(
             'master',
             'supabase-fallback-to-api',
@@ -174,13 +177,26 @@ export const fetchMasterMeta = async (): Promise<MasterMeta> => {
         );
     }
 
-    const response = await api.get('/master/meta');
-    recordDataAccessMode('master', 'backend-api', 'Master data dibaca lewat endpoint backend.');
-    return {
-        owners: (response.data.owners || []).map(normalizeOwner),
-        accounts: (response.data.accounts || []).map(normalizeAccount),
-        activities: (response.data.activities || []).map(normalizeActivity)
-    };
+    try {
+        const response = await api.get('/master/meta');
+        recordDataAccessMode('master', 'backend-api', 'Master data dibaca lewat endpoint backend.');
+        return {
+            owners: (response.data.owners || []).map(normalizeOwner),
+            accounts: (response.data.accounts || []).map(normalizeAccount),
+            activities: (response.data.activities || []).map(normalizeActivity)
+        };
+    } catch (error) {
+        const backendMessage = getErrorMessage(error, 'Backend API tidak merespons master data.');
+        const supabaseMessage = directSupabaseFailure
+            ? getErrorMessage(directSupabaseFailure, 'Supabase tidak dapat dihubungi.')
+            : null;
+        const combinedMessage = supabaseMessage
+            ? `Gagal mengambil master data. ${supabaseMessage} Fallback backend juga gagal: ${backendMessage}`
+            : `Gagal mengambil master data. ${backendMessage}`;
+
+        recordDataAccessMode('master', 'supabase-fallback-to-api', combinedMessage);
+        throw new Error(combinedMessage);
+    }
 };
 
 export const createAccount = async (payload: AccountPayload): Promise<Account> => {

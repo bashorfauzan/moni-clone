@@ -6,6 +6,8 @@ import { fetchMasterMeta, type Account, type Activity } from '../services/master
 import { buildAccountUsageFrequency, type AccountUsageFrequency, sortAccountsByUsage } from '../services/accountUsage';
 import { createTransaction, fetchTransactions, updateTransaction, validateTransaction, type TransactionTypeValue } from '../services/transactions';
 import { getErrorMessage } from '../services/errors';
+import { announceSuccess } from '../lib/feedback';
+import { formatCurrency, formatThousands, sanitizeAmount } from '../lib/format';
 import { inferNotificationCategoryLabel } from '../lib/transactionRules';
 
 type TransactionType = 'INCOME' | 'EXPENSE' | 'TRANSFER' | 'TOP_UP' | 'INVESTMENT';
@@ -33,21 +35,6 @@ const initialForm = {
     sourceAccountId: '',
     destinationAccountId: '',
 };
-
-const formatThousands = (raw: string) => {
-    if (!raw) return '';
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric)) return '';
-    return new Intl.NumberFormat('id-ID').format(numeric);
-};
-
-const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
-const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-}).format(value);
 
 const TransactionModal = () => {
     const { isModalOpen, modalType, modalPayload, editTransactionId, setModalType, closeModal } = useTransaction();
@@ -332,6 +319,13 @@ const TransactionModal = () => {
                 await createTransaction(payload);
             }
 
+            announceSuccess(
+                editTransactionId
+                    ? 'Transaksi berhasil diperbarui.'
+                    : modalPayload?.pendingTransactionId
+                        ? 'Transaksi pending berhasil disetujui.'
+                        : 'Transaksi berhasil disimpan.'
+            );
             window.dispatchEvent(new Event('nova:data-changed'));
             if (modalPayload?.returnTo === 'stocks') {
                 const nextParams = new URLSearchParams();

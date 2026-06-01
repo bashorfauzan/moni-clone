@@ -5,15 +5,8 @@ import { createTarget, deleteTarget, fetchTargets, markTargetAsTransferred, type
 import Spinner from '../components/Spinner';
 import { getErrorMessage } from '../services/errors';
 import { useSecurity } from '../context/SecurityContext';
-
-const formatThousands = (raw: string) => {
-    if (!raw) return '';
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric)) return '';
-    return new Intl.NumberFormat('id-ID').format(numeric);
-};
-
-const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
+import { announceSuccess } from '../lib/feedback';
+import { formatCurrency, formatThousands, sanitizeAmount } from '../lib/format';
 
 const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: string | null) => {
     if (!startValue || !endValue) return null;
@@ -59,14 +52,6 @@ const Targets = () => {
         };
         void fetchData();
     }, []);
-
-    const formatCurrency = (val: number) =>
-        new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0
-        }).format(val).replace('Rp', 'Rp ');
 
     const refetchTargets = async () => {
         const targetRes = await fetchTargets();
@@ -119,6 +104,7 @@ const Targets = () => {
             } else {
                 await createTarget(payload);
             }
+            announceSuccess(editingTargetId ? 'Target berhasil diperbarui.' : 'Target berhasil ditambahkan.');
             resetTargetForm();
             await refetchTargets();
             setIsTargetModalOpen(false);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransaction } from '../context/TransactionContext';
 import {
     clearNotificationInbox,
@@ -18,6 +18,7 @@ import NotificationDrawer from '../components/NotificationDrawer';
 import { useNavigate } from 'react-router-dom';
 import { useSecurity } from '../context/SecurityContext';
 import { canonicalizeAccountAlias } from '../lib/accountAliases';
+import { formatCurrency } from '../lib/format';
 import { readStorage, writeStorage } from '../lib/storage';
 import { getErrorMessage } from '../services/errors';
 import {
@@ -27,7 +28,6 @@ import {
     isTopUpLikeTransfer,
     normalizeTransactionType,
     isLegacyInvestmentTransactionType,
-    isTransferTransaction,
     inferNotificationCategoryLabel,
     requiresSourceAccount,
     requiresDestinationAccount
@@ -56,7 +56,6 @@ const Home = () => {
         investmentValue: 0
     });
     const [validatedTransactions, setValidatedTransactions] = useState<TransactionItem[]>([]);
-    const [recentTransactions, setRecentTransactions] = useState<TransactionItem[]>([]);
     const [pendingTransactions, setPendingTransactions] = useState<TransactionItem[]>([]);
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
     const [notificationLoadError, setNotificationLoadError] = useState<string | null>(null);
@@ -69,6 +68,8 @@ const Home = () => {
     const [clearingNotifications, setClearingNotifications] = useState(false);
     const [isNotificationDrawerOpen, setIsNotificationDrawerOpen] = useState(false);
     const [selectedTransaction, setSelectedTransaction] = useState<TransactionItem | null>(null);
+    const [recentDateFilter, setRecentDateFilter] = useState<'today' | '7d' | '30d' | 'month'>('month');
+    const [recentSearchQuery, setRecentSearchQuery] = useState('');
     const refreshTimeoutRef = useRef<number | null>(null);
 
     const findAccountByNumberHint = (message: string) => {
@@ -151,16 +152,14 @@ const Home = () => {
 
     const [accountFreq, setAccountFreq] = useState<Record<string, number>>({});
 
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         try {
             const [
-                recentResult,
                 validatedResult,
                 pendingResult,
                 metaResult,
                 notificationsResult
             ] = await Promise.allSettled([
-                fetchTransactions({ validated: true, limit: 20 }),
                 fetchTransactions({ validated: true }),
                 fetchTransactions({ validated: false, limit: 20 }),
                 fetchMasterMeta(),
@@ -179,7 +178,6 @@ const Home = () => {
                 return txDate >= startOfMonth && txDate < endOfMonth;
             };
 
-            const nextRecentTransactions = (recentResult.status === 'fulfilled' ? recentResult.value : []).filter((tx: any) => isCurrentMonth(tx.date));
             const allValidatedTransactions = (validatedResult.status === 'fulfilled' ? validatedResult.value : []).filter((tx: any) => !isLegacyInvestmentTransactionType(tx.type));
             const nextPendingTransactions = pendingResult.status === 'fulfilled' ? pendingResult.value : [];
 
@@ -205,7 +203,6 @@ const Home = () => {
             setSummaryData({ liquidBalance, incomeMonth, expenseMonth, investmentValue });
             setAccountFreq(freq);
             setValidatedTransactions(allValidatedTransactions);
-            setRecentTransactions(nextRecentTransactions);
             setPendingTransactions(nextPendingTransactions);
             setNotifications(nextNotifications);
             setNotificationLoadError(nextNotificationError);
@@ -215,11 +212,11 @@ const Home = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchData();
-    }, []);
+        void fetchData();
+    }, [fetchData]);
 
     useEffect(() => {
         const scheduleRefresh = () => {
@@ -271,7 +268,7 @@ const Home = () => {
                 window.clearTimeout(refreshTimeoutRef.current);
             }
         };
-    }, []);
+    }, [fetchData]);
 
     const handleValidate = async (id: string, action: 'APPROVE' | 'REJECT', tx: any) => {
         if (action === 'REJECT') {
@@ -309,15 +306,6 @@ const Home = () => {
         } finally {
             setLoading(false);
         }
-    };
-
-    const formatCurrency = (value: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-        }).format(value).replace('Rp', 'Rp ');
     };
 
     const displayCurrency = (value: number) => {
@@ -449,40 +437,15 @@ const Home = () => {
         ['Bank', 'E-Wallet', 'RDN', 'Sekuritas'].includes(account.type)
     );
 
-    const derivedOwnerBalanceByAccount = validatedTransactions.reduce<Record<string, Record<string, number>>>((acc, tx) => {
-        if (!tx.ownerId) return acc;
-
-        const adjust = (accountId: string | undefined, delta: number) => {
-            if (!accountId || delta === 0) return;
-            const accountBalances = acc[accountId] ?? {};
-            accountBalances[tx.ownerId!] = (accountBalances[tx.ownerId!] ?? 0) + delta;
-            acc[accountId] = accountBalances;
-        };
-
-        if (normalizeTransactionType(tx.type) === 'INCOME') {
-            adjust(tx.destinationAccountId, tx.amount);
-        } else if (normalizeTransactionType(tx.type) === 'EXPENSE') {
-            adjust(tx.sourceAccountId, -tx.amount);
-        } else if (isTransferTransaction(tx)) {
-            adjust(tx.sourceAccountId, -tx.amount);
-            adjust(tx.destinationAccountId, tx.amount);
-        }
-
-        return acc;
-    }, {});
-
     const getOwnerAccountAmount = (account: Account, ownerId: string) => {
         const explicitOwnerBalance = account.ownerBalances?.[ownerId];
-        if (typeof explicitOwnerBalance === 'number') return explicitOwnerBalance;
-
-        const derivedOwnerBalance = derivedOwnerBalanceByAccount[account.id]?.[ownerId];
-        if (typeof derivedOwnerBalance === 'number' && derivedOwnerBalance !== 0) return derivedOwnerBalance;
+        if (typeof explicitOwnerBalance === 'number') return Number(explicitOwnerBalance || 0);
 
         if (!account.ownerBalances && account.ownerId === ownerId) {
             return account.balance;
         }
 
-        return derivedOwnerBalance ?? 0;
+        return 0;
     };
 
     const wealthDistribution = meta.owners.map(owner => {
@@ -501,6 +464,46 @@ const Home = () => {
 
     const totalMemberFunds = wealthDistribution.reduce((sum, owner) => sum + owner.total, 0);
     const needsInitialSetup = meta.owners.length === 0 && meta.accounts.length === 0 && validatedTransactions.length === 0;
+    const filteredRecentTransactions = useMemo(() => {
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const last7Days = new Date(now);
+        last7Days.setDate(now.getDate() - 6);
+        last7Days.setHours(0, 0, 0, 0);
+        const last30Days = new Date(now);
+        last30Days.setDate(now.getDate() - 29);
+        last30Days.setHours(0, 0, 0, 0);
+
+        const activeSearch = recentSearchQuery.trim().toLowerCase();
+        const matchesDate = (tx: TransactionItem) => {
+            const txDate = new Date(tx.date);
+            if (recentDateFilter === 'today') return txDate >= startOfToday;
+            if (recentDateFilter === '7d') return txDate >= last7Days;
+            if (recentDateFilter === '30d') return txDate >= last30Days;
+            return txDate >= startOfMonth;
+        };
+
+        const matchesSearch = (tx: TransactionItem) => {
+            if (!activeSearch) return true;
+            const haystack = [
+                tx.description,
+                tx.activity?.name,
+                tx.owner?.name,
+                tx.sourceAccount?.name,
+                tx.destinationAccount?.name,
+                tx.type
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(activeSearch);
+        };
+
+        return validatedTransactions
+            .filter((tx) => matchesDate(tx) && matchesSearch(tx))
+            .slice(0, 20);
+    }, [recentDateFilter, recentSearchQuery, validatedTransactions]);
 
 
 
@@ -874,9 +877,41 @@ const Home = () => {
                         LIHAT SEMUA
                     </button>
                 </div>
+                <div className="mb-3 space-y-2">
+                    <div className="flex gap-1.5 overflow-x-auto px-1 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+                        {[
+                            { key: 'today', label: 'Hari Ini' },
+                            { key: '7d', label: '7 Hari' },
+                            { key: '30d', label: '30 Hari' },
+                            { key: 'month', label: 'Bulan Ini' }
+                        ].map((item) => (
+                            <button
+                                key={item.key}
+                                type="button"
+                                onClick={() => setRecentDateFilter(item.key as typeof recentDateFilter)}
+                                className={`shrink-0 rounded-xl px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest transition-colors ${
+                                    recentDateFilter === item.key
+                                        ? 'bg-blue-600 text-white'
+                                        : 'bg-white text-slate-500 hover:bg-slate-100'
+                                }`}
+                            >
+                                {item.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="px-1">
+                        <input
+                            type="text"
+                            placeholder="Cari transaksi, rekening, atau catatan..."
+                            value={recentSearchQuery}
+                            onChange={(event) => setRecentSearchQuery(event.target.value)}
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm text-slate-700 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-300"
+                        />
+                    </div>
+                </div>
                 <div className="space-y-2.5">
-                    {recentTransactions.length > 0 ? (
-                        recentTransactions.map((tx) => {
+                    {filteredRecentTransactions.length > 0 ? (
+                        filteredRecentTransactions.map((tx) => {
                             const visual = getRecentTransactionVisual(tx);
                             const origin = getTransactionOriginMeta(tx);
                             return (
@@ -913,7 +948,9 @@ const Home = () => {
                         })
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 px-4 bg-white/50 border border-dashed border-slate-200 rounded-[24px]">
-                            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">Belum ada transaksi</p>
+                            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest text-center">
+                                {recentSearchQuery ? 'Tidak ada transaksi yang cocok' : 'Belum ada transaksi'}
+                            </p>
                         </div>
                     )}
                 </div>

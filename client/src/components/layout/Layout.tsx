@@ -1,15 +1,41 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home as HomeIcon, PieChart, Target, Menu, Plus, TrendingUp, ArrowDownLeft, ArrowUpRight, ArrowRightLeft, BarChart2 } from 'lucide-react';
 import { useTransaction } from '../../context/TransactionContext';
 import TransactionModal from '../TransactionModal';
+import { APP_TOAST_EVENT, type AppToastDetail } from '../../lib/feedback';
 
 const Layout = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { openModal } = useTransaction();
     const [fabOpen, setFabOpen] = useState(false);
+    const [toast, setToast] = useState<AppToastDetail | null>(null);
     const hideGlobalFab = location.pathname === '/investment';
+
+    useEffect(() => {
+        let dismissTimer: number | null = null;
+
+        const handleToast = (event: Event) => {
+            const detail = (event as CustomEvent<AppToastDetail>).detail;
+            if (!detail?.message) return;
+            setToast(detail);
+            if (dismissTimer) {
+                window.clearTimeout(dismissTimer);
+            }
+            dismissTimer = window.setTimeout(() => {
+                setToast(null);
+            }, 2200);
+        };
+
+        window.addEventListener(APP_TOAST_EVENT, handleToast as EventListener);
+        return () => {
+            window.removeEventListener(APP_TOAST_EVENT, handleToast as EventListener);
+            if (dismissTimer) {
+                window.clearTimeout(dismissTimer);
+            }
+        };
+    }, []);
 
     const navItems = [
         { path: '/', label: 'Home', mobileLabel: 'Home', icon: <HomeIcon size={20} /> },
@@ -71,6 +97,18 @@ const Layout = () => {
             </main>
 
             <TransactionModal />
+
+            {toast && (
+                <div className="pointer-events-none fixed top-5 left-1/2 z-[160] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2">
+                    <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold shadow-lg backdrop-blur-sm ${
+                        toast.type === 'error'
+                            ? 'border-rose-200 bg-rose-50/95 text-rose-700'
+                            : 'border-emerald-200 bg-emerald-50/95 text-emerald-700'
+                    }`}>
+                        {toast.message}
+                    </div>
+                </div>
+            )}
 
             {!hideGlobalFab && (
                 <>

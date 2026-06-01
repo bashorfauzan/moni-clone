@@ -4,9 +4,12 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, Pencil, Plus, Save, Sea
 import Spinner from '../components/Spinner';
 import { useTransaction } from '../context/TransactionContext';
 import { useSecurity } from '../context/SecurityContext';
+import { announceSuccess } from '../lib/feedback';
+import { formatCurrency, formatThousands, sanitizeAmount } from '../lib/format';
 import { fetchMasterMeta, type Account, type Owner } from '../services/masterData';
 import { computeStockMoney } from '../services/stocksDirect';
 import { downloadBackupBlob } from '../services/backup';
+import { getErrorMessage } from '../services/errors';
 import {
     createStockTransaction,
     deleteStockTransaction,
@@ -19,27 +22,11 @@ import {
     type StockTransaction
 } from '../services/stocks';
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-}).format(value || 0);
-
 const formatPercent = (value: number) =>
     `${value >= 0 ? '+' : ''}${new Intl.NumberFormat('id-ID', {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2
     }).format(value)}%`;
-
-const formatThousands = (raw: string) => {
-    if (!raw) return '';
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric)) return '';
-    return new Intl.NumberFormat('id-ID').format(numeric);
-};
-
-const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
 const getOwnerBalance = (account: Account | null | undefined, ownerId?: string) =>
     Number((ownerId && account?.ownerBalances?.[ownerId]) || 0);
 
@@ -98,6 +85,7 @@ const Stocks = () => {
     const [liveQuotes, setLiveQuotes] = useState<Record<string, StockQuote>>({});
     const [formLiveQuote, setFormLiveQuote] = useState<StockQuote | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [saving, setSaving] = useState(false);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
     const [selectedAccountId, setSelectedAccountId] = useState('ALL');
@@ -220,6 +208,7 @@ const Stocks = () => {
 
     const loadData = async () => {
         try {
+            setLoadError('');
             const meta = await fetchMasterMeta();
             const nextAccounts = meta.accounts.filter((account) => STOCK_ACCOUNT_TYPES.includes(account.type));
             const fundedAccounts = nextAccounts.filter((account) =>
@@ -262,6 +251,17 @@ const Stocks = () => {
                 accountId: current.accountId || fundedAccounts[0]?.id || nextAccounts[0]?.id || '',
                 ownerId: current.ownerId
             }));
+        } catch (error) {
+            console.error('Gagal memuat modul saham:', error);
+            setOwners([]);
+            setAccounts([]);
+            setTransactions([]);
+            setPositions([]);
+            setLiveQuotes({});
+            setLoadError(getErrorMessage(
+                error,
+                'Data saham belum bisa dimuat. Periksa koneksi internet, akses Supabase, atau server lokal.'
+            ));
         } finally {
             setLoading(false);
         }
@@ -430,6 +430,7 @@ const Stocks = () => {
                 await createStockTransaction(payload);
             }
 
+            announceSuccess(editingId ? 'Transaksi saham berhasil diperbarui.' : 'Transaksi saham berhasil disimpan.');
             resetForm();
             await loadData();
             setIsFormOpen(false);
@@ -629,16 +630,20 @@ const Stocks = () => {
                     >
                         <ArrowLeft size={14} /> Kembali ke Investasi
                     </Link>
-                    <h1 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">Portofolio Saham</h1>
+                    <div className="mt-2 flex items-center gap-2">
+                        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Portofolio Saham</h1>
+                        <button
+                            type="button"
+                            onClick={handleDownloadHistory}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 active:scale-[0.98] shadow-sm"
+                            title="Download History"
+                            aria-label="Download History"
+                        >
+                            <Download size={16} />
+                        </button>
+                    </div>
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
-                    <button
-                        type="button"
-                        onClick={handleDownloadHistory}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-11 text-[11px] font-bold uppercase tracking-widest text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 active:scale-[0.98] shadow-sm"
-                    >
-                        <Download size={14} /> Download History
-                    </button>
                     <button
                         onClick={() => {
                             resetForm();
@@ -652,62 +657,72 @@ const Stocks = () => {
             </div>
 
             {/* No account warning */}
-            {fundedStockAccounts.length === 0 && (
-                <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5">
-                    <p className="text-sm font-bold text-slate-900">Belum ada rekening saham yang memiliki dana</p>
-                    <p className="mt-1 text-xs text-slate-600">Tambahkan dana ke rekening bertipe <code className="font-mono bg-amber-100 px-1 rounded">RDN</code> atau <code className="font-mono bg-amber-100 px-1 rounded">Sekuritas</code>, lalu akun akan muncul di sini.</p>
-                </div>
+            {!loadError && fundedStockAccounts.length === 0 && (
+                <section className="rounded-[28px] border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-[0_8px_24px_-14px_rgba(245,158,11,0.22)]">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-amber-600">Perlu Dana</p>
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">Belum ada rekening saham yang memiliki dana.</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">
+                        Tambahkan dana ke rekening bertipe <code className="rounded bg-amber-100 px-1 font-mono text-amber-700">RDN</code> atau <code className="rounded bg-amber-100 px-1 font-mono text-amber-700">Sekuritas</code>, lalu akun akan muncul di sini.
+                    </p>
+                </section>
             )}
 
-            {/* Stats Cards */}
-            <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Posisi Aktif</p>
-                    <p className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                        {totalOpenLots.toLocaleString('id-ID')}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-500">lot terbuka</p>
-                </div>
-                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Realized PnL</p>
-                    <p className={`mt-2 text-lg sm:text-2xl font-black tracking-tight break-words ${totalRealizedPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {formatCurrency(totalRealizedPnl)}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-500">akumulasi hasil jual</p>
-                </div>
-                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Dipantau</p>
-                    <p className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
-                        {activePositions.length}
-                    </p>
-                    <p className="mt-1 text-[11px] font-semibold text-slate-500">emiten aktif</p>
+            {loadError && (
+                <section className="rounded-[28px] border border-rose-100 bg-gradient-to-br from-rose-50 via-white to-rose-50 p-5 shadow-[0_8px_24px_-14px_rgba(244,63,94,0.18)]">
+                    <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-rose-600">Koneksi Bermasalah</p>
+                    <h3 className="mt-2 text-lg font-bold text-slate-900">Data saham belum bisa dimuat.</h3>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{loadError}</p>
+                </section>
+            )}
+
+            {/* Stats Bar */}
+            <div className="rounded-[28px] border border-slate-100 bg-white p-3 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.05)]">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    <div className="rounded-[22px] border border-sky-100 bg-gradient-to-br from-sky-50 via-white to-sky-50/60 px-4 py-4 sm:px-5">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-sky-700/80">Posisi Aktif</p>
+                        <p className="mt-2 text-2xl sm:text-3xl font-black tracking-[-0.04em] text-slate-900">
+                            {totalOpenLots.toLocaleString('id-ID')}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500/80">lot terbuka</p>
+                    </div>
+                    <div className="rounded-[22px] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50/60 px-4 py-4 sm:px-5">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-emerald-700/80">Realized PnL</p>
+                        <p className={`mt-2 text-base sm:text-3xl font-black tracking-[-0.04em] break-words ${totalRealizedPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            {formatCurrency(totalRealizedPnl)}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500/80">hasil jual</p>
+                    </div>
+                    <div className="rounded-[22px] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-violet-50/60 px-4 py-4 sm:px-5">
+                        <p className="text-[9px] font-bold uppercase tracking-[0.22em] text-violet-700/80">Dipantau</p>
+                        <p className="mt-2 text-2xl sm:text-3xl font-black tracking-[-0.04em] text-slate-900">
+                            {activePositions.length}
+                        </p>
+                        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500/80">emiten aktif</p>
+                    </div>
                 </div>
             </div>
 
             {/* Filter Bar */}
-            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm overflow-hidden">
-                {/* Owner tabs — horizontal scroll, no wrap */}
-                <div className="flex gap-1.5 overflow-x-auto px-3 pt-3 pb-2 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
-                    {[{ id: 'ALL', name: 'Semua' }, ...owners].map((item) => (
-                        <button
-                            key={item.id}
-                            onClick={() => setSelectedOwnerId(item.id)}
-                            className={`shrink-0 whitespace-nowrap rounded-xl px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider transition-all ${
-                                selectedOwnerId === item.id
-                                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-200'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700'
-                            }`}
-                        >
-                            {item.name.split(' ')[0]}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Rekening + Ticker */}
-                <div className="flex gap-2 px-3 pb-3">
-                    <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="rounded-[24px] border border-slate-200 bg-white shadow-sm p-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                    <label className="space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Pemilik</span>
                         <select
-                            className="w-full rounded-xl border border-slate-200 px-3 h-10 text-xs bg-slate-50 font-medium cursor-pointer text-slate-700"
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-blue-300 focus:bg-white"
+                            value={selectedOwnerId}
+                            onChange={(e) => setSelectedOwnerId(e.target.value)}
+                        >
+                            <option value="ALL">Semua Pemilik</option>
+                            {owners.map((owner) => (
+                                <option key={owner.id} value={owner.id}>{owner.name}</option>
+                            ))}
+                        </select>
+                    </label>
+
+                    <label className="space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Rekening</span>
+                        <select
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition-all focus:border-blue-300 focus:bg-white"
                             value={selectedAccountId}
                             onChange={(e) => setSelectedAccountId(e.target.value)}
                         >
@@ -716,14 +731,19 @@ const Stocks = () => {
                                 <option key={account.id} value={account.id}>{account.name}</option>
                             ))}
                         </select>
-                    </div>
-                    <input
-                        className="flex-1 min-w-0 rounded-xl border border-slate-200 px-3 h-10 text-xs uppercase bg-slate-50 font-medium placeholder:normal-case placeholder:text-slate-400 text-slate-700 focus:outline-none focus:border-blue-300 transition-colors"
-                        placeholder="Cari ticker..."
-                        value={tickerFilter}
-                        onChange={(e) => setTickerFilter(e.target.value.toUpperCase())}
-                    />
+                    </label>
+
+                    <label className="space-y-1.5">
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-slate-400">Ticker</span>
+                        <input
+                            className="h-11 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm font-semibold uppercase text-slate-700 outline-none transition-all placeholder:normal-case placeholder:font-medium placeholder:text-slate-400 focus:border-blue-300 focus:bg-white"
+                            placeholder="Cari ticker..."
+                            value={tickerFilter}
+                            onChange={(e) => setTickerFilter(e.target.value.toUpperCase())}
+                        />
+                    </label>
                 </div>
+                {/* Owner tabs — horizontal scroll, no wrap */}
             </div>
 
             {/* Main Grid */}
