@@ -1028,7 +1028,7 @@ const Investment = () => {
                                 <div className="min-w-0">
                                     <p className="text-[9px] font-bold uppercase text-slate-400 mb-1">IPO Dipesan</p>
                                     <p className={`text-xs font-bold truncate ${rdn.pendingIpoValue > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
-                                        {rdn.pendingIpoValue > 0 ? formatCurrency(rdn.pendingIpoValue) : 'â€”'}
+                                        {rdn.pendingIpoValue > 0 ? formatCurrency(rdn.pendingIpoValue) : '-'}
                                     </p>
                                     <p className="text-[9px] text-slate-400 mt-0.5">belum jatah</p>
                                 </div>

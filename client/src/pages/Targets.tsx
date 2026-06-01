@@ -180,20 +180,21 @@ const Targets = () => {
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
             <header className="flex items-start justify-between gap-3 rounded-[28px] border border-white/30 bg-white/70 px-5 py-4 shadow-sm backdrop-blur-sm">
                 <div className="min-w-0">
-                    <h1 className="text-2xl font-bold italic text-slate-900">Manajemen Likuiditas</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-2xl font-bold italic text-slate-900">Manajemen Likuiditas</h1>
+                        <button
+                            type="button"
+                            onClick={openAddTargetModal}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-blue-500 text-white shadow-lg shadow-blue-500/30 transition-transform hover:bg-blue-400 active:scale-95"
+                            aria-label="Tambah target"
+                            title="Tambah target"
+                        >
+                            <Plus size={20} />
+                        </button>
+                    </div>
                     <p className="mt-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider">Target bulanan / tahunan + pengurangan otomatis</p>
                 </div>
-                <button
-                    type="button"
-                    onClick={openAddTargetModal}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-500 text-white shadow-lg shadow-blue-500/30 transition-transform hover:bg-blue-400 active:scale-95"
-                    aria-label="Tambah target"
-                    title="Tambah target"
-                >
-                    <Plus size={20} />
-                </button>
             </header>
-
             <div className="app-hero-card rounded-[32px] p-5 relative overflow-hidden shadow-xl shadow-blue-900/5 border border-white/20">
                 <div className="absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl -mr-20 -mt-20" style={{ backgroundColor: 'var(--theme-hero-glow)', opacity: 0.25 }}></div>
                 <div className="absolute bottom-0 left-0 h-32 w-32 rounded-full blur-3xl -ml-16 -mb-16" style={{ backgroundColor: 'var(--theme-accent)', opacity: 0.15 }}></div>

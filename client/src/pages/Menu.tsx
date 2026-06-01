@@ -824,6 +824,16 @@ const MenuPage = () => {
                     if (e1) throw new Error(e1.message);
                     const { error: e2 } = await supabase.from('NotificationInbox').delete().neq('id', '00000000-0000-0000-0000-000000000000');
                     if (e2 && !e2.message.includes('does not exist')) throw new Error(e2.message);
+                    if (!resetOptions.accounts) {
+                        const { error: resetBalanceError } = await supabase
+                            .from('Account')
+                            .update({
+                                balance: 0,
+                                updatedAt: new Date().toISOString()
+                            })
+                            .neq('id', '00000000-0000-0000-0000-000000000000');
+                        if (resetBalanceError) throw new Error(resetBalanceError.message);
+                    }
                 }
                 if (resetOptions.targets) {
                     const { error: e3 } = await supabase.from('Target').delete().neq('id', '00000000-0000-0000-0000-000000000000');
