@@ -1,5 +1,5 @@
 import express from 'express';
-import { IpoOrderStatus, StockTransactionSide, type Prisma } from '@prisma/client';
+import { StockTransactionSide, type Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { computeValidatedAccountBalances, syncAccountBalances } from '../lib/accountBalances.js';
 
@@ -7,6 +7,8 @@ const router = express.Router();
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
 const SHARES_PER_LOT = 100;
+const IPO_STATUS_VALUES = ['RENCANA', 'PESAN', 'JATAH', 'TIDAK_JATAH', 'JUAL'] as const;
+type IpoOrderStatusValue = typeof IPO_STATUS_VALUES[number];
 
 const toTicker = (value: unknown) => String(value || '').trim().toUpperCase();
 
@@ -18,8 +20,8 @@ const toDate = (value: unknown, fallback?: Date | null) => {
 
 const parseStatus = (value: unknown) => {
     if (typeof value !== 'string') return null;
-    return Object.values(IpoOrderStatus).includes(value as IpoOrderStatus)
-        ? (value as IpoOrderStatus)
+    return IPO_STATUS_VALUES.includes(value as IpoOrderStatusValue)
+        ? (value as IpoOrderStatusValue)
         : null;
 };
 
@@ -40,24 +42,23 @@ const ensureStockAccount = async (accountId: string) => {
 const computeIpoOrderAmount = (lot: number, pricePerShare: number) =>
     lot * SHARES_PER_LOT * pricePerShare;
 
-const computeReservedIpoCash = async (
+const computeCurrentIpoOrderCashImpact = async (
     trx: Prisma.TransactionClient,
-    accountId: string,
-    excludeOrderId?: string
+    orderId?: string
 ) => {
-    const rows = await trx.ipoOrder.findMany({
-        where: {
-            accountId,
-            status: IpoOrderStatus.PESAN,
-            ...(excludeOrderId ? { id: { not: excludeOrderId } } : {})
-        },
+    if (!orderId) return 0;
+
+    const rows = await trx.ipoTransaction.findMany({
+        where: { ipoOrderId: orderId },
         select: {
-            lotRequested: true,
-            ipoPrice: true
+            side: true,
+            netValue: true
         }
     });
 
-    return rows.reduce((sum, row) => sum + computeIpoOrderAmount(row.lotRequested, row.ipoPrice), 0);
+    return rows.reduce((sum, row) => (
+        sum + (row.side === StockTransactionSide.BUY ? -Number(row.netValue || 0) : Number(row.netValue || 0))
+    ), 0);
 };
 
 const ensureIpoFunds = async (
@@ -65,12 +66,12 @@ const ensureIpoFunds = async (
     payload: Awaited<ReturnType<typeof validateOrderPayload>>,
     orderId?: string
 ) => {
-    if (payload.status === IpoOrderStatus.TIDAK_JATAH) return;
+    if (payload.status === 'RENCANA' || payload.status === 'TIDAK_JATAH') return;
 
-    const reservedCash = await computeReservedIpoCash(trx, payload.accountId, orderId);
     const balanceMap = await computeValidatedAccountBalances(trx);
-    const availableBalance = Number(balanceMap.get(payload.accountId) || 0) - reservedCash;
-    const requiredCash = payload.status === IpoOrderStatus.PESAN
+    const currentOrderCashImpact = await computeCurrentIpoOrderCashImpact(trx, orderId);
+    const availableBalance = Number(balanceMap.get(payload.accountId) || 0) - currentOrderCashImpact;
+    const requiredCash = payload.status === 'PESAN'
         ? computeIpoOrderAmount(payload.lotRequested, payload.ipoPrice)
         : computeIpoOrderAmount(payload.lotAllocated, payload.ipoPrice);
 
@@ -113,14 +114,14 @@ const validateOrderPayload = async (body: any, existing?: any) => {
     if (!status) throw new Error('Status IPO tidak valid');
     if (!orderedAt) throw new Error('Tanggal pesanan IPO tidak valid');
     if (sellPrice !== null && (!Number.isFinite(sellPrice) || sellPrice <= 0)) throw new Error('Harga jual IPO tidak valid');
-    if (status === IpoOrderStatus.JATAH && lotAllocated <= 0) throw new Error('Status JATAH membutuhkan lot jatah lebih dari 0');
-    if (status === IpoOrderStatus.JUAL) {
+    if (status === 'JATAH' && lotAllocated <= 0) throw new Error('Status JATAH membutuhkan lot jatah lebih dari 0');
+    if (status === 'JUAL') {
         if (lotAllocated <= 0) throw new Error('Status JUAL membutuhkan lot jatah lebih dari 0');
         if (sellPrice === null) throw new Error('Harga jual wajib diisi untuk status JUAL');
         if (!soldAt) throw new Error('Tanggal jual wajib diisi untuk status JUAL');
     }
 
-    if ((status === IpoOrderStatus.JATAH || status === IpoOrderStatus.JUAL) && !allottedAt) {
+    if ((status === 'JATAH' || status === 'JUAL') && !allottedAt) {
         throw new Error('Tanggal jatah wajib diisi untuk status JATAH atau JUAL');
     }
 
@@ -152,11 +153,13 @@ const syncIpoTransactions = async (
         where: { ipoOrderId: orderId }
     });
 
-    if (payload.status === IpoOrderStatus.PESAN || payload.status === IpoOrderStatus.TIDAK_JATAH || payload.lotAllocated <= 0) {
+    if (payload.status === 'RENCANA' || payload.status === 'TIDAK_JATAH') {
         return;
     }
 
-    const shares = payload.lotAllocated * SHARES_PER_LOT;
+    const buyLot = payload.status === 'PESAN' ? payload.lotRequested : payload.lotAllocated;
+    if (buyLot <= 0) return;
+    const shares = buyLot * SHARES_PER_LOT;
     const buyGrossValue = payload.ipoPrice * shares;
 
     await trx.ipoTransaction.create({
@@ -166,21 +169,22 @@ const syncIpoTransactions = async (
             accountId: payload.accountId,
             ticker: payload.ticker,
             side: StockTransactionSide.BUY,
-            lot: payload.lotAllocated,
+            lot: buyLot,
             pricePerShare: payload.ipoPrice,
             grossValue: buyGrossValue,
             feePercent: 0,
             feeAmount: 0,
             netValue: buyGrossValue,
-            tradedAt: payload.allottedAt || payload.orderedAt
+            tradedAt: payload.status === 'PESAN' ? payload.orderedAt : (payload.allottedAt || payload.orderedAt)
         }
     });
 
-    if (payload.status !== IpoOrderStatus.JUAL || !payload.sellPrice) {
+    if (payload.status !== 'JUAL' || !payload.sellPrice || payload.lotAllocated <= 0) {
         return;
     }
 
-    const sellGrossValue = payload.sellPrice * shares;
+    const sellShares = payload.lotAllocated * SHARES_PER_LOT;
+    const sellGrossValue = payload.sellPrice * sellShares;
 
     await trx.ipoTransaction.create({
         data: {

@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type StockSide = 'BUY' | 'SELL';
-export type IpoStatus = 'PESAN' | 'JATAH' | 'TIDAK_JATAH' | 'JUAL';
+export type IpoStatus = 'RENCANA' | 'PESAN' | 'JATAH' | 'TIDAK_JATAH' | 'JUAL';
 
 const SHARES_PER_LOT = 100;
 
@@ -151,6 +151,24 @@ export const getReservedIpoCashDirect = async (accountId: string, excludeOrderId
     return (data || []).reduce((sum: number, row: any) => sum + (Number(row.lotRequested || 0) * SHARES_PER_LOT * Number(row.ipoPrice || 0)), 0);
 };
 
+export const getCurrentIpoOrderCashImpactDirect = async (orderId?: string) => {
+    if (!orderId) return 0;
+
+    const sb = ensureSupabase();
+    const { data, error } = await sb
+        .from('IpoTransaction')
+        .select('side, netValue')
+        .eq('ipoOrderId', orderId);
+
+    if (error) throw error;
+
+    return (data || []).reduce((sum: number, row: any) => {
+        const amount = Number(row.netValue || 0);
+        if (!Number.isFinite(amount) || amount === 0) return sum;
+        return sum + (row.side === 'BUY' ? -amount : amount);
+    }, 0);
+};
+
 export const ensureStockFundsDirect = async (
     accountId: string,
     netValue: number,
@@ -235,11 +253,11 @@ export const ensureIpoFundsDirect = async (
     ipoPrice: number,
     excludeOrderId?: string
 ) => {
-    if (status === 'TIDAK_JATAH') return;
+    if (status === 'RENCANA' || status === 'TIDAK_JATAH') return;
 
     const available = await getAvailableAccountCashDirect(accountId);
-    const reserved = await getReservedIpoCashDirect(accountId, excludeOrderId);
-    const freeCash = available - reserved;
+    const currentOrderCashImpact = await getCurrentIpoOrderCashImpactDirect(excludeOrderId);
+    const freeCash = available - currentOrderCashImpact;
     const requiredCash = (status === 'PESAN' ? lotRequested : lotAllocated) * SHARES_PER_LOT * ipoPrice;
 
     if (freeCash < requiredCash) {

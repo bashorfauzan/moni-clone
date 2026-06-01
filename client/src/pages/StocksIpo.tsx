@@ -31,7 +31,7 @@ const formatThousands = (raw: string) => {
 const sanitizeAmount = (input: string) => input.replace(/\D/g, '');
 
 const STOCK_ACCOUNT_TYPES = ['RDN', 'Sekuritas'];
-const IPO_STATUS_OPTIONS: IpoOrderStatus[] = ['PESAN', 'JATAH', 'TIDAK_JATAH', 'JUAL'];
+const IPO_STATUS_OPTIONS: IpoOrderStatus[] = ['RENCANA', 'PESAN', 'JATAH', 'TIDAK_JATAH', 'JUAL'];
 
 const emptyForm = () => ({
     ownerId: '',
@@ -42,7 +42,7 @@ const emptyForm = () => ({
     lotRequested: '',
     lotAllocated: '',
     sellPrice: '',
-    status: 'PESAN' as IpoOrderStatus,
+    status: 'RENCANA' as IpoOrderStatus,
     orderedAt: new Date().toISOString().slice(0, 10),
     allottedAt: '',
     soldAt: '',
@@ -51,6 +51,7 @@ const emptyForm = () => ({
 
 // Status badge styling map
 const STATUS_STYLE: Record<IpoOrderStatus, { badge: string; dot: string; label: string; border: string }> = {
+    RENCANA:    { badge: 'bg-violet-50 text-violet-600 border-violet-100', dot: 'bg-violet-500', label: 'Rencana', border: 'border-l-violet-500' },
     PESAN:      { badge: 'bg-blue-50 text-blue-600 border-blue-100',    dot: 'bg-blue-500',    label: 'Pesan',       border: 'border-l-blue-500' },
     JATAH:      { badge: 'bg-emerald-50 text-emerald-600 border-emerald-100', dot: 'bg-emerald-500', label: 'Jatah',       border: 'border-l-emerald-500' },
     TIDAK_JATAH:{ badge: 'bg-rose-50 text-rose-500 border-rose-100',    dot: 'bg-rose-500',    label: 'Tidak Jatah', border: 'border-l-rose-400' },
@@ -77,6 +78,7 @@ const StocksIpo = () => {
     );
     const selectedAccount = stockAccounts.find((account) => account.id === form.accountId) || null;
     const selectedOwner = owners.find((owner) => owner.id === (selectedAccount?.ownerId || form.ownerId)) || null;
+    const isPlanStage = form.status === 'RENCANA';
     const isReservationStage = form.status === 'PESAN';
     const needsAllocationFields = form.status === 'JATAH' || form.status === 'JUAL';
     const needsSellFields = form.status === 'JUAL';
@@ -204,7 +206,7 @@ const StocksIpo = () => {
     const statusCount = IPO_STATUS_OPTIONS.reduce<Record<IpoOrderStatus, number>>((acc, status) => {
         acc[status] = orders.filter((row) => row.status === status).length;
         return acc;
-    }, { PESAN: 0, JATAH: 0, TIDAK_JATAH: 0, JUAL: 0 });
+    }, { RENCANA: 0, PESAN: 0, JATAH: 0, TIDAK_JATAH: 0, JUAL: 0 });
 
     if (loading) return <Spinner message="Memuat modul IPO..." />;
 
@@ -239,7 +241,7 @@ const StocksIpo = () => {
                 <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
                 <div className="pointer-events-none absolute top-1/2 right-1/3 h-40 w-40 rounded-full bg-amber-500/10 blur-3xl" />
 
-                <div className="relative z-10 grid grid-cols-4 divide-x divide-white/10">
+                <div className="relative z-10 grid grid-cols-2 gap-y-4 sm:grid-cols-5 sm:gap-y-0 sm:divide-x sm:divide-white/10">
                     {IPO_STATUS_OPTIONS.map((status, index) => (
                         <div
                             key={status}
@@ -464,7 +466,7 @@ const StocksIpo = () => {
                         <div className="flex items-start justify-between mb-5">
                             <div>
                                 <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                                    {editingId ? 'Edit Order IPO' : isReservationStage ? 'Reservasi IPO' : 'Update Status IPO'}
+                                    {editingId ? 'Edit Order IPO' : isPlanStage ? 'Rencana IPO' : isReservationStage ? 'Reservasi IPO' : 'Update Status IPO'}
                                 </h3>
                                 <p className="mt-0.5 text-xs text-slate-500">Isi detail pesanan dan status jatah IPO.</p>
                             </div>
@@ -480,7 +482,7 @@ const StocksIpo = () => {
                         <form onSubmit={handleSubmit} className="space-y-4">
                             {/* Info banner */}
                             <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-[11px] text-blue-700 font-medium leading-relaxed">
-                                Jika perlu tambah dana sekuritas, lakukan dari menu Home/Rekening. Halaman ini hanya untuk order IPO dan status jatahnya.
+                                Status <span className="font-bold">Rencana</span> bisa disimpan tanpa cek saldo dan belum mengurangi RDN. Saat dana sudah tersedia, ubah ke <span className="font-bold">Pesan</span> atau <span className="font-bold">Jatah</span> agar order mulai direalisasikan.
                             </div>
 
                             {/* Account + Owner */}
@@ -549,10 +551,10 @@ const StocksIpo = () => {
                                 </label>
                                 <div className="space-y-1.5">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 ml-1">Status Pemesanan</span>
-                                    <div className="flex gap-1.5 flex-wrap">
-                                        {IPO_STATUS_OPTIONS.map((status) => {
-                                            const s = STATUS_STYLE[status];
-                                            const isActive = form.status === status;
+                                <div className="flex gap-1.5 flex-wrap">
+                                    {IPO_STATUS_OPTIONS.map((status) => {
+                                        const s = STATUS_STYLE[status];
+                                        const isActive = form.status === status;
                                             return (
                                                 <button
                                                     key={status}
@@ -565,6 +567,13 @@ const StocksIpo = () => {
                                             );
                                         })}
                                     </div>
+                                    <p className="px-1 text-[11px] text-slate-500">
+                                        {isPlanStage
+                                            ? 'Order masih berupa rencana. Dana RDN belum dipakai.'
+                                            : isReservationStage
+                                                ? 'Dana akan dicadangkan dari RDN sesuai lot pesan.'
+                                                : 'Status ini akan merealisasikan order pada rekening RDN/sekuritas.'}
+                                    </p>
                                 </div>
                             </div>
 

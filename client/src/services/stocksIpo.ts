@@ -7,7 +7,7 @@ import {
     syncAccountBalancesDirect
 } from './stocksDirect';
 
-export type IpoOrderStatus = 'PESAN' | 'JATAH' | 'TIDAK_JATAH' | 'JUAL';
+export type IpoOrderStatus = 'RENCANA' | 'PESAN' | 'JATAH' | 'TIDAK_JATAH' | 'JUAL';
 export type IpoSide = 'BUY' | 'SELL';
 
 export type IpoTransaction = {
@@ -250,6 +250,7 @@ export const createIpoOrder = async (payload: IpoOrderPayload): Promise<IpoOrder
             accountId: order.accountId,
             ticker: order.ticker,
             ipoPrice: Number(order.ipoPrice),
+            lotRequested: Number(order.lotRequested || 0),
             lotAllocated: Number(order.lotAllocated || 0),
             sellPrice: order.sellPrice ? Number(order.sellPrice) : null,
             status: order.status,
@@ -335,6 +336,7 @@ export const updateIpoOrder = async (id: string, payload: Partial<IpoOrderPayloa
             accountId: updated.accountId,
             ticker: updated.ticker,
             ipoPrice: Number(updated.ipoPrice),
+            lotRequested: Number(updated.lotRequested || 0),
             lotAllocated: Number(updated.lotAllocated || 0),
             sellPrice: updated.sellPrice ? Number(updated.sellPrice) : null,
             status: updated.status,
@@ -416,6 +418,7 @@ const syncIpoTransactionsDirect = async (
         accountId: string;
         ticker: string;
         ipoPrice: number;
+        lotRequested: number;
         lotAllocated: number;
         sellPrice?: number | null;
         status: IpoOrderStatus;
@@ -429,11 +432,16 @@ const syncIpoTransactionsDirect = async (
 
     await sb.from('IpoTransaction').delete().eq('ipoOrderId', orderId);
 
-    if (payload.status === 'PESAN' || payload.status === 'TIDAK_JATAH' || Number(payload.lotAllocated || 0) <= 0) {
+    if (payload.status === 'RENCANA' || payload.status === 'TIDAK_JATAH') {
         return;
     }
 
-    const shares = Number(payload.lotAllocated) * SHARES_PER_LOT;
+    const buyLot = payload.status === 'PESAN' ? Number(payload.lotRequested || 0) : Number(payload.lotAllocated || 0);
+    if (buyLot <= 0) {
+        return;
+    }
+
+    const shares = buyLot * SHARES_PER_LOT;
     const buyGrossValue = shares * Number(payload.ipoPrice);
 
     const buyRow = {
@@ -443,21 +451,22 @@ const syncIpoTransactionsDirect = async (
         accountId: payload.accountId,
         ticker: payload.ticker.toUpperCase(),
         side: 'BUY',
-        lot: Number(payload.lotAllocated),
+        lot: buyLot,
         pricePerShare: Number(payload.ipoPrice),
         grossValue: buyGrossValue,
         feePercent: 0,
         feeAmount: 0,
         netValue: buyGrossValue,
-        tradedAt: payload.allottedAt || payload.orderedAt,
+        tradedAt: payload.status === 'PESAN' ? payload.orderedAt : (payload.allottedAt || payload.orderedAt),
         createdAt: now,
         updatedAt: now
     };
 
     const rows: any[] = [buyRow];
 
-    if (payload.status === 'JUAL' && payload.sellPrice) {
-        const sellGrossValue = shares * Number(payload.sellPrice);
+    if (payload.status === 'JUAL' && payload.sellPrice && Number(payload.lotAllocated || 0) > 0) {
+        const sellShares = Number(payload.lotAllocated) * SHARES_PER_LOT;
+        const sellGrossValue = sellShares * Number(payload.sellPrice);
         rows.push({
             id: crypto.randomUUID(),
             ipoOrderId: orderId,

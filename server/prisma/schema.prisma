@@ -46,6 +46,7 @@ enum StockTransactionSide {
 }
 
 enum IpoOrderStatus {
+  RENCANA
   PESAN
   JATAH
   TIDAK_JATAH

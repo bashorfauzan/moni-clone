@@ -96,6 +96,7 @@ const Stocks = () => {
     const [transactions, setTransactions] = useState<StockTransaction[]>([]);
     const [positions, setPositions] = useState<StockPosition[]>([]);
     const [liveQuotes, setLiveQuotes] = useState<Record<string, StockQuote>>({});
+    const [formLiveQuote, setFormLiveQuote] = useState<StockQuote | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [selectedOwnerId, setSelectedOwnerId] = useState('ALL');
@@ -160,6 +161,7 @@ const Stocks = () => {
     const selectedOwner = owners.find((owner) => owner.id === form.ownerId) || null;
     const enteredLot = Number(form.lot || 0);
     const enteredPricePerShare = Number(form.pricePerShare || 0);
+    const activeFormTicker = form.ticker.trim().toUpperCase();
     const tradePreview = useMemo(() => {
         if (!selectedAccount || enteredLot <= 0 || enteredPricePerShare <= 0) return null;
 
@@ -205,6 +207,16 @@ const Stocks = () => {
     const remainingLotsAfterSell = form.side === 'SELL' ? sellableLots - enteredLot : null;
     const isSellLotsEnough = form.side !== 'SELL' || enteredLot <= 0 || remainingLotsAfterSell === null || remainingLotsAfterSell >= 0;
     const isSubmitBlockedByLots = form.side === 'SELL' && enteredLot > 0 && !isSellLotsEnough;
+    const referenceQuotePrice = Number(
+        formLiveQuote?.price
+        || liveQuotes[activeFormTicker]?.price
+        || 0
+    );
+    const priceGapPercent = referenceQuotePrice > 0 && enteredPricePerShare > 0
+        ? ((enteredPricePerShare - referenceQuotePrice) / referenceQuotePrice) * 100
+        : null;
+    const isPriceFarFromLive = priceGapPercent !== null && Math.abs(priceGapPercent) >= 30;
+    const needsPriceConfirmation = priceGapPercent !== null && Math.abs(priceGapPercent) >= 60;
 
     const loadData = async () => {
         try {
@@ -334,8 +346,44 @@ const Stocks = () => {
         return () => window.clearTimeout(focusTarget);
     }, [isFormOpen]);
 
+    useEffect(() => {
+        if (!isFormOpen || activeFormTicker.length !== 4) {
+            setFormLiveQuote(null);
+            return;
+        }
+
+        const cachedQuote = liveQuotes[activeFormTicker];
+        if (cachedQuote) {
+            setFormLiveQuote(cachedQuote);
+            return;
+        }
+
+        let cancelled = false;
+        const timer = window.setTimeout(async () => {
+            try {
+                const quotes = await fetchStockQuotes([activeFormTicker]);
+                if (cancelled) return;
+                const nextQuote = quotes[activeFormTicker] || null;
+                setFormLiveQuote(nextQuote);
+                if (nextQuote) {
+                    setLiveQuotes((current) => ({ ...current, [activeFormTicker]: nextQuote }));
+                }
+            } catch {
+                if (!cancelled) {
+                    setFormLiveQuote(null);
+                }
+            }
+        }, 250);
+
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timer);
+        };
+    }, [activeFormTicker, isFormOpen, liveQuotes]);
+
     const resetForm = () => {
         setEditingId(null);
+        setFormLiveQuote(null);
         setForm({
             ...emptyForm(),
             ownerId: formStockAccounts[0]
@@ -353,6 +401,16 @@ const Stocks = () => {
         try {
             if (form.side === 'SELL' && Number(form.lot || 0) > Math.max(0, sellableLots)) {
                 throw new Error(`Lot saham tidak cukup untuk dijual (tersedia ${Math.max(0, sellableLots).toLocaleString('id-ID')} lot)`);
+            }
+
+            if (needsPriceConfirmation && priceGapPercent !== null && referenceQuotePrice > 0) {
+                const confirmed = window.confirm(
+                    `Harga input ${formatCurrency(enteredPricePerShare)} berbeda ${formatPercent(priceGapPercent)} dari harga live ${formatCurrency(referenceQuotePrice)}. Tetap simpan transaksi ini?`
+                );
+                if (!confirmed) {
+                    setSaving(false);
+                    return;
+                }
             }
 
             const payload = {
@@ -563,7 +621,7 @@ const Stocks = () => {
         <div className="p-4 md:p-8 pb-32 mx-auto w-full max-w-6xl space-y-6">
 
             {/* Page Header */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                 <div>
                     <Link
                         to="/investment"
@@ -573,22 +631,24 @@ const Stocks = () => {
                     </Link>
                     <h1 className="mt-2 text-2xl font-black text-slate-900 tracking-tight">Portofolio Saham</h1>
                 </div>
-                <button
-                                type="button"
-                                onClick={handleDownloadHistory}
-                                className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-white transition-colors hover:bg-blue-500"
-                            >
-                                <Download size={12} /> 
-                            </button>
-                <button
-                    onClick={() => {
-                        resetForm();
-                        setIsFormOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 h-12 text-xs font-bold uppercase tracking-widest text-white hover:bg-blue-500 transition-all hover:-translate-y-0.5 active:scale-95 shadow-lg shadow-blue-500/25 shrink-0"
-                >
-                    <Plus size={16} /> Tambah Transaksi
-                </button>
+                <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
+                    <button
+                        type="button"
+                        onClick={handleDownloadHistory}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 h-11 text-[11px] font-bold uppercase tracking-widest text-slate-700 transition-all hover:-translate-y-0.5 hover:border-blue-200 hover:text-blue-600 active:scale-[0.98] shadow-sm"
+                    >
+                        <Download size={14} /> Download History
+                    </button>
+                    <button
+                        onClick={() => {
+                            resetForm();
+                            setIsFormOpen(true);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 h-12 text-xs font-bold uppercase tracking-widest text-white hover:bg-blue-500 transition-all hover:-translate-y-0.5 active:scale-95 shadow-lg shadow-blue-500/25 shrink-0"
+                    >
+                        <Plus size={16} /> Tambah Transaksi
+                    </button>
+                </div>
             </div>
 
             {/* No account warning */}
@@ -599,34 +659,28 @@ const Stocks = () => {
                 </div>
             )}
 
-            {/* Hero Stats Card */}
-            <div className="relative overflow-hidden rounded-[28px] bg-slate-900 p-6 sm:p-8 shadow-2xl shadow-slate-900/20">
-                <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-500/20 blur-3xl" />
-                <div className="pointer-events-none absolute -bottom-16 -left-16 h-56 w-56 rounded-full bg-emerald-500/15 blur-3xl" />
-                <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
-
-                <div className="relative z-10 grid grid-cols-3 divide-x divide-white/10">
-                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6 pl-0">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Posisi Aktif</p>
-                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
-                            {totalOpenLots.toLocaleString('id-ID')}
-                        </p>
-                        <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">lot</p>
-                    </div>
-                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Realized PnL</p>
-                        <p className={`text-sm sm:text-2xl font-black tracking-tight leading-tight break-words ${totalRealizedPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {formatCurrency(totalRealizedPnl)}
-                        </p>
-                        <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">total</p>
-                    </div>
-                    <div className="flex flex-col justify-center min-w-0 px-2 sm:px-6 pr-0">
-                        <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-white/50 mb-1.5 truncate">Dipantau</p>
-                        <p className="text-xl sm:text-3xl font-black text-white tracking-tight leading-none truncate">
-                            {activePositions.length}
-                        </p>
-                        <p className="mt-1 text-[10px] sm:text-xs font-bold text-white/40">emiten</p>
-                    </div>
+            {/* Stats Cards */}
+            <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Posisi Aktif</p>
+                    <p className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                        {totalOpenLots.toLocaleString('id-ID')}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">lot terbuka</p>
+                </div>
+                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Realized PnL</p>
+                    <p className={`mt-2 text-lg sm:text-2xl font-black tracking-tight break-words ${totalRealizedPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {formatCurrency(totalRealizedPnl)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">akumulasi hasil jual</p>
+                </div>
+                <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-4 shadow-sm">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">Dipantau</p>
+                    <p className="mt-2 text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                        {activePositions.length}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-500">emiten aktif</p>
                 </div>
             </div>
 
@@ -1142,6 +1196,12 @@ const Stocks = () => {
                                         value={formatThousands(form.pricePerShare)}
                                         onChange={(e) => setForm((current) => ({ ...current, pricePerShare: sanitizeAmount(e.target.value) }))}
                                     />
+                                    {referenceQuotePrice > 0 ? (
+                                        <p className={`px-1 text-[11px] font-medium ${isPriceFarFromLive ? 'text-amber-700' : 'text-slate-500'}`}>
+                                            Harga live sekitar {formatCurrency(referenceQuotePrice)}
+                                            {priceGapPercent !== null ? ` • selisih ${formatPercent(priceGapPercent)}` : ''}
+                                        </p>
+                                    ) : null}
                                 </label>
                             </div>
 
@@ -1210,6 +1270,12 @@ const Stocks = () => {
                                             Saldo yang dipakai adalah milik {selectedOwner.name} pada akun ini.
                                         </p>
                                     )}
+                                    {isPriceFarFromLive && priceGapPercent !== null && referenceQuotePrice > 0 ? (
+                                        <p className="mt-2 text-[11px] font-semibold text-amber-700">
+                                            Harga transaksi cukup jauh dari harga live. Cek lagi agar tidak salah input.
+                                            {needsPriceConfirmation ? ' Anda akan diminta konfirmasi tambahan saat menyimpan.' : ''}
+                                        </p>
+                                    ) : null}
                                 </div>
                             )}
 
