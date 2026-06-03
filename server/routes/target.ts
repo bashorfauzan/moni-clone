@@ -25,6 +25,20 @@ const dueDateFromMonthCount = (monthCount: number, baseDate = new Date()) => {
     return dueDate;
 };
 
+const parseStartMonth = (value?: string | null) => {
+    if (!value) return null;
+    const match = /^(\d{4})-(\d{2})$/.exec(String(value).trim());
+    if (!match) return null;
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    if (!Number.isInteger(year) || !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+        return null;
+    }
+
+    const date = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const diffInCalendarMonthsInclusive = (startValue?: Date | null, endValue?: Date | null) => {
     if (!startValue || !endValue) return null;
     const start = new Date(startValue);
@@ -60,7 +74,7 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { title, notes, totalAmount, period, ownerId, dueDate, monthCount } = req.body;
+    const { title, notes, totalAmount, period, ownerId, dueDate, monthCount, startMonth, kind } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -75,6 +89,8 @@ router.post('/', async (req, res) => {
     const parsedPeriod = parsedMonthCount
         ? monthCountToPeriod(parsedMonthCount)
         : (Object.values(TargetPeriod).includes(period as TargetPeriod) ? (period as TargetPeriod) : null);
+    const startDate = parseStartMonth(startMonth) || new Date();
+    const parsedKind = kind === 'BILL' ? 'BILL' : 'SAVING';
 
     if (!parsedPeriod) {
         return res.status(400).json({ error: 'Jumlah bulan target tidak valid' });
@@ -96,13 +112,15 @@ router.post('/', async (req, res) => {
             data: {
                 title: String(title),
                 notes: notes ? String(notes).trim() : null,
+                kind: parsedKind,
                 totalAmount: parsedAmount,
                 remainingMonths: parsedMonthCount || 1,
                 remainingAmount: parsedAmount * (parsedMonthCount || 1),
                 period: parsedPeriod,
                 ownerId: selectedOwnerId,
+                createdAt: startDate,
                 dueDate: parsedMonthCount
-                    ? dueDateFromMonthCount(parsedMonthCount)
+                    ? dueDateFromMonthCount(parsedMonthCount, startDate)
                     : (dueDate ? new Date(dueDate) : null)
             }
         });
@@ -165,7 +183,7 @@ router.post('/:id/mark-progress', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-    const { title, notes, totalAmount, period, dueDate, monthCount } = req.body;
+    const { title, notes, totalAmount, period, dueDate, monthCount, startMonth, kind } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -186,6 +204,7 @@ router.put('/:id', async (req, res) => {
         const nextPeriod = parsedMonthCount
             ? monthCountToPeriod(parsedMonthCount)
             : (Object.values(TargetPeriod).includes(period as TargetPeriod) ? (period as TargetPeriod) : null);
+        const nextKind = kind === 'BILL' ? 'BILL' : 'SAVING';
 
         if (!nextPeriod) {
             return res.status(400).json({ error: 'Jumlah bulan target tidak valid' });
@@ -194,19 +213,22 @@ router.put('/:id', async (req, res) => {
         const currentTotalMonths = diffInCalendarMonthsInclusive(current.createdAt, current.dueDate) || current.remainingMonths || 1;
         const completedMonths = Math.max(0, currentTotalMonths - current.remainingMonths);
         const nextRemainingMonths = Math.max(0, (parsedMonthCount || currentTotalMonths) - completedMonths);
+        const nextStartDate = parseStartMonth(startMonth) || current.createdAt;
 
         const updated = await prisma.target.update({
             where: { id: req.params.id },
             data: {
                 title: String(title),
                 notes: notes ? String(notes).trim() : null,
+                kind: nextKind,
                 totalAmount: parsedAmount,
                 remainingMonths: nextRemainingMonths,
                 remainingAmount: parsedAmount * nextRemainingMonths,
                 isActive: nextRemainingMonths > 0,
                 period: nextPeriod,
+                createdAt: nextStartDate,
                 dueDate: parsedMonthCount
-                    ? dueDateFromMonthCount(parsedMonthCount, current.createdAt)
+                    ? dueDateFromMonthCount(parsedMonthCount, nextStartDate)
                     : (dueDate ? new Date(dueDate) : null)
             }
         });

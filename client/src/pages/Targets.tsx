@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, X, Save, Pencil } from 'lucide-react';
+import { Plus, Trash2, X, Save, Pencil, Download } from 'lucide-react';
 import { fetchMasterMeta } from '../services/masterData';
 import { createTarget, deleteTarget, fetchTargets, markTargetAsTransferred, type TargetItem, updateTarget } from '../services/targets';
 import Spinner from '../components/Spinner';
@@ -7,6 +7,7 @@ import { getErrorMessage } from '../services/errors';
 import { useSecurity } from '../context/SecurityContext';
 import { announceSuccess } from '../lib/feedback';
 import { formatCurrency, formatThousands, sanitizeAmount } from '../lib/format';
+import { downloadBackupBlob } from '../services/backup';
 
 const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: string | null) => {
     if (!startValue || !endValue) return null;
@@ -20,6 +21,11 @@ const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: st
 const isSameCalendarMonth = (left: Date, right: Date) =>
     left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth();
 
+const currentMonthInputValue = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+};
+
 const Targets = () => {
     const { verifySecurity } = useSecurity();
     const [data, setData] = useState<any>({ accounts: [], owners: [] });
@@ -27,9 +33,17 @@ const Targets = () => {
     const [submitting, setSubmitting] = useState(false);
     const [markingTargetId, setMarkingTargetId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [exporting, setExporting] = useState(false);
     const [isTargetModalOpen, setIsTargetModalOpen] = useState(false);
     const [editingTargetId, setEditingTargetId] = useState<string | null>(null);
-    const [form, setForm] = useState({ title: '', notes: '', totalAmount: '', monthCount: '' });
+    const [form, setForm] = useState({
+        title: '',
+        notes: '',
+        kind: 'SAVING' as 'SAVING' | 'BILL',
+        totalAmount: '',
+        monthCount: '',
+        startMonth: currentMonthInputValue()
+    });
 
     const loadPageData = async () => {
         const [metaRes, targetRes] = await Promise.all([
@@ -59,7 +73,14 @@ const Targets = () => {
     };
 
     const resetTargetForm = () => {
-        setForm({ title: '', notes: '', totalAmount: '', monthCount: '' });
+        setForm({
+            title: '',
+            notes: '',
+            kind: 'SAVING',
+            totalAmount: '',
+            monthCount: '',
+            startMonth: currentMonthInputValue()
+        });
         setEditingTargetId(null);
     };
 
@@ -73,8 +94,10 @@ const Targets = () => {
         setForm({
             title: target.title || '',
             notes: target.notes || '',
+            kind: target.kind || 'SAVING',
             totalAmount: String(target.totalAmount || ''),
             monthCount: String(diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 12),
+            startMonth: target.createdAt ? String(target.createdAt).slice(0, 7) : currentMonthInputValue(),
         });
         setIsTargetModalOpen(true);
     };
@@ -89,14 +112,17 @@ const Targets = () => {
         if (!form.title.trim()) { alert('Nama target wajib diisi'); return; }
         if (!form.totalAmount || Number(form.totalAmount) <= 0) { alert('Nominal target harus lebih dari 0'); return; }
         if (!form.monthCount || Number(form.monthCount) <= 0) { alert('Jumlah bulan harus lebih dari 0'); return; }
+        if (!form.startMonth) { alert('Bulan mulai wajib dipilih'); return; }
 
         setSubmitting(true);
         try {
             const payload = {
                 title: form.title.trim(),
                 notes: form.notes.trim(),
+                kind: form.kind,
                 totalAmount: Number(form.totalAmount),
                 monthCount: Number(form.monthCount),
+                startMonth: form.startMonth,
                 ownerId: data.owners[0]?.id || undefined
             };
             if (editingTargetId) {
@@ -145,6 +171,65 @@ const Targets = () => {
         }
     };
 
+    const handleExportTargets = async () => {
+        setExporting(true);
+        try {
+            const XLSX = await import('xlsx');
+            const rows = targets.map((target) => {
+                const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+                const monthsLeft = Math.max(0, target.remainingMonths);
+                const totalTargetAmount = totalMonths * target.totalAmount;
+                const paidAmount = Math.max(0, totalTargetAmount - target.remainingAmount);
+                const paidMonths = target.totalAmount > 0
+                    ? Math.max(0, Math.min(totalMonths, Math.round(paidAmount / target.totalAmount)))
+                    : 0;
+                const progressPercent = totalTargetAmount <= 0 ? 100 : Math.min(100, (paidAmount / totalTargetAmount) * 100);
+                const startMonthLabel = target.createdAt
+                    ? new Date(target.createdAt).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                    : '-';
+
+                return {
+                    Target: target.title,
+                    Catatan: target.notes || '-',
+                    Jenis: target.kind === 'BILL' ? 'Tagihan' : 'Tabungan',
+                    Pemilik: target.owner?.name || data.owners.find((owner: any) => owner.id === target.ownerId)?.name || '-',
+                    'Mulai Bulan': startMonthLabel,
+                    'Nominal Bulanan (Rp)': target.totalAmount,
+                    'Total Bulan': totalMonths,
+                    'Bulan Terbayar': paidMonths,
+                    'Bulan Sisa': monthsLeft,
+                    'Sudah Dibayar (Rp)': paidAmount,
+                    'Sisa Kewajiban (Rp)': target.remainingAmount,
+                    Progress: `${Math.round(progressPercent)}%`,
+                    Status: target.isActive ? 'Aktif' : 'Selesai',
+                    'Terakhir Ditandai': target.lastContributionAt
+                        ? new Date(target.lastContributionAt).toLocaleDateString('id-ID')
+                        : '-',
+                    'Dibuat': target.createdAt
+                        ? new Date(target.createdAt).toLocaleDateString('id-ID')
+                        : '-',
+                    'Jatuh Tempo': target.dueDate
+                        ? new Date(target.dueDate).toLocaleDateString('id-ID')
+                        : '-'
+                };
+            });
+
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Target Likuiditas');
+            const output = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+            const blob = new Blob([output], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            const dateStr = new Date().toISOString().slice(0, 10);
+            downloadBackupBlob(blob, `Target Likuiditas ${dateStr}.xlsx`);
+            announceSuccess('Export target berhasil dibuat.');
+        } catch (error) {
+            alert(getErrorMessage(error, 'Gagal export target ke Excel'));
+        } finally {
+            setExporting(false);
+        }
+    };
+
     if (loading) return <Spinner message="Menganalisis Likuiditas..." />;
 
     const now = new Date();
@@ -161,6 +246,8 @@ const Targets = () => {
     const surplusThisMonth = Math.max(0, transferredThisMonth - monthlyTargetAmount);
     const isSafe = monthlyTargetAmount > 0 && remainingThisMonth === 0;
     const progressBase = monthlyTargetAmount <= 0 ? 100 : Math.min(100, (transferredThisMonth / monthlyTargetAmount) * 100);
+    const activeTargets = targets.filter((target) => target.isActive || target.kind !== 'BILL');
+    const archivedBillTargets = targets.filter((target) => !target.isActive && target.kind === 'BILL');
 
     return (
         <div className="p-4 md:p-8 space-y-6 md:space-y-8 pb-32 mx-auto w-full max-w-6xl">
@@ -168,6 +255,16 @@ const Targets = () => {
                 <div className="min-w-0">
                     <div className="flex items-center gap-3">
                         <h1 className="text-2xl font-bold italic text-slate-900">Manajemen Likuiditas</h1>
+                        <button
+                            type="button"
+                            onClick={() => void handleExportTargets()}
+                            disabled={exporting || targets.length === 0}
+                            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform hover:border-blue-200 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
+                            aria-label="Export target ke Excel"
+                            title="Export target ke Excel"
+                        >
+                            <Download size={18} />
+                        </button>
                         <button
                             type="button"
                             onClick={openAddTargetModal}
@@ -232,11 +329,12 @@ const Targets = () => {
                 )}
 
                 <div className="space-y-4">
-                    {targets.map((target) => {
+                    {activeTargets.map((target) => {
                         const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
                         const monthsLeft = Math.max(0, target.remainingMonths);
-                        const paidAmount = Math.max(0, (totalMonths - monthsLeft) * target.totalAmount);
-                        const progressPercent = totalMonths <= 0 ? 100 : Math.min(100, ((totalMonths - monthsLeft) / totalMonths) * 100);
+                        const totalTargetAmount = totalMonths * target.totalAmount;
+                        const paidAmount = Math.max(0, totalTargetAmount - target.remainingAmount);
+                        const progressPercent = totalTargetAmount <= 0 ? 100 : Math.min(100, (paidAmount / totalTargetAmount) * 100);
                         const lastContributionAt = target.lastContributionAt ? new Date(target.lastContributionAt) : null;
                         const alreadyMarkedThisMonth = Boolean(
                             lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
@@ -262,6 +360,9 @@ const Targets = () => {
                                             <h4 className="text-sm font-bold text-slate-900 truncate">
                                                 {target.title}
                                             </h4>
+                                            <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${target.kind === 'BILL' ? 'bg-amber-50 text-amber-700' : 'bg-sky-50 text-sky-700'}`}>
+                                                {target.kind === 'BILL' ? 'Tagihan' : 'Tabungan'}
+                                            </span>
                                             {!target.isActive && (
                                                 <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-600">
                                                     Selesai
@@ -270,6 +371,9 @@ const Targets = () => {
                                         </div>
                                         <p className="mt-1 text-xs text-slate-500 truncate">
                                             {formatCurrency(target.totalAmount)} / bln <span className="text-slate-300 mx-1">•</span> {monthsLeft} bln tersisa
+                                        </p>
+                                        <p className="mt-1 text-[11px] text-slate-400 truncate">
+                                            Mulai {target.createdAt ? new Date(target.createdAt).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-'}
                                         </p>
                                         {target.notes && (
                                             <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
@@ -333,6 +437,55 @@ const Targets = () => {
                         );
                     })}
                 </div>
+
+                {archivedBillTargets.length > 0 && (
+                    <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between gap-3">
+                            <h3 className="text-sm font-bold text-slate-900">Riwayat Tagihan Selesai</h3>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                {archivedBillTargets.length} item
+                            </span>
+                        </div>
+                        <div className="space-y-3">
+                            {archivedBillTargets.map((target) => {
+                                const totalMonths = diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 1;
+                                const totalTargetAmount = totalMonths * target.totalAmount;
+                                const paidAmount = Math.max(0, totalTargetAmount - target.remainingAmount);
+
+                                return (
+                                    <div
+                                        key={`archived-${target.id}`}
+                                        className="rounded-2xl border border-slate-100 bg-slate-50/80 p-4 shadow-sm"
+                                    >
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-sm font-bold text-slate-900 truncate">{target.title}</h4>
+                                                    <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-amber-700">
+                                                        Tagihan
+                                                    </span>
+                                                    <span className="shrink-0 rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-600">
+                                                        Selesai
+                                                    </span>
+                                                </div>
+                                                <p className="mt-1 text-xs text-slate-500 truncate">
+                                                    {formatCurrency(target.totalAmount)} / bln <span className="text-slate-300 mx-1">•</span> lunas
+                                                </p>
+                                                <p className="mt-1 text-[11px] text-slate-400 truncate">
+                                                    Mulai {target.createdAt ? new Date(target.createdAt).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-'}
+                                                </p>
+                                            </div>
+                                            <div className="text-right shrink-0">
+                                                <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Terkumpul</p>
+                                                <p className="mt-0.5 text-sm font-bold text-emerald-600">{formatCurrency(paidAmount)}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
             </section>
 
             {/* ─── Add / Edit Modal (unchanged) ─── */}
@@ -368,6 +521,18 @@ const Targets = () => {
                                 />
                             </div>
                             <div className="space-y-1.5">
+                                <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Jenis</label>
+                                <select
+                                    className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                    value={form.kind}
+                                    onChange={(e) => setForm((f) => ({ ...f, kind: e.target.value as 'SAVING' | 'BILL' }))}
+                                >
+                                    <option value="SAVING">Tabungan</option>
+                                    <option value="BILL">Tagihan</option>
+                                </select>
+                                <p className="px-1 text-[11px] text-slate-400">Tagihan yang sudah lunas akan dipindah ke riwayat agar daftar utama tetap rapi.</p>
+                            </div>
+                            <div className="space-y-1.5">
                                 <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Nominal Target</label>
                                 <input
                                     required
@@ -390,7 +555,18 @@ const Targets = () => {
                                     value={formatThousands(form.monthCount)}
                                     onChange={(e) => setForm((f) => ({ ...f, monthCount: sanitizeAmount(e.target.value) }))}
                                 />
-                                <p className="px-1 text-[11px] text-slate-400">Dihitung mulai bulan ini hingga jumlah bulan yang ditentukan.</p>
+                                <p className="px-1 text-[11px] text-slate-400">Total tenor target dari bulan mulai yang Anda pilih.</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Mulai Bulan</label>
+                                <input
+                                    required
+                                    type="month"
+                                    className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                    value={form.startMonth}
+                                    onChange={(e) => setForm((f) => ({ ...f, startMonth: e.target.value }))}
+                                />
+                                <p className="px-1 text-[11px] text-slate-400">Pilih bulan awal jika target ini sudah berjalan dari tahun lalu atau bulan sebelumnya.</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Catatan</label>

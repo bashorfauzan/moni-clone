@@ -428,6 +428,54 @@ const hasSpecificTransactionContext = (text: string) => {
     ]);
 };
 
+const isBankHint = (hint?: string | null) =>
+    Boolean(hint && ['bca', 'bsya', 'bni', 'bri', 'mandiri', 'bsi', 'wondr', 'livin', 'seabank', 'jago', 'blu', 'btpn', 'jenius'].includes(hint));
+
+const isBankIncomingAccountNotification = (sourceApp: string, text: string) => {
+    const sourceHint = detectSourceAppHint(sourceApp);
+    if (!isBankHint(sourceHint)) return false;
+
+    return containsAny(text, [
+        'masuk ke rekening',
+        'dana masuk ke rekening',
+        'rekening ',
+        'kredit ke rekening',
+        'transaksi diterima'
+    ]) && containsIncomeSignal(text);
+};
+
+const isTopUpRelayNotification = (sourceApp: string, text: string) => {
+    const sourceHint = detectSourceAppHint(sourceApp);
+    const relayHint = sourceHint === 'flip' || isEWalletHint(sourceHint);
+    return relayHint && containsAny(text, [
+        'top up',
+        'topup',
+        'pengisian saldo',
+        'isi saldo',
+        'berhasil top up',
+        'top up berhasil'
+    ]);
+};
+
+const isCrossSourceTopUpDuplicatePair = ({
+    sourceApp,
+    text,
+    existingSourceApp,
+    existingText
+}: {
+    sourceApp: string;
+    text: string;
+    existingSourceApp: string;
+    existingText: string;
+}) => {
+    const currentIsBankIncoming = isBankIncomingAccountNotification(sourceApp, text);
+    const existingIsBankIncoming = isBankIncomingAccountNotification(existingSourceApp, existingText);
+    const currentIsRelay = isTopUpRelayNotification(sourceApp, text);
+    const existingIsRelay = isTopUpRelayNotification(existingSourceApp, existingText);
+
+    return (currentIsBankIncoming && existingIsRelay) || (existingIsBankIncoming && currentIsRelay);
+};
+
 const isLikelyDuplicateNotificationPair = ({
     sourceApp,
     title,
@@ -451,14 +499,24 @@ const isLikelyDuplicateNotificationPair = ({
 }) => {
     const currentType = normalizeTypeForDuplicate(parsedType);
     const existingType = normalizeTypeForDuplicate(existing.parsedType);
-    if (!currentType || currentType !== existingType) return false;
+    if (!currentType) return false;
 
     const currentSourceKey = getDuplicateSourceKey(sourceApp);
     const existingSourceKey = getDuplicateSourceKey(existing.sourceApp);
-    if (!currentSourceKey || currentSourceKey !== existingSourceKey) return false;
 
     const currentCombined = normalizeText(`${title} ${senderName} ${text}`.trim());
     const existingCombined = normalizeText(`${existing.title || ''} ${existing.senderName || ''} ${existing.messageText}`.trim());
+    const allowsCrossSourceTopUpDuplicate = isCrossSourceTopUpDuplicatePair({
+        sourceApp,
+        text: currentCombined,
+        existingSourceApp: existing.sourceApp,
+        existingText: existingCombined
+    });
+
+    if (!allowsCrossSourceTopUpDuplicate) {
+        if (!existingType || currentType !== existingType) return false;
+        if (!currentSourceKey || currentSourceKey !== existingSourceKey) return false;
+    }
 
     if (currentCombined === existingCombined) return true;
 

@@ -33,6 +33,11 @@ enum TargetPeriod {
   FIVE_YEAR
 }
 
+enum TargetKind {
+  SAVING
+  BILL
+}
+
 enum NotificationParseStatus {
   PENDING
   PARSED
@@ -161,6 +166,7 @@ model Target {
   id              String       @id @default(uuid())
   title           String
   notes           String?
+  kind            TargetKind   @default(SAVING)
   totalAmount     Float
   remainingAmount Float
   remainingMonths Int

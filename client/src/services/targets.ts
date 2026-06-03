@@ -7,6 +7,7 @@ export type TargetItem = {
     id: string;
     title: string;
     notes?: string | null;
+    kind: 'SAVING' | 'BILL';
     totalAmount: number;
     remainingAmount: number;
     remainingMonths: number;
@@ -32,8 +33,10 @@ export type TargetContributionResult = {
 export type TargetWritePayload = {
     title: string;
     notes?: string;
+    kind: 'SAVING' | 'BILL';
     totalAmount: number;
     monthCount: number;
+    startMonth?: string;
     ownerId?: string;
 };
 
@@ -66,6 +69,20 @@ const dueDateFromMonthCount = (monthCount: number, baseDate = new Date()) => {
     const dueDate = new Date(baseDate.getFullYear(), baseDate.getMonth() + monthCount, 0);
     dueDate.setHours(23, 59, 59, 999);
     return dueDate.toISOString();
+};
+
+const parseStartMonth = (value?: string | null) => {
+    if (!value) return null;
+    const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
+    if (!match) return null;
+    const year = Number(match[1]);
+    const monthIndex = Number(match[2]) - 1;
+    if (!Number.isInteger(year) || !Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+        return null;
+    }
+
+    const date = new Date(year, monthIndex, 1, 0, 0, 0, 0);
+    return Number.isNaN(date.getTime()) ? null : date;
 };
 
 const diffInCalendarMonthsInclusive = (startValue?: string | null, endValue?: string | null) => {
@@ -126,6 +143,7 @@ const normalizeTarget = (row: any): TargetItem => ({
     id: row.id,
     title: row.title,
     notes: row.notes ?? null,
+    kind: row.kind === 'BILL' ? 'BILL' : 'SAVING',
     totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
     remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0),
     remainingMonths: Number(row.remainingMonths ?? row.remaining_months ?? 0),
@@ -181,6 +199,7 @@ export const fetchTargets = async (): Promise<TargetsResponse> => {
 export const createTarget = async (payload: TargetWritePayload): Promise<TargetItem> => {
     const parsedMonthCount = parseMonthCount(payload.monthCount);
     if (!parsedMonthCount) throw new Error('Jumlah bulan target tidak valid');
+    const startDate = parseStartMonth(payload.startMonth) || new Date();
 
     if (useDirectSupabaseData && supabase) {
         const timestamp = new Date().toISOString();
@@ -191,14 +210,15 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
                     id: crypto.randomUUID(),
                     title: payload.title.trim(),
                     notes: payload.notes?.trim() || null,
+                    kind: payload.kind,
                     totalAmount: payload.totalAmount,
                     remainingMonths: parsedMonthCount,
                     remainingAmount: payload.totalAmount * parsedMonthCount,
                     period: monthCountToPeriod(parsedMonthCount),
                     ownerId: payload.ownerId,
-                    dueDate: dueDateFromMonthCount(parsedMonthCount),
+                    dueDate: dueDateFromMonthCount(parsedMonthCount, startDate),
                     isActive: true,
-                    createdAt: timestamp,
+                    createdAt: startDate.toISOString(),
                     updatedAt: timestamp
                 })
                 .select(targetSelectFields(includeLastContributionAt))
@@ -234,6 +254,8 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
         const currentTotalMonths = diffInCalendarMonthsInclusive(current.createdAt, current.dueDate) || Number(current.remainingMonths || 1);
         const completedMonths = Math.max(0, currentTotalMonths - Number(current.remainingMonths || 0));
         const nextRemainingMonths = Math.max(0, parsedMonthCount - completedMonths);
+        const nextStartDate = parseStartMonth(payload.startMonth)
+            || (current.createdAt ? new Date(current.createdAt) : new Date());
 
         const { data, error } = await withTargetSelectFallback(async (includeLastContributionAt) =>
             sb
@@ -241,12 +263,14 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
                 .update({
                     title: payload.title.trim(),
                     notes: payload.notes?.trim() || null,
+                    kind: payload.kind,
                     totalAmount: payload.totalAmount,
                     remainingMonths: nextRemainingMonths,
                     remainingAmount: payload.totalAmount * nextRemainingMonths,
                     isActive: nextRemainingMonths > 0,
                     period: monthCountToPeriod(parsedMonthCount),
-                    dueDate: dueDateFromMonthCount(parsedMonthCount, current.createdAt ? new Date(current.createdAt) : new Date()),
+                    createdAt: nextStartDate.toISOString(),
+                    dueDate: dueDateFromMonthCount(parsedMonthCount, nextStartDate),
                     updatedAt: new Date().toISOString()
                 })
                 .eq('id', id)
