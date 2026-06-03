@@ -167,6 +167,8 @@ model Target {
   title           String
   notes           String?
   kind            TargetKind   @default(SAVING)
+  sourceAccountId String?
+  destinationAccountId String?
   totalAmount     Float
   remainingAmount Float
   remainingMonths Int

@@ -1,0 +1,3 @@
+ALTER TABLE "Target"
+ADD COLUMN IF NOT EXISTS "sourceAccountId" TEXT,
+ADD COLUMN IF NOT EXISTS "destinationAccountId" TEXT;

@@ -8,6 +8,8 @@ export type TargetItem = {
     title: string;
     notes?: string | null;
     kind: 'SAVING' | 'BILL';
+    sourceAccountId?: string | null;
+    destinationAccountId?: string | null;
     totalAmount: number;
     remainingAmount: number;
     remainingMonths: number;
@@ -34,6 +36,8 @@ export type TargetWritePayload = {
     title: string;
     notes?: string;
     kind: 'SAVING' | 'BILL';
+    sourceAccountId?: string;
+    destinationAccountId?: string;
     totalAmount: number;
     monthCount: number;
     startMonth?: string;
@@ -107,6 +111,8 @@ const targetSelectFields = (includeLastContributionAt: boolean) => `
     period,
     isActive,
     ${includeLastContributionAt ? 'lastContributionAt,' : ''}
+    sourceAccountId,
+    destinationAccountId,
     dueDate,
     createdAt,
     ownerId,
@@ -144,6 +150,8 @@ const normalizeTarget = (row: any): TargetItem => ({
     title: row.title,
     notes: row.notes ?? null,
     kind: row.kind === 'BILL' ? 'BILL' : 'SAVING',
+    sourceAccountId: row.sourceAccountId ?? row.source_account_id ?? null,
+    destinationAccountId: row.destinationAccountId ?? row.destination_account_id ?? null,
     totalAmount: Number(row.totalAmount ?? row.total_amount ?? 0),
     remainingAmount: Number(row.remainingAmount ?? row.remaining_amount ?? 0),
     remainingMonths: Number(row.remainingMonths ?? row.remaining_months ?? 0),
@@ -211,6 +219,8 @@ export const createTarget = async (payload: TargetWritePayload): Promise<TargetI
                     title: payload.title.trim(),
                     notes: payload.notes?.trim() || null,
                     kind: payload.kind,
+                    sourceAccountId: payload.sourceAccountId || null,
+                    destinationAccountId: payload.destinationAccountId || null,
                     totalAmount: payload.totalAmount,
                     remainingMonths: parsedMonthCount,
                     remainingAmount: payload.totalAmount * parsedMonthCount,
@@ -264,6 +274,8 @@ export const updateTarget = async (id: string, payload: TargetWritePayload): Pro
                     title: payload.title.trim(),
                     notes: payload.notes?.trim() || null,
                     kind: payload.kind,
+                    sourceAccountId: payload.sourceAccountId || null,
+                    destinationAccountId: payload.destinationAccountId || null,
                     totalAmount: payload.totalAmount,
                     remainingMonths: nextRemainingMonths,
                     remainingAmount: payload.totalAmount * nextRemainingMonths,
@@ -319,7 +331,6 @@ export const markTargetAsTransferred = async (id: string): Promise<TargetContrib
         if (!normalizedCurrent.isActive || normalizedCurrent.remainingMonths <= 0) {
             throw new Error('Target ini sudah selesai');
         }
-
         const now = new Date();
         const lastContributionAt = normalizedCurrent.lastContributionAt ? new Date(normalizedCurrent.lastContributionAt) : null;
         const alreadyMarkedThisMonth = lastContributionAt

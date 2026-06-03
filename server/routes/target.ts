@@ -74,7 +74,7 @@ router.get('/', async (_req, res) => {
 });
 
 router.post('/', async (req, res) => {
-    const { title, notes, totalAmount, period, ownerId, dueDate, monthCount, startMonth, kind } = req.body;
+    const { title, notes, totalAmount, period, ownerId, dueDate, monthCount, startMonth, kind, sourceAccountId, destinationAccountId } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -95,7 +95,6 @@ router.post('/', async (req, res) => {
     if (!parsedPeriod) {
         return res.status(400).json({ error: 'Jumlah bulan target tidak valid' });
     }
-
     try {
         let selectedOwnerId = ownerId ? String(ownerId) : '';
         if (!selectedOwnerId) {
@@ -113,6 +112,8 @@ router.post('/', async (req, res) => {
                 title: String(title),
                 notes: notes ? String(notes).trim() : null,
                 kind: parsedKind,
+                sourceAccountId: sourceAccountId ? String(sourceAccountId) : null,
+                destinationAccountId: destinationAccountId ? String(destinationAccountId) : null,
                 totalAmount: parsedAmount,
                 remainingMonths: parsedMonthCount || 1,
                 remainingAmount: parsedAmount * (parsedMonthCount || 1),
@@ -160,11 +161,9 @@ router.post('/:id/mark-progress', async (req, res) => {
         if (current.lastContributionAt && isSameCalendarMonth(new Date(current.lastContributionAt), new Date())) {
             return res.status(400).json({ error: 'Setoran target bulan ini sudah ditandai' });
         }
-
         const appliedAmount = getSuggestedContributionAmount(current);
         const nextRemainingMonths = Math.max(0, current.remainingMonths - 1);
         const nextRemaining = current.totalAmount * nextRemainingMonths;
-
         const updated = await prisma.target.update({
             where: { id: req.params.id },
             data: {
@@ -183,7 +182,7 @@ router.post('/:id/mark-progress', async (req, res) => {
 });
 
 router.put('/:id', async (req, res) => {
-    const { title, notes, totalAmount, period, dueDate, monthCount, startMonth, kind } = req.body;
+    const { title, notes, totalAmount, period, dueDate, monthCount, startMonth, kind, sourceAccountId, destinationAccountId } = req.body;
 
     if (!title || !totalAmount) {
         return res.status(400).json({ error: 'Data target tidak lengkap' });
@@ -209,7 +208,6 @@ router.put('/:id', async (req, res) => {
         if (!nextPeriod) {
             return res.status(400).json({ error: 'Jumlah bulan target tidak valid' });
         }
-
         const currentTotalMonths = diffInCalendarMonthsInclusive(current.createdAt, current.dueDate) || current.remainingMonths || 1;
         const completedMonths = Math.max(0, currentTotalMonths - current.remainingMonths);
         const nextRemainingMonths = Math.max(0, (parsedMonthCount || currentTotalMonths) - completedMonths);
@@ -221,6 +219,8 @@ router.put('/:id', async (req, res) => {
                 title: String(title),
                 notes: notes ? String(notes).trim() : null,
                 kind: nextKind,
+                sourceAccountId: sourceAccountId ? String(sourceAccountId) : null,
+                destinationAccountId: destinationAccountId ? String(destinationAccountId) : null,
                 totalAmount: parsedAmount,
                 remainingMonths: nextRemainingMonths,
                 remainingAmount: parsedAmount * nextRemainingMonths,

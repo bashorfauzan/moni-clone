@@ -40,6 +40,8 @@ const Targets = () => {
         title: '',
         notes: '',
         kind: 'SAVING' as 'SAVING' | 'BILL',
+        sourceAccountId: '',
+        destinationAccountId: '',
         totalAmount: '',
         monthCount: '',
         startMonth: currentMonthInputValue()
@@ -77,6 +79,8 @@ const Targets = () => {
             title: '',
             notes: '',
             kind: 'SAVING',
+            sourceAccountId: '',
+            destinationAccountId: '',
             totalAmount: '',
             monthCount: '',
             startMonth: currentMonthInputValue()
@@ -95,6 +99,8 @@ const Targets = () => {
             title: target.title || '',
             notes: target.notes || '',
             kind: target.kind || 'SAVING',
+            sourceAccountId: target.sourceAccountId || '',
+            destinationAccountId: target.destinationAccountId || '',
             totalAmount: String(target.totalAmount || ''),
             monthCount: String(diffInCalendarMonthsInclusive(target.createdAt, target.dueDate) || 12),
             startMonth: target.createdAt ? String(target.createdAt).slice(0, 7) : currentMonthInputValue(),
@@ -113,13 +119,14 @@ const Targets = () => {
         if (!form.totalAmount || Number(form.totalAmount) <= 0) { alert('Nominal target harus lebih dari 0'); return; }
         if (!form.monthCount || Number(form.monthCount) <= 0) { alert('Jumlah bulan harus lebih dari 0'); return; }
         if (!form.startMonth) { alert('Bulan mulai wajib dipilih'); return; }
-
         setSubmitting(true);
         try {
             const payload = {
                 title: form.title.trim(),
                 notes: form.notes.trim(),
                 kind: form.kind,
+                sourceAccountId: form.kind === 'SAVING' ? form.sourceAccountId || undefined : undefined,
+                destinationAccountId: form.kind === 'SAVING' ? form.destinationAccountId || undefined : undefined,
                 totalAmount: Number(form.totalAmount),
                 monthCount: Number(form.monthCount),
                 startMonth: form.startMonth,
@@ -192,6 +199,8 @@ const Targets = () => {
                     Target: target.title,
                     Catatan: target.notes || '-',
                     Jenis: target.kind === 'BILL' ? 'Tagihan' : 'Tabungan',
+                    'Rekening Asal': target.sourceAccountId ? data.accounts.find((account: any) => account.id === target.sourceAccountId)?.name || '-' : '-',
+                    'Rekening Tujuan': target.destinationAccountId ? data.accounts.find((account: any) => account.id === target.destinationAccountId)?.name || '-' : '-',
                     Pemilik: target.owner?.name || data.owners.find((owner: any) => owner.id === target.ownerId)?.name || '-',
                     'Mulai Bulan': startMonthLabel,
                     'Nominal Bulanan (Rp)': target.totalAmount,
@@ -340,6 +349,12 @@ const Targets = () => {
                             lastContributionAt && isSameCalendarMonth(lastContributionAt, now)
                         );
                         const isTransferButtonDisabled = !target.isActive || alreadyMarkedThisMonth || markingTargetId === target.id;
+                        const sourceAccountName = target.sourceAccountId
+                            ? data.accounts.find((account: any) => account.id === target.sourceAccountId)?.name || '-'
+                            : '-';
+                        const destinationAccountName = target.destinationAccountId
+                            ? data.accounts.find((account: any) => account.id === target.destinationAccountId)?.name || '-'
+                            : '-';
                         const transferButtonLabel = markingTargetId === target.id
                             ? 'Memproses...'
                             : !target.isActive
@@ -375,6 +390,11 @@ const Targets = () => {
                                         <p className="mt-1 text-[11px] text-slate-400 truncate">
                                             Mulai {target.createdAt ? new Date(target.createdAt).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-'}
                                         </p>
+                                        {target.kind === 'SAVING' && (
+                                            <p className="mt-1 text-[11px] text-slate-400 truncate">
+                                                {sourceAccountName} <span className="mx-1">→</span> {destinationAccountName}
+                                            </p>
+                                        )}
                                         {target.notes && (
                                             <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">
                                                 {target.notes}
@@ -532,6 +552,41 @@ const Targets = () => {
                                 </select>
                                 <p className="px-1 text-[11px] text-slate-400">Tagihan yang sudah lunas akan dipindah ke riwayat agar daftar utama tetap rapi.</p>
                             </div>
+                            {form.kind === 'SAVING' && (
+                                <>
+                                    <div className="space-y-1.5">
+                                        <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Asal</label>
+                                        <select
+                                            className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                            value={form.sourceAccountId}
+                                            onChange={(e) => setForm((f) => ({ ...f, sourceAccountId: e.target.value }))}
+                                        >
+                                            <option value="">Pilih rekening asal...</option>
+                                            {data.accounts.map((account: any) => (
+                                                <option key={`source-${account.id}`} value={account.id}>
+                                                    {account.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Rekening Tujuan</label>
+                                        <select
+                                            className="h-11 w-full rounded-xl border border-slate-200 px-4 text-sm outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                                            value={form.destinationAccountId}
+                                            onChange={(e) => setForm((f) => ({ ...f, destinationAccountId: e.target.value }))}
+                                        >
+                                            <option value="">Pilih rekening tujuan...</option>
+                                            {data.accounts.map((account: any) => (
+                                                <option key={`destination-${account.id}`} value={account.id}>
+                                                    {account.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <p className="px-1 text-[11px] text-slate-400">Opsional. Hanya untuk penanda arah tabungan, tidak mengubah saldo rekening saat target ditandai.</p>
+                                    </div>
+                                </>
+                            )}
                             <div className="space-y-1.5">
                                 <label className="block px-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Nominal Target</label>
                                 <input
