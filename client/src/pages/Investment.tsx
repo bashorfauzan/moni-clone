@@ -952,25 +952,27 @@ const Investment = () => {
                 </div>
             </div>
 
-            <div className="relative z-10 mb-6 grid grid-cols-2 gap-3">
-                <Link
-                    to="/stocks"
-                    className="isolate flex min-h-[88px] items-center justify-center rounded-[22px] bg-blue-600 px-4 py-5 transition-transform hover:-translate-y-0.5 shadow-sm active:scale-[0.99]"
+            <div className="relative z-20 -mt-20 mb-6 grid grid-cols-2 gap-3 pr-20 sm:mt-0 sm:pr-0">
+                <button
+                    type="button"
+                    onClick={() => navigate('/stocks')}
+                    className="isolate relative z-10 flex min-h-[88px] touch-manipulation items-center justify-center rounded-[22px] bg-blue-600 px-4 py-5 text-left transition-transform hover:-translate-y-0.5 shadow-sm active:scale-[0.99]"
                 >
                     <div className="text-center">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-blue-200">Portofolio</p>
                         <p className="text-base font-black text-white leading-tight mt-0.5">Saham</p>
                     </div>
-                </Link>
-                <Link
-                    to="/stocks/ipo"
-                    className="isolate flex min-h-[88px] items-center justify-center rounded-[22px] bg-emerald-600 px-4 py-5 transition-transform hover:-translate-y-0.5 shadow-sm active:scale-[0.99]"
+                </button>
+                <button
+                    type="button"
+                    onClick={() => navigate('/stocks/ipo')}
+                    className="isolate relative z-10 flex min-h-[88px] touch-manipulation items-center justify-center rounded-[22px] bg-emerald-600 px-4 py-5 text-left transition-transform hover:-translate-y-0.5 shadow-sm active:scale-[0.99]"
                 >
                     <div className="text-center">
                         <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-200">Pesanan</p>
                         <p className="text-base font-black text-white leading-tight mt-0.5">IPO</p>
                     </div>
-                </Link>
+                </button>
             </div>
 
             {/* RDN List */}
@@ -1655,7 +1657,7 @@ const Investment = () => {
                 onClick={() => setFabOpen(false)}
             />
 
-            <div className="fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
+            <div className="pointer-events-none fixed bottom-[104px] sm:bottom-[112px] right-5 sm:right-8 z-50 flex flex-col-reverse gap-3 items-end">
                 {investmentFabActions.map((action, idx) => (
                     <div
                         key={action.label}
