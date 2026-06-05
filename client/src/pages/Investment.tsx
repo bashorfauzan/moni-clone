@@ -952,7 +952,7 @@ const Investment = () => {
                 </div>
             </div>
 
-            <div className="relative z-20 -mt-20 mb-6 grid grid-cols-2 gap-3 pr-20 sm:mt-0 sm:pr-0">
+            <div className="relative z-20 mb-6 grid grid-cols-2 gap-3">
                 <button
                     type="button"
                     onClick={() => navigate('/stocks')}
